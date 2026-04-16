@@ -305,9 +305,30 @@ void openfhe_cprobe_switchmodulus(uintptr_t dst, uintptr_t src,
                                  uint64_t /*ring_dim*/) {
     if (!should_record()) return;
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    emit("# switchmodulus " + addr(map_address(dst)) + ", " +
-         addr(map_address(src)) +
-         ", old_" + midx(old_modulus) + ", new_" + midx(new_modulus));
+
+    // SwitchModulus expands to muli-addi-muli-addi (same as compiler's
+    // SwitchModulus::expand() with non-HW immediates).
+    //   imm[0] = 1
+    //   imm[1] = (old_modulus - 1) / 2
+    //   imm[2] = 1
+    //   imm[3] = -(old_modulus-1)/2 mod new_modulus
+    uint64_t half_om = (old_modulus - 1) >> 1;
+    uint64_t x = half_om % new_modulus;
+    uint64_t neg_half = (x == 0) ? 0 : new_modulus - x;
+
+    uintptr_t d = map_address(dst);
+    uintptr_t s = map_address(src);
+    std::string da = addr(d);
+    std::string sa = addr(s);
+
+    // muli dst, src, 1, old_modulus
+    emit("sr_mulps " + da + ", " + sa + ", 1, " + midx(old_modulus));
+    // addi dst, dst, half_om, old_modulus
+    emit("sr_addps " + da + ", " + da + ", " + std::to_string(half_om) + ", " + midx(old_modulus));
+    // muli dst, dst, 1, new_modulus
+    emit("sr_mulps " + da + ", " + da + ", 1, " + midx(new_modulus));
+    // addi dst, dst, neg_half, new_modulus
+    emit("sr_addps " + da + ", " + da + ", " + std::to_string(neg_half) + ", " + midx(new_modulus));
 }
 
 }  // extern "C"
