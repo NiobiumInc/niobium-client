@@ -69,6 +69,10 @@ public:
     /// Check if a memory address is initialized.
     bool is_initialized(uint64_t address) const;
 
+    /// Get the set of addresses that are read before being written in the trace.
+    /// These are the "live-in" addresses that need input data.
+    std::vector<uint64_t> get_read_before_write_addresses() const;
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

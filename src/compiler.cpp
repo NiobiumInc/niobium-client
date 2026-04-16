@@ -15,6 +15,7 @@
 #include <functional>
 #include <iostream>
 #include <map>
+#include <set>
 
 // OpenFHE hollow mode global — defined in libOPENFHEcore.
 // When true, polynomial operations skip expensive math but preserve structure.
@@ -395,27 +396,33 @@ bool Compiler::replay() {
         return false;
     }
 
-    // Populate simulator memory from captured input data
+    // Compute the "live-in" set: addresses read before being written in the trace.
+    // Only these addresses need input data; addresses that are written first
+    // get their values from the simulation itself.
+    auto rbw_addrs = impl_->simulator->get_read_before_write_addresses();
+    std::set<uint64_t> rbw_set(rbw_addrs.begin(), rbw_addrs.end());
+
+    // Populate simulator memory from captured input data (only live-in addresses)
     size_t direct_count = 0;
     for (const auto& input : impl_->captured_inputs) {
         for (const auto& elem : input.elements) {
-            impl_->simulator->store_polynomial(elem.addr_id, elem.values, elem.modulus);
-            direct_count++;
+            if (rbw_set.count(elem.addr_id)) {
+                impl_->simulator->store_polynomial(elem.addr_id, elem.values, elem.modulus);
+                direct_count++;
+            }
         }
     }
 
-    // Propagate data to derived addresses using the copy/move lineage.
-    // When OpenFHE copies a polynomial (e.g., format conversion between
-    // tag_input and start), the probe records the parent-child relationship.
-    // The derived address inherits the parent's data.
+    // Propagate data to derived addresses using the copy/move lineage,
+    // but only for addresses in the live-in set.
     const auto& parent_map = detail::get_data_parent_map();
     size_t propagated = 0;
-    // Iterate until no more propagation is possible (handles chains)
     bool changed = true;
     while (changed) {
         changed = false;
         for (const auto& [child, parent] : parent_map) {
-            if (!impl_->simulator->is_initialized(child) &&
+            if (rbw_set.count(child) &&
+                !impl_->simulator->is_initialized(child) &&
                  impl_->simulator->is_initialized(parent)) {
                 impl_->simulator->store_polynomial(
                     child,
@@ -427,8 +434,9 @@ bool Compiler::replay() {
         }
     }
 
-    std::cout << "[NIOBIUM] Loaded " << direct_count << " direct + "
-              << propagated << " propagated polynomials into simulator" << std::endl;
+    std::cout << "[NIOBIUM] Live-in addresses: " << rbw_set.size()
+              << ", loaded " << direct_count << " direct + "
+              << propagated << " propagated" << std::endl;
 
     auto result = impl_->simulator->run();
 

@@ -47,8 +47,23 @@ static void emit(const std::string& instruction) {
     niobium::detail::trace_writer().emit(instruction);
 }
 
+// Data inheritance: tracks which FHETCH address was derived from which.
+// Forward-declared here; defined in the copy/move probe section below.
+static std::unordered_map<uint64_t, uint64_t> g_data_parent;
+
 static bool should_record() {
     return niobium::compiler().running_p() && !g_suppressed && !g_serialization_thread;
+}
+
+// Resolve an in-place source: if src_addr == dst_addr and there is a
+// copy-parent for dst_addr, return the parent instead. This turns
+// in-place ops like "add %8, %8, %4" (from clone+operator+=) into
+// "add %8, %0, %4" so the simulator sees the real data dependency.
+static uintptr_t resolve_inplace_src(uintptr_t src_addr, uintptr_t dst_addr) {
+    if (src_addr != dst_addr) return src_addr;
+    auto it = g_data_parent.find(src_addr);
+    if (it != g_data_parent.end()) return it->second;
+    return src_addr;
 }
 
 // ============================================================================
@@ -161,11 +176,6 @@ void openfhe_cprobe_key(uintptr_t poly_id, int /*format*/) {
 // Polynomial lifecycle
 // ============================================================================
 
-// Data inheritance: tracks which FHETCH address was derived from which.
-// When a polynomial is copied/moved, the destination inherits the source's data.
-// This allows the simulator to populate derived addresses from input data.
-static std::unordered_map<uint64_t, uint64_t> g_data_parent;
-
 void openfhe_cprobe_copy(uintptr_t dst_id, uintptr_t src_id) {
     // Always track copies — even before start() — so the address lineage
     // is preserved for simulator input population.
@@ -217,8 +227,10 @@ void openfhe_cprobe_add(uintptr_t dst, uintptr_t src1, uintptr_t src2,
                         uint64_t modulus) {
     if (!should_record()) return;
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    emit("sr_addp " + addr(map_address(dst)) + ", " +
-         addr(map_address(src1)) + ", " + addr(map_address(src2)) +
+    uintptr_t da = map_address(dst);
+    uintptr_t s1 = resolve_inplace_src(map_address(src1), da);
+    uintptr_t s2 = map_address(src2);
+    emit("sr_addp " + addr(da) + ", " + addr(s1) + ", " + addr(s2) +
          ", " + midx(modulus));
 }
 
@@ -226,8 +238,10 @@ void openfhe_cprobe_sub(uintptr_t dst, uintptr_t src1, uintptr_t src2,
                         uint64_t modulus) {
     if (!should_record()) return;
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    emit("sr_subp " + addr(map_address(dst)) + ", " +
-         addr(map_address(src1)) + ", " + addr(map_address(src2)) +
+    uintptr_t da = map_address(dst);
+    uintptr_t s1 = resolve_inplace_src(map_address(src1), da);
+    uintptr_t s2 = map_address(src2);
+    emit("sr_subp " + addr(da) + ", " + addr(s1) + ", " + addr(s2) +
          ", " + midx(modulus));
 }
 
@@ -235,8 +249,10 @@ void openfhe_cprobe_mul(uintptr_t dst, uintptr_t src1, uintptr_t src2,
                         uint64_t modulus) {
     if (!should_record()) return;
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    emit("sr_mulp " + addr(map_address(dst)) + ", " +
-         addr(map_address(src1)) + ", " + addr(map_address(src2)) +
+    uintptr_t da = map_address(dst);
+    uintptr_t s1 = resolve_inplace_src(map_address(src1), da);
+    uintptr_t s2 = map_address(src2);
+    emit("sr_mulp " + addr(da) + ", " + addr(s1) + ", " + addr(s2) +
          ", " + midx(modulus));
 }
 
@@ -244,8 +260,9 @@ void openfhe_cprobe_addi(uintptr_t dst, uintptr_t src, uint64_t immediate,
                          uint64_t modulus) {
     if (!should_record()) return;
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    emit("sr_addps " + addr(map_address(dst)) + ", " +
-         addr(map_address(src)) + ", " + std::to_string(immediate) +
+    uintptr_t da = map_address(dst);
+    uintptr_t sa = resolve_inplace_src(map_address(src), da);
+    emit("sr_addps " + addr(da) + ", " + addr(sa) + ", " + std::to_string(immediate) +
          ", " + midx(modulus));
 }
 
@@ -253,8 +270,9 @@ void openfhe_cprobe_subi(uintptr_t dst, uintptr_t src, uint64_t immediate,
                          uint64_t modulus) {
     if (!should_record()) return;
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    emit("sr_subps " + addr(map_address(dst)) + ", " +
-         addr(map_address(src)) + ", " + std::to_string(immediate) +
+    uintptr_t da = map_address(dst);
+    uintptr_t sa = resolve_inplace_src(map_address(src), da);
+    emit("sr_subps " + addr(da) + ", " + addr(sa) + ", " + std::to_string(immediate) +
          ", " + midx(modulus));
 }
 
@@ -262,8 +280,9 @@ void openfhe_cprobe_muli(uintptr_t dst, uintptr_t src, uint64_t immediate,
                          uint64_t modulus) {
     if (!should_record()) return;
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    emit("sr_mulps " + addr(map_address(dst)) + ", " +
-         addr(map_address(src)) + ", " + std::to_string(immediate) +
+    uintptr_t da = map_address(dst);
+    uintptr_t sa = resolve_inplace_src(map_address(src), da);
+    emit("sr_mulps " + addr(da) + ", " + addr(sa) + ", " + std::to_string(immediate) +
          ", " + midx(modulus));
 }
 

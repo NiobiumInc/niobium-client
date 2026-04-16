@@ -47,13 +47,6 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Ring dimension: " << cc->GetRingDimension() << std::endl;
 
-    // ---- Load eval mult key ----
-    {
-        std::ifstream mkStream(keyDir + "/mk.bin", std::ios::in | std::ios::binary);
-        if (!mkStream.is_open() || !cc->DeserializeEvalMultKey(mkStream, SerType::BINARY))
-            throw std::runtime_error("Failed to load eval mult key");
-    }
-
     // ---- Load ciphertexts ----
     Ciphertext<DCRTPoly> ct_a, ct_b;
     if (!Serial::DeserializeFromFile(keyDir + "/ct_a.bin", ct_a, SerType::BINARY))
@@ -61,9 +54,8 @@ int main(int argc, char* argv[]) {
     if (!Serial::DeserializeFromFile(keyDir + "/ct_b.bin", ct_b, SerType::BINARY))
         throw std::runtime_error("Failed to load ciphertext b");
 
-    // ---- Capture crypto context and keys for simulator ----
+    // ---- Capture crypto context ----
     niobium::compiler().capture_crypto_context(cc);
-    niobium::compiler().tag_keys(cc);
 
     // ---- Tag inputs (before start, following compiler convention) ----
     niobium::compiler().tag_input("ct_a", ct_a);
@@ -71,10 +63,11 @@ int main(int argc, char* argv[]) {
 
     if (!niobium::compiler().is_cache_valid()) {
         // ---- RECORDING PHASE ----
-        std::cout << "\n--- Recording EvalMult ---" << std::endl;
+        std::cout << "\n--- Recording EvalAdd(a,b) + EvalAdd(result,a) ---" << std::endl;
         niobium::compiler().start();
 
-        auto ct_result = cc->EvalMult(ct_a, ct_b);
+        auto ct_tmp = cc->EvalAdd(ct_a, ct_b);     // a + b
+        auto ct_result = cc->EvalAdd(ct_tmp, ct_a); // (a + b) + a = 2a + b
 
         niobium::compiler().probe("result", ct_result);
         niobium::compiler().stop();

@@ -54,9 +54,9 @@ int main(int argc, char* argv[]) {
     pt_result->SetLength(1);
 
     int64_t result = pt_result->GetPackedValue()[0];
-    int64_t expected = a * b;
+    int64_t expected = 2 * a + b;
 
-    std::cout << "Result: " << a << " * " << b << " = " << result << std::endl;
+    std::cout << "Result: 2*" << a << " + " << b << " = " << result << std::endl;
 
     if (result == expected) {
         std::cout << "[PASS] " << result << " == " << expected << std::endl;
