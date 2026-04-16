@@ -1,0 +1,4 @@
+[submodule "vendor/openfhe"]
+	path = vendor/openfhe
+	url = https://github.com/NiobiumInc/openfhe-development.git
+	branch = nb_main
