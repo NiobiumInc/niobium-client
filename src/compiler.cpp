@@ -5,8 +5,12 @@
 #include "niobium/fhetch_sim/simulator.h"
 #include "trace_writer.h"
 
+#include <nlohmann/json.hpp>
+
+#include <chrono>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <map>
@@ -48,12 +52,34 @@ struct Compiler::Impl {
 
     // Crypto context info
     uint64_t ring_dimension = 0;
+    std::vector<uint64_t> modulus_chain;
 
     // Last written trace path (set by stop())
     std::filesystem::path last_trace_path;
 
     // Simulator instance (created by replay())
     std::unique_ptr<fhetch_sim::Simulator> simulator;
+
+    // Input polynomial data captured by tag_input().
+    // Each entry: {name, [{addr_id, modulus, values}]}
+    struct PolyElement {
+        uint64_t addr_id;
+        uint64_t modulus;
+        std::vector<uint64_t> values;
+    };
+    struct InputRecord {
+        std::string name;
+        std::vector<PolyElement> elements;
+    };
+    std::vector<InputRecord> captured_inputs;
+
+    // Output probe addresses captured by probe().
+    struct OutputRecord {
+        std::string name;
+        std::vector<uint64_t> addr_ids;
+        std::vector<uint64_t> moduli;
+    };
+    std::vector<OutputRecord> captured_outputs;
 
     // Derived program directory
     std::filesystem::path program_dir;
@@ -126,11 +152,8 @@ bool Compiler::stop() {
     auto dir = get_program_directory();
     impl_->last_trace_path = impl_->trace_writer.write(dir, impl_->full_program_name());
 
-    // Save FHETCH input/output metadata if in FHETCH mode
-    if (impl_->fhetch_mode) {
-        // These are called from fhetch_api.cpp's save functions
-        // which the user or the compiler triggers.
-    }
+    // Write fhetch_replay.json with inputs, outputs, and modulus table
+    write_replay_json();
 
     std::cout << "[NIOBIUM] Recording stopped ("
               << impl_->trace_writer.instruction_count()
@@ -200,6 +223,38 @@ bool Compiler::is_cache_valid() {
 
 void Compiler::set_ring_dimension(uint64_t N) {
     impl_->ring_dimension = N;
+}
+
+void Compiler::store_input_element(const std::string& input_name,
+                                   uint64_t addr_id, uint64_t modulus,
+                                   const std::vector<uint64_t>& values) {
+    // Append to existing InputRecord or create a new one
+    for (auto& rec : impl_->captured_inputs) {
+        if (rec.name == input_name) {
+            rec.elements.push_back({addr_id, modulus, values});
+            return;
+        }
+    }
+    Impl::InputRecord rec;
+    rec.name = input_name;
+    rec.elements.push_back({addr_id, modulus, values});
+    impl_->captured_inputs.push_back(std::move(rec));
+}
+
+void Compiler::store_output_probe(const std::string& output_name,
+                                  uint64_t addr_id, uint64_t modulus) {
+    for (auto& rec : impl_->captured_outputs) {
+        if (rec.name == output_name) {
+            rec.addr_ids.push_back(addr_id);
+            rec.moduli.push_back(modulus);
+            return;
+        }
+    }
+    Impl::OutputRecord rec;
+    rec.name = output_name;
+    rec.addr_ids.push_back(addr_id);
+    rec.moduli.push_back(modulus);
+    impl_->captured_outputs.push_back(std::move(rec));
 }
 
 void Compiler::enable_hollow_mode(bool enabled) {
@@ -299,6 +354,17 @@ bool Compiler::replay() {
         return false;
     }
 
+    // Populate simulator memory from captured input data
+    for (const auto& input : impl_->captured_inputs) {
+        for (const auto& elem : input.elements) {
+            impl_->simulator->store_polynomial(elem.addr_id, elem.values, elem.modulus);
+        }
+    }
+    if (!impl_->captured_inputs.empty()) {
+        std::cout << "[NIOBIUM] Loaded " << impl_->captured_inputs.size()
+                  << " inputs into simulator memory" << std::endl;
+    }
+
     auto result = impl_->simulator->run();
 
     if (result.errors > 0) {
@@ -308,7 +374,116 @@ bool Compiler::replay() {
 
     std::cout << "[NIOBIUM] Replay complete: " << result.instructions_executed
               << " instructions, " << result.elapsed_seconds << "s" << std::endl;
+
+    // Write output polynomial values for probe addresses
+    write_replay_outputs();
+
     return true;
+}
+
+// ============================================================================
+// write_replay_json — serialize inputs, outputs, and metadata for replay
+// ============================================================================
+
+void Compiler::write_replay_json() {
+    using json = nlohmann::json;
+    auto dir = get_program_directory();
+    auto path = dir / "fhetch_replay.json";
+
+    json replay;
+    replay["program_name"] = impl_->full_program_name();
+    replay["ring_dimension"] = impl_->ring_dimension;
+    replay["trace_file"] = impl_->last_trace_path.filename().string();
+
+    // Per-input files
+    json inputs_arr = json::array();
+    for (const auto& input : impl_->captured_inputs) {
+        std::string input_file = impl_->full_program_name() + ".input_" + input.name + ".json";
+
+        json idx;
+        idx["name"] = input.name;
+        idx["file"] = input_file;
+        idx["element_count"] = input.elements.size();
+        inputs_arr.push_back(idx);
+
+        // Write per-input data file
+        json input_data;
+        input_data["name"] = input.name;
+        json elems_arr = json::array();
+        for (const auto& e : input.elements) {
+            json elem;
+            elem["addr_id"] = e.addr_id;
+            elem["modulus"] = e.modulus;
+            elem["values"] = e.values;
+            elems_arr.push_back(elem);
+        }
+        input_data["elements"] = elems_arr;
+
+        std::ofstream inp(dir / input_file);
+        if (inp.is_open()) {
+            inp << input_data.dump(2) << std::endl;
+            inp.close();
+        }
+    }
+    replay["inputs"] = inputs_arr;
+
+    // Output probe definitions
+    json outputs_arr = json::array();
+    for (const auto& output : impl_->captured_outputs) {
+        json out_entry;
+        out_entry["name"] = output.name;
+        out_entry["addr_ids"] = output.addr_ids;
+        out_entry["moduli"] = output.moduli;
+        outputs_arr.push_back(out_entry);
+    }
+    replay["outputs"] = outputs_arr;
+
+    std::ofstream out(path);
+    if (out.is_open()) {
+        out << replay.dump(2) << std::endl;
+        out.close();
+        std::cout << "[NIOBIUM] Replay JSON written: " << path << std::endl;
+    }
+}
+
+// ============================================================================
+// write_replay_outputs — after simulation, write computed probe values
+// ============================================================================
+
+void Compiler::write_replay_outputs() {
+    using json = nlohmann::json;
+    if (!impl_->simulator || impl_->captured_outputs.empty()) return;
+
+    auto dir = get_program_directory();
+    auto path = dir / "fhetch_replay_outputs.json";
+
+    json root;
+    json outputs_arr = json::array();
+    for (const auto& output : impl_->captured_outputs) {
+        json out_entry;
+        out_entry["name"] = output.name;
+        json elems_arr = json::array();
+        for (size_t j = 0; j < output.addr_ids.size(); ++j) {
+            uint64_t addr = output.addr_ids[j];
+            auto values = impl_->simulator->get_polynomial(addr);
+            json elem;
+            elem["addr_id"] = addr;
+            elem["modulus"] = output.moduli[j];
+            elem["status"] = values.empty() ? "missing" : "computed";
+            elem["values"] = values;
+            elems_arr.push_back(elem);
+        }
+        out_entry["elements"] = elems_arr;
+        outputs_arr.push_back(out_entry);
+    }
+    root["outputs"] = outputs_arr;
+
+    std::ofstream out(path);
+    if (out.is_open()) {
+        out << root.dump(2) << std::endl;
+        out.close();
+        std::cout << "[NIOBIUM] Replay outputs written: " << path << std::endl;
+    }
 }
 
 // ============================================================================

@@ -47,6 +47,9 @@ set(OPENFHE_INCLUDE_DIRS
 # OpenFHE library path
 set(OPENFHE_LIBRARY_PATH "${OPENFHE_INSTALL_DIR}/lib")
 
+# nlohmann/json (header-only, single_include)
+set(JSON_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/json/single_include")
+
 # OpenFHE libraries
 set(OPENFHE_LIBRARIES
     OPENFHEbinfhe
@@ -90,6 +93,7 @@ target_include_directories(niobium_client
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/fhetch_sim
+        ${JSON_INCLUDE_DIR}
 )
 
 # OpenFHE include paths — BUILD_INTERFACE only (not propagated to install tree;

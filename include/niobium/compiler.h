@@ -244,7 +244,21 @@ public:
         stop();
     }
 
+    // Internal: store captured input polynomial data for replay.
+    // Called by the tag_input template instantiation.
+    void store_input_element(const std::string& input_name,
+                             uint64_t addr_id, uint64_t modulus,
+                             const std::vector<uint64_t>& values);
+
+    // Internal: store output probe address for replay.
+    // Called by the probe template instantiation.
+    void store_output_probe(const std::string& output_name,
+                            uint64_t addr_id, uint64_t modulus);
+
 private:
+    void write_replay_json();
+    void write_replay_outputs();
+
     struct Impl;
     std::unique_ptr<Impl> impl_;
 

@@ -103,12 +103,13 @@ void openfhe_cprobe_save_dcrt_poly(const void* /*dcrt_poly_ptr*/) {
 // Explicit template instantiations for Compiler methods with OpenFHE types
 // ============================================================================
 
+#include "compiler_internal.h"
+
 namespace niobium {
 
 template<>
 void Compiler::capture_crypto_context<lbcrypto::CryptoContext<DCRTPoly>>(
     const lbcrypto::CryptoContext<DCRTPoly>& cc) {
-    // Store ring dimension for the simulator.
     uint64_t rd = cc->GetRingDimension();
     set_ring_dimension(rd);
     std::cout << "[NIOBIUM] Captured crypto context: ring_dim=" << rd << std::endl;
@@ -116,25 +117,53 @@ void Compiler::capture_crypto_context<lbcrypto::CryptoContext<DCRTPoly>>(
 
 template<>
 void Compiler::tag_input<lbcrypto::Ciphertext<DCRTPoly>>(
-    const std::string& /*input_name*/,
-    lbcrypto::Ciphertext<DCRTPoly>& /*value*/,
+    const std::string& input_name,
+    lbcrypto::Ciphertext<DCRTPoly>& ct,
     std::optional<std::filesystem::path> /*file*/) {
-    // Input tagging is recorded via the probe mechanism.
+    // Extract polynomial data from the ciphertext and store for replay.
+    const auto& elements = ct->GetElements();
+    for (const auto& dcrt : elements) {
+        for (const auto& poly : dcrt.GetAllElements()) {
+            uintptr_t poly_id = poly.GetId();
+            uint64_t fhetch_addr = detail::lookup_fhetch_address(poly_id);
+            if (fhetch_addr == static_cast<uint64_t>(-1)) continue;
+
+            uint64_t modulus = poly.GetModulus().ConvertToInt();
+            size_t n = poly.GetLength();
+            std::vector<uint64_t> vals(n);
+            const auto& vec = poly.GetValues();
+            for (size_t i = 0; i < n; ++i)
+                vals[i] = vec[i].ConvertToInt();
+
+            store_input_element(input_name, fhetch_addr, modulus, vals);
+        }
+    }
 }
 
 template<>
 void Compiler::tag_input<lbcrypto::Ciphertext<DCRTPoly>>(
-    const std::string& /*input_name*/,
-    const lbcrypto::Ciphertext<DCRTPoly>& /*value*/,
-    std::optional<std::filesystem::path> /*file*/) {
-    // Const overload.
+    const std::string& input_name,
+    const lbcrypto::Ciphertext<DCRTPoly>& ct,
+    std::optional<std::filesystem::path> file) {
+    auto& mutable_ct = const_cast<lbcrypto::Ciphertext<DCRTPoly>&>(ct);
+    tag_input(input_name, mutable_ct, file);
 }
 
 template<>
 void Compiler::probe<lbcrypto::Ciphertext<DCRTPoly>>(
-    const std::string& /*var_name*/,
-    const lbcrypto::Ciphertext<DCRTPoly>& /*value*/) {
-    // Output probing is recorded via the probe mechanism.
+    const std::string& var_name,
+    const lbcrypto::Ciphertext<DCRTPoly>& ct) {
+    // Record the FHETCH addresses of the output polynomials.
+    const auto& elements = ct->GetElements();
+    for (const auto& dcrt : elements) {
+        for (const auto& poly : dcrt.GetAllElements()) {
+            uintptr_t poly_id = poly.GetId();
+            uint64_t fhetch_addr = detail::lookup_fhetch_address(poly_id);
+            if (fhetch_addr == static_cast<uint64_t>(-1)) continue;
+            uint64_t modulus = poly.GetModulus().ConvertToInt();
+            store_output_probe(var_name, fhetch_addr, modulus);
+        }
+    }
 }
 
 }  // namespace niobium
