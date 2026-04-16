@@ -3,6 +3,7 @@
 
 #include "niobium/compiler.h"
 #include "niobium/fhetch_sim/simulator.h"
+#include "compiler_internal.h"
 #include "trace_writer.h"
 
 #include <nlohmann/json.hpp>
@@ -395,15 +396,39 @@ bool Compiler::replay() {
     }
 
     // Populate simulator memory from captured input data
+    size_t direct_count = 0;
     for (const auto& input : impl_->captured_inputs) {
         for (const auto& elem : input.elements) {
             impl_->simulator->store_polynomial(elem.addr_id, elem.values, elem.modulus);
+            direct_count++;
         }
     }
-    if (!impl_->captured_inputs.empty()) {
-        std::cout << "[NIOBIUM] Loaded " << impl_->captured_inputs.size()
-                  << " inputs into simulator memory" << std::endl;
+
+    // Propagate data to derived addresses using the copy/move lineage.
+    // When OpenFHE copies a polynomial (e.g., format conversion between
+    // tag_input and start), the probe records the parent-child relationship.
+    // The derived address inherits the parent's data.
+    const auto& parent_map = detail::get_data_parent_map();
+    size_t propagated = 0;
+    // Iterate until no more propagation is possible (handles chains)
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (const auto& [child, parent] : parent_map) {
+            if (!impl_->simulator->is_initialized(child) &&
+                 impl_->simulator->is_initialized(parent)) {
+                impl_->simulator->store_polynomial(
+                    child,
+                    impl_->simulator->get_polynomial(parent),
+                    impl_->simulator->get_modulus(parent));
+                propagated++;
+                changed = true;
+            }
+        }
     }
+
+    std::cout << "[NIOBIUM] Loaded " << direct_count << " direct + "
+              << propagated << " propagated polynomials into simulator" << std::endl;
 
     auto result = impl_->simulator->run();
 
@@ -448,9 +473,29 @@ void Compiler::write_replay_json() {
     cc["multiplicative_depth"] = impl_->multiplicative_depth;
     cc["scaling_modulus_size"] = impl_->scaling_mod_size;
     cc["security_level"] = impl_->security_level;
-    cc["modulus_chain"] = impl_->modulus_chain;
-    cc["modulus_chain_length"] = impl_->modulus_chain.size();
-    cc["inverse_modulus_chain"] = impl_->inverse_modulus_chain;
+    // Use the trace writer's modulus table as the authoritative source —
+    // it includes all moduli encountered during recording (base chain +
+    // key-switching moduli), matching the .fhetch file's modulus_count.
+    const auto& trace_moduli = impl_->trace_writer.modulus_table();
+    if (!trace_moduli.empty()) {
+        cc["modulus_chain"] = trace_moduli;
+        cc["modulus_chain_length"] = trace_moduli.size();
+        // Recompute inverse chain for the complete set
+        std::vector<uint64_t> inv_chain;
+        for (uint64_t q : trace_moduli) {
+            uint64_t ninv = 1;
+            for (int i = 1; i < 64; i++) {
+                if (((q * ninv) >> i) & 1)
+                    ninv |= (1ULL << i);
+            }
+            inv_chain.push_back(ninv);
+        }
+        cc["inverse_modulus_chain"] = inv_chain;
+    } else {
+        cc["modulus_chain"] = impl_->modulus_chain;
+        cc["modulus_chain_length"] = impl_->modulus_chain.size();
+        cc["inverse_modulus_chain"] = impl_->inverse_modulus_chain;
+    }
     cc["is_valid"] = true;
     replay["crypto_context"] = cc;
 

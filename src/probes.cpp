@@ -161,21 +161,27 @@ void openfhe_cprobe_key(uintptr_t poly_id, int /*format*/) {
 // Polynomial lifecycle
 // ============================================================================
 
+// Data inheritance: tracks which FHETCH address was derived from which.
+// When a polynomial is copied/moved, the destination inherits the source's data.
+// This allows the simulator to populate derived addresses from input data.
+static std::unordered_map<uint64_t, uint64_t> g_data_parent;
+
 void openfhe_cprobe_copy(uintptr_t dst_id, uintptr_t src_id) {
-    if (!should_record()) return;
+    // Always track copies — even before start() — so the address lineage
+    // is preserved for simulator input population.
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    uintptr_t src = map_address(src_id);
-    uintptr_t dst = map_address(dst_id);
-    // Copy is a no-op at the FHETCH level — the server handles aliasing.
-    // But we track the address mapping.
-    (void)src; (void)dst;
+    if (g_serialization_thread) return;
+    uintptr_t src_addr = map_address(src_id);
+    uintptr_t dst_addr = map_address(dst_id);
+    g_data_parent[dst_addr] = src_addr;
 }
 
 void openfhe_cprobe_move(uintptr_t dst_id, uintptr_t src_id) {
-    if (!should_record()) return;
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    uintptr_t src = map_address(src_id);
-    g_address_map[dst_id] = src;
+    if (g_serialization_thread) return;
+    uintptr_t src_addr = map_address(src_id);
+    g_address_map[dst_id] = src_addr;
+    // dst_id now points to the same FHETCH address as src_id
 }
 
 void openfhe_cprobe_reassign_id(uintptr_t dst_old, uintptr_t src) {
@@ -317,6 +323,10 @@ uint64_t lookup_fhetch_address(uintptr_t openfhe_poly_id) {
     auto it = g_address_map.find(openfhe_poly_id);
     if (it != g_address_map.end()) return it->second;
     return static_cast<uint64_t>(-1);
+}
+
+const std::unordered_map<uint64_t, uint64_t>& get_data_parent_map() {
+    return g_data_parent;
 }
 
 }  // namespace niobium::detail

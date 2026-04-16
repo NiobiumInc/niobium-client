@@ -19,4 +19,8 @@ TraceWriter& trace_writer();
 /// Returns (uint64_t)-1 if not found.
 uint64_t lookup_fhetch_address(uintptr_t openfhe_poly_id);
 
+/// Get the data parent map: derived_addr → source_addr.
+/// Used to propagate input data to addresses created by copy/move probes.
+const std::unordered_map<uint64_t, uint64_t>& get_data_parent_map();
+
 }  // namespace niobium::detail
