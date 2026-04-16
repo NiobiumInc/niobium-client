@@ -75,8 +75,9 @@ int main(int argc, char* argv[]) {
     std::vector<uint32_t> levelBudget = {4, 4};
     cc->EvalBootstrapSetup(levelBudget);
 
-    // ---- Capture crypto context (stores ring dimension for simulator) ----
+    // ---- Capture crypto context and keys for simulator ----
     niobium::compiler().capture_crypto_context(cc);
+    niobium::compiler().tag_keys(cc);
 
     // ---- Tag the input ciphertext ----
     niobium::compiler().tag_input("input_cipher", ciph);

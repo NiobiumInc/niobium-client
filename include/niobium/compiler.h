@@ -149,6 +149,25 @@ public:
     /// Called automatically by capture_crypto_context(), or can be set manually.
     void set_ring_dimension(uint64_t N);
 
+    /// Set crypto context metadata for replay.json.
+    /// Called by capture_crypto_context template instantiation.
+    void set_crypto_context_info(const std::string& scheme_name,
+                                 uint32_t multiplicative_depth,
+                                 uint32_t scaling_mod_size,
+                                 const std::string& security_level,
+                                 const std::vector<uint64_t>& modulus_chain);
+
+    /// Set key start addr_id for a given key type.
+    void set_key_start_addr_id(const std::string& key_type, uint64_t addr_id);
+
+    /// Capture evaluation key polynomial data for the simulator.
+    /// Iterates over all EvalMult and EvalAutomorphism keys loaded in the
+    /// CryptoContext and extracts their polynomial coefficients.
+    /// Call after deserializing keys and before start().
+    /// @param cc  OpenFHE CryptoContext containing the loaded keys.
+    template<typename CryptoContextType>
+    void tag_keys(const CryptoContextType& cc);
+
     // ====================================================================
     // RECORDING MODES
     // ====================================================================

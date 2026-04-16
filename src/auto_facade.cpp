@@ -16,7 +16,13 @@
 #include "key/key-ser.h"
 #include "scheme/ckksrns/ckksrns-ser.h"
 
+#include "cereal_io.h"
+#include <cereal/archives/portable_binary.hpp>
+
 #include <atomic>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
 #include <memory>
 #include <string>
 
@@ -112,21 +118,47 @@ void Compiler::capture_crypto_context<lbcrypto::CryptoContext<DCRTPoly>>(
     const lbcrypto::CryptoContext<DCRTPoly>& cc) {
     uint64_t rd = cc->GetRingDimension();
     set_ring_dimension(rd);
-    std::cout << "[NIOBIUM] Captured crypto context: ring_dim=" << rd << std::endl;
+
+    // Extract crypto parameters
+    auto cryptoParams = cc->GetCryptoParameters();
+    auto elemParams = cryptoParams->GetElementParams();
+
+    // Scheme name
+    std::string scheme;
+    auto sid = cc->getSchemeId();
+    if (sid == lbcrypto::SCHEME::CKKSRNS_SCHEME) scheme = "CKKS";
+    else if (sid == lbcrypto::SCHEME::BFVRNS_SCHEME) scheme = "BFV";
+    else if (sid == lbcrypto::SCHEME::BGVRNS_SCHEME) scheme = "BGV";
+    else scheme = "UNKNOWN";
+
+    // Modulus chain
+    std::vector<uint64_t> modulus_chain;
+    for (const auto& p : elemParams->GetParams())
+        modulus_chain.push_back(p->GetModulus().ConvertToInt());
+
+    uint32_t depth = static_cast<uint32_t>(modulus_chain.size() > 0 ? modulus_chain.size() - 1 : 0);
+
+    set_crypto_context_info(scheme, depth, 0, "HEStd_NotSet", modulus_chain);
+
+    std::cout << "[NIOBIUM] Captured crypto context: scheme=" << scheme
+              << " ring_dim=" << rd
+              << " depth=" << depth
+              << " moduli=" << modulus_chain.size() << std::endl;
 }
 
-template<>
-void Compiler::tag_input<lbcrypto::Ciphertext<DCRTPoly>>(
-    const std::string& input_name,
-    lbcrypto::Ciphertext<DCRTPoly>& ct,
-    std::optional<std::filesystem::path> /*file*/) {
-    // Extract polynomial data from the ciphertext and store for replay.
+// Helper: collect addr_ids and coefficient data from a ciphertext
+static void capture_ciphertext_polys(niobium::Compiler& compiler,
+                                     const std::string& name,
+                                     const lbcrypto::Ciphertext<DCRTPoly>& ct,
+                                     std::vector<uint64_t>& addr_ids) {
     const auto& elements = ct->GetElements();
     for (const auto& dcrt : elements) {
         for (const auto& poly : dcrt.GetAllElements()) {
             uintptr_t poly_id = poly.GetId();
-            uint64_t fhetch_addr = detail::lookup_fhetch_address(poly_id);
+            uint64_t fhetch_addr = niobium::detail::lookup_fhetch_address(poly_id);
             if (fhetch_addr == static_cast<uint64_t>(-1)) continue;
+
+            addr_ids.push_back(fhetch_addr);
 
             uint64_t modulus = poly.GetModulus().ConvertToInt();
             size_t n = poly.GetLength();
@@ -135,7 +167,41 @@ void Compiler::tag_input<lbcrypto::Ciphertext<DCRTPoly>>(
             for (size_t i = 0; i < n; ++i)
                 vals[i] = vec[i].ConvertToInt();
 
-            store_input_element(input_name, fhetch_addr, modulus, vals);
+            compiler.store_input_element(name, fhetch_addr, modulus, vals);
+        }
+    }
+}
+
+template<>
+void Compiler::tag_input<lbcrypto::Ciphertext<DCRTPoly>>(
+    const std::string& input_name,
+    lbcrypto::Ciphertext<DCRTPoly>& ct,
+    std::optional<std::filesystem::path> /*file*/) {
+    auto dir = get_program_directory();
+    std::filesystem::create_directories(dir);
+    std::string prog = program_name();
+
+    // Collect addr_ids and in-memory data
+    std::vector<uint64_t> addr_ids;
+    capture_ciphertext_polys(*this, input_name, ct, addr_ids);
+
+    // Write .ids file
+    auto ids_path = dir / (prog + ".input_" + input_name + ".ids");
+    cereal_io::write_addr_ids(ids_path, addr_ids);
+
+    // Write .bin file (cereal binary — same format as niobium-compiler)
+    auto bin_path = dir / (prog + ".input_" + input_name + ".bin");
+    {
+        std::ofstream bin_stream(bin_path, std::ios::binary);
+        if (bin_stream.is_open()) {
+            cereal::PortableBinaryOutputArchive ar(bin_stream);
+            ar(static_cast<uint32_t>(1));  // instances_count
+            ar(static_cast<uint8_t>(1));   // payload_type: ciphertext
+            auto& elements = ct->GetElements();
+            ar(static_cast<uint32_t>(elements.size()));
+            for (auto& dcrt : elements) {
+                ar(dcrt);
+            }
         }
     }
 }
@@ -164,6 +230,109 @@ void Compiler::probe<lbcrypto::Ciphertext<DCRTPoly>>(
             store_output_probe(var_name, fhetch_addr, modulus);
         }
     }
+}
+
+// Helper: capture DCRTPoly polynomials — collects addr_ids and stores values
+static size_t capture_dcrt_polys(Compiler& compiler,
+                                 const std::string& key_name,
+                                 const std::vector<DCRTPoly>& polys,
+                                 std::vector<uint64_t>& addr_ids) {
+    size_t count = 0;
+    for (const auto& dcrt : polys) {
+        for (const auto& poly : dcrt.GetAllElements()) {
+            uintptr_t poly_id = poly.GetId();
+            uint64_t fhetch_addr = detail::lookup_fhetch_address(poly_id);
+            if (fhetch_addr == static_cast<uint64_t>(-1)) continue;
+
+            addr_ids.push_back(fhetch_addr);
+
+            uint64_t modulus = poly.GetModulus().ConvertToInt();
+            size_t n = poly.GetLength();
+            std::vector<uint64_t> vals(n);
+            const auto& vec = poly.GetValues();
+            for (size_t i = 0; i < n; ++i)
+                vals[i] = vec[i].ConvertToInt();
+
+            compiler.store_input_element(key_name, fhetch_addr, modulus, vals);
+            count++;
+        }
+    }
+    return count;
+}
+
+// Helper: serialize eval keys to .bin via cereal + write .ids
+static void serialize_eval_keys(
+    const std::vector<lbcrypto::EvalKey<DCRTPoly>>& keys,
+    const std::filesystem::path& bin_path,
+    const std::filesystem::path& ids_path,
+    const std::vector<uint64_t>& addr_ids) {
+    // .ids
+    cereal_io::write_addr_ids(ids_path, addr_ids);
+    // .bin — serialize each key's A/B vectors
+    std::ofstream bin(bin_path, std::ios::binary);
+    if (!bin.is_open()) return;
+    cereal::PortableBinaryOutputArchive ar(bin);
+    ar(static_cast<uint32_t>(keys.size()));
+    for (const auto& key : keys) {
+        const auto& av = key->GetAVector();
+        const auto& bv = key->GetBVector();
+        ar(static_cast<uint32_t>(av.size()));
+        for (const auto& dcrt : av) ar(dcrt);
+        ar(static_cast<uint32_t>(bv.size()));
+        for (const auto& dcrt : bv) ar(dcrt);
+    }
+}
+
+template<>
+void Compiler::tag_keys<lbcrypto::CryptoContext<DCRTPoly>>(
+    const lbcrypto::CryptoContext<DCRTPoly>& /*cc*/) {
+    auto dir = get_program_directory();
+    std::filesystem::create_directories(dir);
+    std::string prog = program_name();
+    size_t total = 0;
+
+    // EvalMult keys
+    try {
+        const auto& allMultKeys = lbcrypto::CryptoContextImpl<DCRTPoly>::GetAllEvalMultKeys();
+        std::vector<uint64_t> mk_addr_ids;
+        std::vector<lbcrypto::EvalKey<DCRTPoly>> all_mk;
+        for (const auto& [keyTag, keyVec] : allMultKeys) {
+            for (const auto& evalKey : keyVec) {
+                total += capture_dcrt_polys(*this, "evalmult_key", evalKey->GetAVector(), mk_addr_ids);
+                total += capture_dcrt_polys(*this, "evalmult_key", evalKey->GetBVector(), mk_addr_ids);
+                all_mk.push_back(evalKey);
+            }
+        }
+        if (!all_mk.empty()) {
+            serialize_eval_keys(all_mk,
+                dir / (prog + ".mk.bin"), dir / (prog + ".mk.ids"), mk_addr_ids);
+            if (!mk_addr_ids.empty())
+                set_key_start_addr_id("evalmult", mk_addr_ids[0]);
+        }
+    } catch (...) {}
+
+    // EvalAutomorphism keys
+    try {
+        const auto& allAutoKeys = lbcrypto::CryptoContextImpl<DCRTPoly>::GetAllEvalAutomorphismKeys();
+        std::vector<uint64_t> rk_addr_ids;
+        std::vector<lbcrypto::EvalKey<DCRTPoly>> all_rk;
+        for (const auto& [keyTag, keyMap] : allAutoKeys) {
+            if (!keyMap) continue;
+            for (const auto& [idx, evalKey] : *keyMap) {
+                total += capture_dcrt_polys(*this, "automorphism_key", evalKey->GetAVector(), rk_addr_ids);
+                total += capture_dcrt_polys(*this, "automorphism_key", evalKey->GetBVector(), rk_addr_ids);
+                all_rk.push_back(evalKey);
+            }
+        }
+        if (!all_rk.empty()) {
+            serialize_eval_keys(all_rk,
+                dir / (prog + ".rk.bin"), dir / (prog + ".rk.ids"), rk_addr_ids);
+            if (!rk_addr_ids.empty())
+                set_key_start_addr_id("evalautomorphism", rk_addr_ids[0]);
+        }
+    } catch (...) {}
+
+    std::cout << "[NIOBIUM] Tagged " << total << " key polynomials for replay" << std::endl;
 }
 
 }  // namespace niobium

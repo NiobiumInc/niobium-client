@@ -61,24 +61,23 @@ int main(int argc, char* argv[]) {
     if (!Serial::DeserializeFromFile(keyDir + "/ct_b.bin", ct_b, SerType::BINARY))
         throw std::runtime_error("Failed to load ciphertext b");
 
-    // ---- Capture crypto context (stores ring dimension for simulator) ----
+    // ---- Capture crypto context and keys for simulator ----
     niobium::compiler().capture_crypto_context(cc);
+    niobium::compiler().tag_keys(cc);
 
     // ---- Tag inputs ----
     niobium::compiler().tag_input("ct_a", ct_a);
     niobium::compiler().tag_input("ct_b", ct_b);
 
     if (!niobium::compiler().is_cache_valid()) {
-        // ---- RECORDING PHASE (hollow mode) ----
-        std::cout << "\n--- Recording EvalMult (hollow mode) ---" << std::endl;
-        niobium::compiler().enable_hollow_mode(true);
+        // ---- RECORDING PHASE ----
+        std::cout << "\n--- Recording EvalMult ---" << std::endl;
         niobium::compiler().start();
 
         auto ct_result = cc->EvalMult(ct_a, ct_b);
 
         niobium::compiler().probe("result", ct_result);
         niobium::compiler().stop();
-        niobium::compiler().enable_hollow_mode(false);
     }
 
     // ---- REPLAY: execute trace through the FHETCH simulator ----

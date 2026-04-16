@@ -50,9 +50,19 @@ struct Compiler::Impl {
     // Epochs
     uint32_t epoch_id = 0;
 
-    // Crypto context info
+    // Crypto context info (populated by capture_crypto_context)
     uint64_t ring_dimension = 0;
+    uint32_t multiplicative_depth = 0;
+    uint32_t scaling_mod_size = 0;
+    std::string scheme_name;
+    std::string security_level;
     std::vector<uint64_t> modulus_chain;
+    std::vector<uint64_t> inverse_modulus_chain;
+    bool niobium_hw_mode = false;
+
+    // Key start addr_ids (first addr_id recorded for each key type)
+    uint64_t evalmult_start_addr_id = 0;
+    uint64_t evalautomorphism_start_addr_id = 0;
 
     // Last written trace path (set by stop())
     std::filesystem::path last_trace_path;
@@ -225,6 +235,36 @@ void Compiler::set_ring_dimension(uint64_t N) {
     impl_->ring_dimension = N;
 }
 
+void Compiler::set_crypto_context_info(const std::string& scheme_name,
+                                       uint32_t multiplicative_depth,
+                                       uint32_t scaling_mod_size,
+                                       const std::string& security_level,
+                                       const std::vector<uint64_t>& modulus_chain) {
+    impl_->scheme_name = scheme_name;
+    impl_->multiplicative_depth = multiplicative_depth;
+    impl_->scaling_mod_size = scaling_mod_size;
+    impl_->security_level = security_level;
+    impl_->modulus_chain = modulus_chain;
+
+    // Compute inverse modulus chain (Hensel lifting)
+    impl_->inverse_modulus_chain.clear();
+    for (uint64_t q : modulus_chain) {
+        uint64_t ninv = 1;
+        for (int i = 1; i < 64; i++) {
+            if (((q * ninv) >> i) & 1)
+                ninv |= (1ULL << i);
+        }
+        impl_->inverse_modulus_chain.push_back(ninv);
+    }
+}
+
+void Compiler::set_key_start_addr_id(const std::string& key_type, uint64_t addr_id) {
+    if (key_type == "evalmult")
+        impl_->evalmult_start_addr_id = addr_id;
+    else if (key_type == "evalautomorphism")
+        impl_->evalautomorphism_start_addr_id = addr_id;
+}
+
 void Compiler::store_input_element(const std::string& input_name,
                                    uint64_t addr_id, uint64_t modulus,
                                    const std::vector<uint64_t>& values) {
@@ -389,54 +429,132 @@ void Compiler::write_replay_json() {
     using json = nlohmann::json;
     auto dir = get_program_directory();
     auto path = dir / "fhetch_replay.json";
+    std::string prog = impl_->full_program_name();
 
     json replay;
-    replay["program_name"] = impl_->full_program_name();
-    replay["ring_dimension"] = impl_->ring_dimension;
-    replay["trace_file"] = impl_->last_trace_path.filename().string();
 
-    // Per-input files
-    json inputs_arr = json::array();
-    for (const auto& input : impl_->captured_inputs) {
-        std::string input_file = impl_->full_program_name() + ".input_" + input.name + ".json";
+    // ---- program_name / program_info ----
+    replay["program_name"] = prog + ".fhetch";
+    replay["program_info"] = {
+        {"name", impl_->program_name},
+        {"version", impl_->program_version},
+        {"description", impl_->program_description}
+    };
 
-        json idx;
-        idx["name"] = input.name;
-        idx["file"] = input_file;
-        idx["element_count"] = input.elements.size();
-        inputs_arr.push_back(idx);
+    // ---- crypto_context (matches compiler's schema) ----
+    json cc;
+    cc["scheme_name"] = impl_->scheme_name;
+    cc["ring_dimension"] = impl_->ring_dimension;
+    cc["multiplicative_depth"] = impl_->multiplicative_depth;
+    cc["scaling_modulus_size"] = impl_->scaling_mod_size;
+    cc["security_level"] = impl_->security_level;
+    cc["modulus_chain"] = impl_->modulus_chain;
+    cc["modulus_chain_length"] = impl_->modulus_chain.size();
+    cc["inverse_modulus_chain"] = impl_->inverse_modulus_chain;
+    cc["is_valid"] = true;
+    replay["crypto_context"] = cc;
 
-        // Write per-input data file
-        json input_data;
-        input_data["name"] = input.name;
-        json elems_arr = json::array();
-        for (const auto& e : input.elements) {
-            json elem;
-            elem["addr_id"] = e.addr_id;
-            elem["modulus"] = e.modulus;
-            elem["values"] = e.values;
-            elems_arr.push_back(elem);
+    // ---- files ----
+    json files;
+    files["instructions"] = impl_->last_trace_path.filename().string();
+
+    // Inputs (master index referencing per-input .bin + .ids)
+    std::string inputs_index_file = prog + ".inputs.json";
+    files["inputs"] = inputs_index_file;
+
+    // Write the inputs index file (same format as compiler's inputs.cbor)
+    {
+        json inputs_index;
+        inputs_index["program_name"] = prog + ".fhetch";
+        inputs_index["input_count"] = impl_->captured_inputs.size();
+        inputs_index["input_format"] = "cereal_binary";
+        inputs_index["timestamp"] = std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+        json inputs_arr = json::array();
+        for (const auto& input : impl_->captured_inputs) {
+            json idx;
+            idx["name"] = input.name;
+            idx["ids_file"] = prog + ".input_" + input.name + ".ids";
+            idx["bin_file"] = prog + ".input_" + input.name + ".bin";
+            idx["instances_count"] = 1;
+            inputs_arr.push_back(idx);
         }
-        input_data["elements"] = elems_arr;
-
-        std::ofstream inp(dir / input_file);
-        if (inp.is_open()) {
-            inp << input_data.dump(2) << std::endl;
-            inp.close();
+        inputs_index["inputs"] = inputs_arr;
+        std::ofstream inp_out(dir / inputs_index_file);
+        if (inp_out.is_open()) {
+            inp_out << inputs_index.dump(2) << std::endl;
+            inp_out.close();
         }
     }
-    replay["inputs"] = inputs_arr;
 
-    // Output probe definitions
-    json outputs_arr = json::array();
-    for (const auto& output : impl_->captured_outputs) {
-        json out_entry;
-        out_entry["name"] = output.name;
-        out_entry["addr_ids"] = output.addr_ids;
-        out_entry["moduli"] = output.moduli;
-        outputs_arr.push_back(out_entry);
+    // Outputs
+    std::string outputs_file = prog + ".outputs.json";
+    files["outputs"] = outputs_file;
+
+    // Write the outputs file (same format as compiler's outputs.cbor)
+    {
+        json outputs_data;
+        outputs_data["program_name"] = prog + ".fhetch";
+        outputs_data["timestamp"] = std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+        json outputs_arr = json::array();
+        for (const auto& output : impl_->captured_outputs) {
+            json out_entry;
+            out_entry["name"] = output.name;
+            out_entry["payload_type"] = "ciphertext";
+            json ct_data = json::array();
+            for (size_t j = 0; j < output.addr_ids.size(); ++j) {
+                json poly;
+                poly["poly_index"] = j;
+                poly["elements"] = json::array({output.addr_ids[j]});
+                ct_data.push_back(poly);
+            }
+            out_entry["ciphertext_data"] = ct_data;
+            outputs_arr.push_back(out_entry);
+        }
+        outputs_data["outputs"] = outputs_arr;
+        std::ofstream out_out(dir / outputs_file);
+        if (out_out.is_open()) {
+            out_out << outputs_data.dump(2) << std::endl;
+            out_out.close();
+        }
     }
-    replay["outputs"] = outputs_arr;
+
+    // Key file references
+    auto mk_bin = dir / (prog + ".mk.bin");
+    if (std::filesystem::exists(mk_bin)) {
+        files["evalmult_keys"] = (dir / (prog + ".mk.bin")).string();
+        files["evalmult_ids"] = (dir / (prog + ".mk.ids")).string();
+    }
+    auto rk_bin = dir / (prog + ".rk.bin");
+    if (std::filesystem::exists(rk_bin)) {
+        files["evalautomorphism_keys"] = (dir / (prog + ".rk.bin")).string();
+        files["evalautomorphism_ids"] = (dir / (prog + ".rk.ids")).string();
+    }
+
+    replay["files"] = files;
+
+    // ---- Top-level fields matching compiler's replay.json ----
+    replay["input_format"] = "cereal_binary";
+    replay["evalmult_format"] = "cereal_binary";
+    replay["evalautomorphism_format"] = "cereal_binary";
+    replay["niobium_hw"] = impl_->niobium_hw_mode;
+    replay["num_registers"] = 16;
+    replay["config_sectors"] = 1;
+    replay["hbm_mode"] = "interleaved";
+    replay["max_memory_id"] = 0;
+
+    // Key start addr_ids
+    json key_start;
+    if (impl_->evalmult_start_addr_id > 0)
+        key_start["evalmult"] = impl_->evalmult_start_addr_id;
+    if (impl_->evalautomorphism_start_addr_id > 0)
+        key_start["evalautomorphism"] = impl_->evalautomorphism_start_addr_id;
+    if (!key_start.empty())
+        replay["key_start_addr_ids"] = key_start;
+
+    replay["generated_timestamp"] = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
 
     std::ofstream out(path);
     if (out.is_open()) {
