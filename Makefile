@@ -194,21 +194,27 @@ test-bootstrap-release: build-release ## Run the bootstrap example: client → s
 	@echo "=== Running bootstrap server (hollow mode) ==="
 	$(BUILD_DIR)/examples/bootstrap_server bootstrap_keys
 
-test-mult: build ## Run the multiply example: client → server with hollow recording (Debug)
+test-mult: build ## Run the multiply example: client → server → decrypt (Debug)
 	$(call set-build-config,Debug,dbuild)
 	@echo "=== Running mult client ==="
 	$(BUILD_DIR)/examples/mult_client mult_keys 7 13
 	@echo ""
-	@echo "=== Running mult server (hollow mode) ==="
+	@echo "=== Running mult server ==="
 	$(BUILD_DIR)/examples/mult_server mult_keys
+	@echo ""
+	@echo "=== Running mult decrypt ==="
+	$(BUILD_DIR)/examples/mult_decrypt mult_keys
 
-test-mult-release: build-release ## Run the multiply example: client → server with hollow recording (Release)
+test-mult-release: build-release ## Run the multiply example: client → server → decrypt (Release)
 	$(call set-build-config,Release,build)
 	@echo "=== Running mult client ==="
 	$(BUILD_DIR)/examples/mult_client mult_keys 7 13
 	@echo ""
-	@echo "=== Running mult server (hollow mode) ==="
+	@echo "=== Running mult server ==="
 	$(BUILD_DIR)/examples/mult_server mult_keys
+	@echo ""
+	@echo "=== Running mult decrypt ==="
+	$(BUILD_DIR)/examples/mult_decrypt mult_keys
 
 test-sim-mult: test-mult ## Record mult trace then simulate it (Debug)
 	$(call set-build-config,Debug,dbuild)

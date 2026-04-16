@@ -218,6 +218,12 @@ public:
     bool result(CryptoContextType& cc, const std::string& var_name,
                 CiphertextType& result);
 
+    /// Reconstruct probe ciphertexts from simulator output.
+    /// Called internally after replay(). Loads ciphertext templates,
+    /// fills polynomial values from the simulator, and serializes
+    /// to serialized_probes/<name>.ct.
+    void reconstruct_probes();
+
     // ====================================================================
     // FUNCTIONAL EPOCHS
     // ====================================================================

@@ -443,6 +443,10 @@ bool Compiler::replay() {
     // Write output polynomial values for probe addresses
     write_replay_outputs();
 
+    // Reconstruct ciphertext probes from simulator output
+    // (reads fhetch_replay_outputs.json written above)
+    reconstruct_probes();
+
     return true;
 }
 

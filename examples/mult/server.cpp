@@ -87,5 +87,18 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // ---- Retrieve result and serialize for decrypt step ----
+    Ciphertext<DCRTPoly> ct_result;
+    if (niobium::compiler().result(cc, "result", ct_result)) {
+        if (!Serial::SerializeToFile(keyDir + "/ct_result.bin", ct_result, SerType::BINARY)) {
+            std::cerr << "Error: Failed to serialize result ciphertext" << std::endl;
+            return 1;
+        }
+        std::cout << "Result ciphertext written to " << keyDir << "/ct_result.bin" << std::endl;
+    } else {
+        std::cerr << "[ERROR] Could not retrieve result" << std::endl;
+        return 1;
+    }
+
     return 0;
 }
