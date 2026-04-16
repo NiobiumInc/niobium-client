@@ -65,7 +65,7 @@ int main(int argc, char* argv[]) {
     niobium::compiler().capture_crypto_context(cc);
     niobium::compiler().tag_keys(cc);
 
-    // ---- Tag inputs ----
+    // ---- Tag inputs (before start, following compiler convention) ----
     niobium::compiler().tag_input("ct_a", ct_a);
     niobium::compiler().tag_input("ct_b", ct_b);
 

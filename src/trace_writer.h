@@ -50,6 +50,9 @@ public:
 
     size_t instruction_count() const { return instructions_.size(); }
 
+    /// Get the modulus table (all moduli registered during recording).
+    const std::vector<uint64_t>& modulus_table() const { return modulus_table_; }
+
 private:
     bool recording_ = false;
     bool paused_ = false;
