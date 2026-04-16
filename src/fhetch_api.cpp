@@ -15,10 +15,8 @@
 #include <atomic>
 #include <cassert>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <map>
-#include <sstream>
 #include <stdexcept>
 
 namespace niobium::fhetch {
@@ -41,11 +39,10 @@ static void emit(const std::string& instruction) {
     niobium::detail::trace_writer().emit(instruction);
 }
 
-// Format a modulus as hex for the trace
-static std::string qhex(uint64_t q) {
-    std::ostringstream ss;
-    ss << "0x" << std::hex << std::uppercase << q;
-    return ss.str();
+// Register a modulus and return "m=<index>" for the trace
+static std::string midx(uint64_t q) {
+    uint32_t idx = niobium::detail::trace_writer().register_modulus(q);
+    return "m=" + std::to_string(idx);
 }
 
 // Format an address as %N
@@ -513,7 +510,7 @@ Polynomial sr_addp(const Polynomial& a, const Polynomial& b, uint64_t q) {
     auto result = make_result(a);
     emit("sr_addp " + addr(result.impl()->address) + ", " +
          addr(a.impl()->address) + ", " + addr(b.impl()->address) +
-         ", q=" + qhex(q));
+         ", " + midx(q));
     return result;
 }
 
@@ -521,7 +518,7 @@ Polynomial sr_addps(const Polynomial& a, const Scalar& s, uint64_t q) {
     auto result = make_result(a);
     emit("sr_addps " + addr(result.impl()->address) + ", " +
          addr(a.impl()->address) + ", " +
-         std::to_string(s.impl()->int_value) + ", q=" + qhex(q));
+         std::to_string(s.impl()->int_value) + ", " + midx(q));
     return result;
 }
 
@@ -529,14 +526,14 @@ Polynomial sr_addps_coeff(const Polynomial& a, const Scalar& s, uint64_t q) {
     auto result = make_result(a, Format::Coefficient);
     emit("sr_addps_coeff " + addr(result.impl()->address) + ", " +
          addr(a.impl()->address) + ", " +
-         std::to_string(s.impl()->int_value) + ", q=" + qhex(q));
+         std::to_string(s.impl()->int_value) + ", " + midx(q));
     return result;
 }
 
 Polynomial sr_negp(const Polynomial& a, uint64_t q) {
     auto result = make_result(a);
     emit("sr_negp " + addr(result.impl()->address) + ", " +
-         addr(a.impl()->address) + ", q=" + qhex(q));
+         addr(a.impl()->address) + ", " + midx(q));
     return result;
 }
 
@@ -544,7 +541,7 @@ Polynomial sr_subp(const Polynomial& a, const Polynomial& b, uint64_t q) {
     auto result = make_result(a);
     emit("sr_subp " + addr(result.impl()->address) + ", " +
          addr(a.impl()->address) + ", " + addr(b.impl()->address) +
-         ", q=" + qhex(q));
+         ", " + midx(q));
     return result;
 }
 
@@ -552,7 +549,7 @@ Polynomial sr_subps(const Polynomial& a, const Scalar& s, uint64_t q) {
     auto result = make_result(a);
     emit("sr_subps " + addr(result.impl()->address) + ", " +
          addr(a.impl()->address) + ", " +
-         std::to_string(s.impl()->int_value) + ", q=" + qhex(q));
+         std::to_string(s.impl()->int_value) + ", " + midx(q));
     return result;
 }
 
@@ -560,7 +557,7 @@ Polynomial sr_subps_coeff(const Polynomial& a, const Scalar& s, uint64_t q) {
     auto result = make_result(a, Format::Coefficient);
     emit("sr_subps_coeff " + addr(result.impl()->address) + ", " +
          addr(a.impl()->address) + ", " +
-         std::to_string(s.impl()->int_value) + ", q=" + qhex(q));
+         std::to_string(s.impl()->int_value) + ", " + midx(q));
     return result;
 }
 
@@ -568,7 +565,7 @@ Polynomial sr_mulp(const Polynomial& a, const Polynomial& b, uint64_t q) {
     auto result = make_result(a);
     emit("sr_mulp " + addr(result.impl()->address) + ", " +
          addr(a.impl()->address) + ", " + addr(b.impl()->address) +
-         ", q=" + qhex(q));
+         ", " + midx(q));
     return result;
 }
 
@@ -576,21 +573,21 @@ Polynomial sr_mulps(const Polynomial& a, const Scalar& s, uint64_t q) {
     auto result = make_result(a);
     emit("sr_mulps " + addr(result.impl()->address) + ", " +
          addr(a.impl()->address) + ", " +
-         std::to_string(s.impl()->int_value) + ", q=" + qhex(q));
+         std::to_string(s.impl()->int_value) + ", " + midx(q));
     return result;
 }
 
 Polynomial sr_ntt(const Polynomial& a, uint64_t q) {
     auto result = make_result(a, Format::Evaluation);
     emit("sr_ntt " + addr(result.impl()->address) + ", " +
-         addr(a.impl()->address) + ", q=" + qhex(q));
+         addr(a.impl()->address) + ", " + midx(q));
     return result;
 }
 
 Polynomial sr_intt(const Polynomial& a, uint64_t q) {
     auto result = make_result(a, Format::Coefficient);
     emit("sr_intt " + addr(result.impl()->address) + ", " +
-         addr(a.impl()->address) + ", q=" + qhex(q));
+         addr(a.impl()->address) + ", " + midx(q));
     return result;
 }
 
@@ -600,7 +597,7 @@ Polynomial sr_permute(const Polynomial& a,
                       uint64_t q) {
     auto result = make_result(a);
     emit("sr_permute " + addr(result.impl()->address) + ", " +
-         addr(a.impl()->address) + ", q=" + qhex(q));
+         addr(a.impl()->address) + ", " + midx(q));
     return result;
 }
 
@@ -732,7 +729,7 @@ Polynomial sr_automorph_coeff(const Polynomial& x, uint64_t k, uint64_t q) {
     auto result = make_result(x, Format::Coefficient);
     emit("sr_automorph_coeff " + addr(result.impl()->address) + ", " +
          addr(x.impl()->address) + ", k=" + std::to_string(k) +
-         ", q=" + qhex(q));
+         ", " + midx(q));
     return result;
 }
 
@@ -740,7 +737,7 @@ Polynomial sr_rot_automorph_coeff(const Polynomial& x, uint64_t offset, uint64_t
     auto result = make_result(x, Format::Coefficient);
     emit("sr_rot_automorph_coeff " + addr(result.impl()->address) + ", " +
          addr(x.impl()->address) + ", offset=" + std::to_string(offset) +
-         ", q=" + qhex(q));
+         ", " + midx(q));
     return result;
 }
 

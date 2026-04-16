@@ -145,6 +145,10 @@ public:
     template<typename CryptoContextType>
     void capture_crypto_context(const CryptoContextType& cc);
 
+    /// Set the ring dimension for the FHETCH simulator.
+    /// Called automatically by capture_crypto_context(), or can be set manually.
+    void set_ring_dimension(uint64_t N);
+
     // ====================================================================
     // RECORDING MODES
     // ====================================================================
@@ -175,6 +179,25 @@ public:
 
     /// Activate FHETCH mode (called internally by FHETCH API functions).
     void set_fhetch_mode();
+
+    // ====================================================================
+    // REPLAY (FHETCH Simulator)
+    // ====================================================================
+
+    /// Replay the recorded trace through the FHETCH simulator.
+    /// Executes the .fhetch trace using OpenFHE modular arithmetic,
+    /// producing computed polynomial values.
+    /// @return true if replay succeeded with zero errors.
+    bool replay();
+
+    /// Retrieve a hardware-computed result ciphertext after replay.
+    /// @param cc       CryptoContext for result assembly.
+    /// @param var_name Name of the output (as passed to probe()).
+    /// @param result   Ciphertext to populate with computed values.
+    /// @return true if the result was retrieved successfully.
+    template<typename CryptoContextType, typename CiphertextType>
+    bool result(CryptoContextType& cc, const std::string& var_name,
+                CiphertextType& result);
 
     // ====================================================================
     // FUNCTIONAL EPOCHS

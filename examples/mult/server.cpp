@@ -4,8 +4,9 @@
 // Multiply example — server side
 //
 // Loads BFV crypto context, keys, and two encrypted integers from client.
-// Records a*b via the Niobium compiler, producing a FHETCH instruction trace.
-// Serializes the result ciphertext for the decrypt step.
+// Records a*b via the Niobium compiler using hollow mode, producing a
+// FHETCH instruction trace. Then replays the trace through the FHETCH
+// simulator to execute the computation using OpenFHE modular arithmetic.
 //
 // Usage: ./mult_server [key_dir]
 
@@ -36,7 +37,7 @@ int main(int argc, char* argv[]) {
         if (arg.find("--") != 0) { keyDir = arg; break; }
     }
 
-    std::cout << "=== Integer Multiply — Server (Trace Recording) ===" << std::endl;
+    std::cout << "=== Integer Multiply — Server ===" << std::endl;
     std::cout << "Loading from: " << keyDir << std::endl;
 
     // ---- Load crypto context ----
@@ -60,45 +61,32 @@ int main(int argc, char* argv[]) {
     if (!Serial::DeserializeFromFile(keyDir + "/ct_b.bin", ct_b, SerType::BINARY))
         throw std::runtime_error("Failed to load ciphertext b");
 
-    // ---- Capture crypto context ----
+    // ---- Capture crypto context (stores ring dimension for simulator) ----
     niobium::compiler().capture_crypto_context(cc);
 
     // ---- Tag inputs ----
     niobium::compiler().tag_input("ct_a", ct_a);
     niobium::compiler().tag_input("ct_b", ct_b);
 
-    Ciphertext<DCRTPoly> ct_result;
-
     if (!niobium::compiler().is_cache_valid()) {
         // ---- RECORDING PHASE (hollow mode) ----
-        // Hollow mode skips expensive polynomial math during recording
-        // while preserving structure and firing probes correctly.
-        // Real input data is still captured via tag_input().
-        // The result ciphertext is NOT valid after hollow recording —
-        // real results come from the Niobium hardware after compilation.
         std::cout << "\n--- Recording EvalMult (hollow mode) ---" << std::endl;
         niobium::compiler().enable_hollow_mode(true);
         niobium::compiler().start();
 
-        ct_result = cc->EvalMult(ct_a, ct_b);
+        auto ct_result = cc->EvalMult(ct_a, ct_b);
 
         niobium::compiler().probe("result", ct_result);
         niobium::compiler().stop();
         niobium::compiler().enable_hollow_mode(false);
-        std::cout << "Recording complete. FHETCH trace written." << std::endl;
-        std::cout << "NOTE: Hollow mode was used — result ciphertext is not valid." << std::endl;
-        std::cout << "      In production, the Niobium server returns the real result" << std::endl;
-        std::cout << "      after compiling and executing the trace on hardware." << std::endl;
-    } else {
-        std::cout << "\n--- Using cached trace ---" << std::endl;
     }
 
-    // In a real deployment, the FHETCH trace + serialized inputs would be
-    // sent to the Niobium compilation service. The server would return the
-    // hardware-computed result ciphertext, which the client then decrypts.
-    //
-    // For this example, no ct_result.bin is produced since hollow mode
-    // does not compute real polynomial values.
+    // ---- REPLAY: execute trace through the FHETCH simulator ----
+    std::cout << "\n--- Replay ---" << std::endl;
+    if (!niobium::compiler().replay()) {
+        std::cerr << "[ERROR] Replay failed" << std::endl;
+        return 1;
+    }
 
     return 0;
 }

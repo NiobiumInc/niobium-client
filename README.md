@@ -32,10 +32,12 @@ Open-source thin client for the **Niobium Mistic** FHE accelerator. Customers li
          v
  +--------------------------------------------------+
  |  .fhetch trace file (text format)                 |
- |  sr_addp %2, %0, %1, q=...                        |
- |  sr_mulp %3, %2, %1, q=...                        |
- |  sr_ntt %4, %3, q=...                              |
- |  mr_addp %6, %5, %7                                |
+ |  modulus_count 2                                   |
+ |  m[0] 0xFFFFFFFF00000001                           |
+ |  m[1] 0xFFFFFFFE00000001                           |
+ |  sr_addp %2, %0, %1, m=0                           |
+ |  sr_mulp %3, %2, %1, m=1                           |
+ |  sr_ntt %4, %3, m=0                                |
  |  halt                                              |
  +--------------------------------------------------+
          |
@@ -139,20 +141,27 @@ The output is a human-readable text file recording every FHETCH Polynomial IR op
 # Niobium FHETCH Trace
 # Program: my_program v1.0
 # Instruction Count: 24
-sr_addp %2, %0, %1, q=0xFFFFFFFF00000001
-sr_mulp %3, %2, %1, q=0xFFFFFFFF00000001
-sr_mulps %4, %3, 42, q=0xFFFFFFFF00000001
-sr_negp %5, %4, q=0xFFFFFFFF00000001
-sr_intt %6, %5, q=0xFFFFFFFF00000001
-sr_ntt %7, %6, q=0xFFFFFFFF00000001
-sr_addps_coeff %8, %7, 1, q=0xFFFFFFFF00000001
-mr_addp %10, %9, %11          # multi-residue (expands per-residue on server)
-mr_ntt %12, %10
-mrpa_dotproduct %13, %14, %15
+# Modulus Count: 2
+
+# Modulus Table
+modulus_count 2
+m[0] 0xFFFFFFFF00000001
+m[1] 0xFFFFFFFE00000001
+
+# Instructions
+sr_addp %2, %0, %1, m=0
+sr_mulp %3, %2, %1, m=0
+sr_mulps %4, %3, 42, m=0
+sr_negp %5, %4, m=0
+sr_intt %6, %5, m=0
+sr_ntt %7, %6, m=0
+sr_addps_coeff %8, %7, 1, m=1
 halt
 ```
 
-Each line is one FHETCH operation using the Polynomial IR function names. The server-side `niobium-compiler` parses this trace and lowers each FHETCH operation to internal hardware instructions (e.g., `sr_ntt` becomes `ntt1`+`ntt2`, multi-residue gadgets expand into per-residue operations, register allocation and load/store insertion is performed). This trace is **intentionally unoptimized** — all optimization happens server-side.
+The file starts with a **modulus table** that maps indices to prime modulus values. Instructions reference moduli by index (`m=0`, `m=1`, ...) rather than repeating the full value on every line — this keeps the trace compact and makes parsing efficient.
+
+Each instruction line is one FHETCH operation using the Polynomial IR function names. The server-side `niobium-compiler` parses this trace and lowers each FHETCH operation to internal hardware instructions (e.g., `sr_ntt` becomes `ntt1`+`ntt2`, multi-residue gadgets expand into per-residue operations, register allocation and load/store insertion is performed). This trace is **intentionally unoptimized** — all optimization happens server-side.
 
 ## Project Structure
 

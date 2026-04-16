@@ -62,6 +62,8 @@ set(LIB_SOURCES
     src/auto_facade.cpp
     src/compiler.cpp
     src/fhetch_api.cpp
+    src/fhetch_sim/instruction.cpp
+    src/fhetch_sim/simulator.cpp
     src/probes.cpp
     src/trace_writer.cpp
 )
@@ -87,6 +89,7 @@ target_include_directories(niobium_client
         $<INSTALL_INTERFACE:include>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/fhetch_sim
 )
 
 # OpenFHE include paths — BUILD_INTERFACE only (not propagated to install tree;
@@ -149,6 +152,20 @@ install(EXPORT NiobiumClientTargets
     NAMESPACE   Niobium::
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/NiobiumClient
 )
+
+# ==============================================================================
+# FHETCH Simulator CLI
+# ==============================================================================
+
+add_executable(fhetch_sim src/fhetch_sim/main.cpp)
+target_link_libraries(fhetch_sim PRIVATE niobium_client)
+if(APPLE)
+  set_target_properties(fhetch_sim PROPERTIES
+      BUILD_RPATH "@loader_path;${OPENFHE_LIBRARY_PATH}")
+else()
+  set_target_properties(fhetch_sim PROPERTIES
+      BUILD_RPATH "${OPENFHE_LIBRARY_PATH}")
+endif()
 
 # ==============================================================================
 # Examples (optional)

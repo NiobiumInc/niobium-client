@@ -107,9 +107,11 @@ namespace niobium {
 
 template<>
 void Compiler::capture_crypto_context<lbcrypto::CryptoContext<DCRTPoly>>(
-    const lbcrypto::CryptoContext<DCRTPoly>& /*cc*/) {
-    // In the client, we note the context but don't serialize it locally.
-    // The server handles crypto context propagation.
+    const lbcrypto::CryptoContext<DCRTPoly>& cc) {
+    // Store ring dimension for the simulator.
+    uint64_t rd = cc->GetRingDimension();
+    set_ring_dimension(rd);
+    std::cout << "[NIOBIUM] Captured crypto context: ring_dim=" << rd << std::endl;
 }
 
 template<>

@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace niobium {
@@ -28,6 +29,11 @@ public:
     void pause_recording();
     void resume_recording();
 
+    // Register a modulus in the table. Returns the index.
+    // If the modulus is already registered, returns the existing index.
+    // Thread-safe.
+    uint32_t register_modulus(uint64_t modulus);
+
     // Emit a FHETCH instruction line into the trace.
     void emit(const std::string& instruction);
 
@@ -39,7 +45,7 @@ public:
     std::filesystem::path write(const std::filesystem::path& directory,
                                 const std::string& program_name);
 
-    // Clear all recorded instructions (for epoch reset).
+    // Clear all recorded instructions and modulus table (for epoch reset).
     void clear();
 
     size_t instruction_count() const { return instructions_.size(); }
@@ -54,6 +60,11 @@ private:
     int source_line_ = 0;
     std::string build_timestamp_;
     std::vector<std::string> instructions_;
+
+    // Modulus table: modulus value → index
+    std::vector<uint64_t> modulus_table_;
+    std::unordered_map<uint64_t, uint32_t> modulus_index_;
+
     mutable std::mutex mutex_;
 };
 

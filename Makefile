@@ -207,6 +207,24 @@ test-mult-release: build-release ## Run the multiply example: client → server 
 	@echo "=== Running mult server (hollow mode) ==="
 	$(BUILD_DIR)/examples/mult_server mult_keys
 
+test-sim-mult: test-mult ## Record mult trace then simulate it (Debug)
+	$(call set-build-config,Debug,dbuild)
+	@echo ""
+	@echo "=== Running FHETCH simulator on mult trace ==="
+	$(BUILD_DIR)/fhetch_sim mult_server_workload_bfv_mult/mult_server_workload_bfv_mult.fhetch --ring-dim 8192
+
+test-sim-mult-release: test-mult-release ## Record mult trace then simulate it (Release)
+	$(call set-build-config,Release,build)
+	@echo ""
+	@echo "=== Running FHETCH simulator on mult trace ==="
+	$(BUILD_DIR)/fhetch_sim mult_server_workload_bfv_mult/mult_server_workload_bfv_mult.fhetch --ring-dim 8192
+
+test-sim-bootstrap-release: test-bootstrap-release ## Record bootstrap trace then simulate it (Release)
+	$(call set-build-config,Release,build)
+	@echo ""
+	@echo "=== Running FHETCH simulator on bootstrap trace ==="
+	$(BUILD_DIR)/fhetch_sim bootstrap_server_workload_ckks_bootstrap/bootstrap_server_workload_ckks_bootstrap.fhetch --ring-dim 2048
+
 ##@ Cleanup
 
 clean: ## Remove all build artifacts

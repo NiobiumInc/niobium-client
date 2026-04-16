@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 
 #include "niobium/compiler.h"
+#include "niobium/fhetch_sim/simulator.h"
 #include "trace_writer.h"
 
 #include <cstring>
@@ -44,6 +45,15 @@ struct Compiler::Impl {
 
     // Epochs
     uint32_t epoch_id = 0;
+
+    // Crypto context info
+    uint64_t ring_dimension = 0;
+
+    // Last written trace path (set by stop())
+    std::filesystem::path last_trace_path;
+
+    // Simulator instance (created by replay())
+    std::unique_ptr<fhetch_sim::Simulator> simulator;
 
     // Derived program directory
     std::filesystem::path program_dir;
@@ -114,7 +124,7 @@ bool Compiler::stop() {
 
     // Write the FHETCH trace file
     auto dir = get_program_directory();
-    auto trace_path = impl_->trace_writer.write(dir, impl_->full_program_name());
+    impl_->last_trace_path = impl_->trace_writer.write(dir, impl_->full_program_name());
 
     // Save FHETCH input/output metadata if in FHETCH mode
     if (impl_->fhetch_mode) {
@@ -188,6 +198,10 @@ bool Compiler::is_cache_valid() {
 // Recording modes
 // ============================================================================
 
+void Compiler::set_ring_dimension(uint64_t N) {
+    impl_->ring_dimension = N;
+}
+
 void Compiler::enable_hollow_mode(bool enabled) {
     impl_->hollow_mode = enabled;
     lbcrypto::g_hollow_mode = enabled;
@@ -251,6 +265,50 @@ bool Compiler::stop_epoch() {
 
 uint32_t Compiler::epoch_id() const {
     return impl_->epoch_id;
+}
+
+// ============================================================================
+// Replay — run the FHETCH simulator
+// ============================================================================
+
+bool Compiler::replay() {
+    if (impl_->last_trace_path.empty()) {
+        // Look for an existing trace (cached)
+        auto dir = get_program_directory();
+        auto path = dir / (impl_->full_program_name() + ".fhetch");
+        if (std::filesystem::exists(path)) {
+            impl_->last_trace_path = path;
+        } else {
+            std::cerr << "[NIOBIUM] No trace file found for replay" << std::endl;
+            return false;
+        }
+    }
+
+    if (impl_->ring_dimension == 0) {
+        std::cerr << "[NIOBIUM] Ring dimension not set — call capture_crypto_context() before replay()" << std::endl;
+        return false;
+    }
+
+    std::cout << "[NIOBIUM] Replaying trace: " << impl_->last_trace_path << std::endl;
+
+    impl_->simulator = std::make_unique<fhetch_sim::Simulator>();
+    impl_->simulator->set_ring_dimension(impl_->ring_dimension);
+
+    if (!impl_->simulator->load_trace(impl_->last_trace_path)) {
+        std::cerr << "[NIOBIUM] Failed to load trace for replay" << std::endl;
+        return false;
+    }
+
+    auto result = impl_->simulator->run();
+
+    if (result.errors > 0) {
+        std::cerr << "[NIOBIUM] Replay failed: " << result.errors << " errors" << std::endl;
+        return false;
+    }
+
+    std::cout << "[NIOBIUM] Replay complete: " << result.instructions_executed
+              << " instructions, " << result.elapsed_seconds << "s" << std::endl;
+    return true;
 }
 
 // ============================================================================
