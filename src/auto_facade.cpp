@@ -18,6 +18,7 @@
 
 #include "cereal_io.h"
 #include <cereal/archives/portable_binary.hpp>
+#include <nlohmann/json.hpp>
 
 #include <atomic>
 #include <filesystem>
@@ -230,6 +231,17 @@ void Compiler::probe<lbcrypto::Ciphertext<DCRTPoly>>(
             store_output_probe(var_name, fhetch_addr, modulus);
         }
     }
+
+    // Save ciphertext template for result reconstruction after replay.
+    // The template preserves the ciphertext structure (params, format, etc.)
+    // so we can fill in simulator-computed polynomial values later.
+    auto dir = get_program_directory();
+    auto templates_dir = dir / "ciphertext_templates";
+    std::filesystem::create_directories(templates_dir);
+    auto template_path = templates_dir / (var_name + ".template");
+    if (!lbcrypto::Serial::SerializeToFile(template_path.string(), ct, lbcrypto::SerType::BINARY)) {
+        std::cerr << "[NIOBIUM] WARNING: Failed to save ciphertext template for " << var_name << std::endl;
+    }
 }
 
 // Helper: capture DCRTPoly polynomials — collects addr_ids and stores values
@@ -333,6 +345,90 @@ void Compiler::tag_keys<lbcrypto::CryptoContext<DCRTPoly>>(
     } catch (...) {}
 
     std::cout << "[NIOBIUM] Tagged " << total << " key polynomials for replay" << std::endl;
+}
+
+// ============================================================================
+// reconstruct_probes() — fill ciphertext templates with simulator output
+// ============================================================================
+
+// reconstruct_probes() needs both Compiler::Impl (from compiler.cpp) and
+// OpenFHE types. We implement it here using the public API + fhetch_replay_outputs.json
+// rather than accessing Impl directly.
+
+void Compiler::reconstruct_probes() {
+    auto dir = get_program_directory();
+    auto templates_dir = dir / "ciphertext_templates";
+    auto serialized_dir = dir / "serialized_probes";
+    auto outputs_path = dir / "fhetch_replay_outputs.json";
+
+    if (!std::filesystem::exists(outputs_path)) return;
+    std::filesystem::create_directories(serialized_dir);
+
+    // Load the simulator's computed output values
+    std::ifstream ifs(outputs_path);
+    if (!ifs.is_open()) return;
+    nlohmann::json outputs_json = nlohmann::json::parse(ifs, nullptr, false);
+    if (outputs_json.is_discarded() || !outputs_json.contains("outputs")) return;
+
+    for (const auto& output_entry : outputs_json["outputs"]) {
+        std::string name = output_entry.value("name", "");
+        auto template_path = templates_dir / (name + ".template");
+        if (!std::filesystem::exists(template_path)) continue;
+
+        lbcrypto::Ciphertext<DCRTPoly> ct;
+        if (!lbcrypto::Serial::DeserializeFromFile(template_path.string(), ct, lbcrypto::SerType::BINARY)) {
+            std::cerr << "[NIOBIUM] Failed to load template for " << name << std::endl;
+            continue;
+        }
+
+        // Fill the polynomial values from the simulator output
+        const auto& sim_elements = output_entry["elements"];
+        auto& ct_elements = ct->GetElements();
+        size_t elem_idx = 0;
+        for (auto& dcrt : ct_elements) {
+            auto& polys = dcrt.GetAllElements();
+            for (auto& native_poly : polys) {
+                if (elem_idx >= sim_elements.size()) break;
+                const auto& sim_elem = sim_elements[elem_idx];
+                if (sim_elem.value("status", "") == "computed" && sim_elem.contains("values")) {
+                    auto values = sim_elem["values"].get<std::vector<uint64_t>>();
+                    size_t ring_dim = native_poly.GetLength();
+                    auto modulus = native_poly.GetModulus();
+                    lbcrypto::NativeVector nv(ring_dim, modulus);
+                    for (size_t i = 0; i < ring_dim && i < values.size(); i++)
+                        nv[i] = lbcrypto::NativeInteger(values[i]);
+                    native_poly.SetValues(std::move(nv), native_poly.GetFormat());
+                }
+                elem_idx++;
+            }
+        }
+
+        auto ct_path = serialized_dir / (name + ".ct");
+        if (lbcrypto::Serial::SerializeToFile(ct_path.string(), ct, lbcrypto::SerType::BINARY)) {
+            std::cout << "[NIOBIUM] Serialized probe '" << name << "' to " << ct_path << std::endl;
+        }
+    }
+}
+
+// ============================================================================
+// result() — load simulator-computed ciphertext from serialized_probes/
+// ============================================================================
+
+template<>
+bool Compiler::result<lbcrypto::CryptoContext<DCRTPoly>, lbcrypto::Ciphertext<DCRTPoly>>(
+    lbcrypto::CryptoContext<DCRTPoly>& /*cc*/,
+    const std::string& var_name,
+    lbcrypto::Ciphertext<DCRTPoly>& ct_result) {
+    auto dir = get_program_directory();
+    auto serialized_path = dir / "serialized_probes" / (var_name + ".ct");
+    if (std::filesystem::exists(serialized_path)) {
+        if (lbcrypto::Serial::DeserializeFromFile(serialized_path.string(), ct_result, lbcrypto::SerType::BINARY)) {
+            std::cout << "[NIOBIUM] Loaded result '" << var_name << "' from serialized probe" << std::endl;
+            return true;
+        }
+    }
+    std::cerr << "[NIOBIUM] Result '" << var_name << "' not found" << std::endl;
+    return false;
 }
 
 }  // namespace niobium
