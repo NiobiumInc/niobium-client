@@ -83,10 +83,13 @@ help: ## Display this help message
 
 ##@ Submodules
 
-sync: sync-openfhe ## Sync all submodules to pinned commits
+sync: sync-openfhe sync-json ## Sync all submodules to pinned commits
 
 sync-openfhe: ## Sync OpenFHE submodule to pinned commit
 	git submodule update --init --recursive vendor/openfhe
+
+sync-json: ## Sync nlohmann/json submodule to pinned commit
+	git submodule update --init vendor/json
 
 update-openfhe: ## Update OpenFHE submodule to latest remote commit
 	cd $(OPENFHE_DIR) && git fetch origin && git checkout nb_main && git pull origin nb_main

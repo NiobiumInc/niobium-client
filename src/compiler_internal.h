@@ -8,10 +8,15 @@
 #pragma once
 
 #include "trace_writer.h"
+#include <cstdint>
 
 namespace niobium::detail {
 
 /// Get the global TraceWriter instance (owned by the Compiler singleton).
 TraceWriter& trace_writer();
+
+/// Look up the FHETCH address for an OpenFHE polynomial ID.
+/// Returns (uint64_t)-1 if not found.
+uint64_t lookup_fhetch_address(uintptr_t openfhe_poly_id);
 
 }  // namespace niobium::detail

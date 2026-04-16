@@ -305,3 +305,18 @@ void openfhe_cprobe_switchmodulus(uintptr_t dst, uintptr_t src,
 }
 
 }  // extern "C"
+
+// ============================================================================
+// Internal helper: look up FHETCH address for an OpenFHE poly ID
+// ============================================================================
+
+namespace niobium::detail {
+
+uint64_t lookup_fhetch_address(uintptr_t openfhe_poly_id) {
+    std::lock_guard<std::mutex> lock(g_probe_mutex);
+    auto it = g_address_map.find(openfhe_poly_id);
+    if (it != g_address_map.end()) return it->second;
+    return static_cast<uint64_t>(-1);
+}
+
+}  // namespace niobium::detail
