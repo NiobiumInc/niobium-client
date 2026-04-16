@@ -11,10 +11,8 @@
 #include "niobium/compiler.h"
 #include "compiler_internal.h"
 
-#include <iomanip>
 #include <iostream>
 #include <mutex>
-#include <sstream>
 #include <string>
 #include <unordered_map>
 
@@ -40,10 +38,9 @@ static std::string addr(uintptr_t a) {
     return "%" + std::to_string(a);
 }
 
-static std::string qhex(uint64_t q) {
-    std::ostringstream ss;
-    ss << "0x" << std::hex << std::uppercase << q;
-    return ss.str();
+static std::string midx(uint64_t q) {
+    uint32_t idx = niobium::detail::trace_writer().register_modulus(q);
+    return "m=" + std::to_string(idx);
 }
 
 static void emit(const std::string& instruction) {
@@ -216,7 +213,7 @@ void openfhe_cprobe_add(uintptr_t dst, uintptr_t src1, uintptr_t src2,
     std::lock_guard<std::mutex> lock(g_probe_mutex);
     emit("sr_addp " + addr(map_address(dst)) + ", " +
          addr(map_address(src1)) + ", " + addr(map_address(src2)) +
-         ", q=" + qhex(modulus));
+         ", " + midx(modulus));
 }
 
 void openfhe_cprobe_sub(uintptr_t dst, uintptr_t src1, uintptr_t src2,
@@ -225,7 +222,7 @@ void openfhe_cprobe_sub(uintptr_t dst, uintptr_t src1, uintptr_t src2,
     std::lock_guard<std::mutex> lock(g_probe_mutex);
     emit("sr_subp " + addr(map_address(dst)) + ", " +
          addr(map_address(src1)) + ", " + addr(map_address(src2)) +
-         ", q=" + qhex(modulus));
+         ", " + midx(modulus));
 }
 
 void openfhe_cprobe_mul(uintptr_t dst, uintptr_t src1, uintptr_t src2,
@@ -234,7 +231,7 @@ void openfhe_cprobe_mul(uintptr_t dst, uintptr_t src1, uintptr_t src2,
     std::lock_guard<std::mutex> lock(g_probe_mutex);
     emit("sr_mulp " + addr(map_address(dst)) + ", " +
          addr(map_address(src1)) + ", " + addr(map_address(src2)) +
-         ", q=" + qhex(modulus));
+         ", " + midx(modulus));
 }
 
 void openfhe_cprobe_addi(uintptr_t dst, uintptr_t src, uint64_t immediate,
@@ -243,7 +240,7 @@ void openfhe_cprobe_addi(uintptr_t dst, uintptr_t src, uint64_t immediate,
     std::lock_guard<std::mutex> lock(g_probe_mutex);
     emit("sr_addps " + addr(map_address(dst)) + ", " +
          addr(map_address(src)) + ", " + std::to_string(immediate) +
-         ", q=" + qhex(modulus));
+         ", " + midx(modulus));
 }
 
 void openfhe_cprobe_subi(uintptr_t dst, uintptr_t src, uint64_t immediate,
@@ -252,7 +249,7 @@ void openfhe_cprobe_subi(uintptr_t dst, uintptr_t src, uint64_t immediate,
     std::lock_guard<std::mutex> lock(g_probe_mutex);
     emit("sr_subps " + addr(map_address(dst)) + ", " +
          addr(map_address(src)) + ", " + std::to_string(immediate) +
-         ", q=" + qhex(modulus));
+         ", " + midx(modulus));
 }
 
 void openfhe_cprobe_muli(uintptr_t dst, uintptr_t src, uint64_t immediate,
@@ -261,7 +258,7 @@ void openfhe_cprobe_muli(uintptr_t dst, uintptr_t src, uint64_t immediate,
     std::lock_guard<std::mutex> lock(g_probe_mutex);
     emit("sr_mulps " + addr(map_address(dst)) + ", " +
          addr(map_address(src)) + ", " + std::to_string(immediate) +
-         ", q=" + qhex(modulus));
+         ", " + midx(modulus));
 }
 
 // ============================================================================
@@ -273,7 +270,7 @@ void openfhe_cprobe_ntt(uintptr_t dst, uintptr_t src, uint64_t modulus,
     if (!should_record()) return;
     std::lock_guard<std::mutex> lock(g_probe_mutex);
     emit("sr_ntt " + addr(map_address(dst)) + ", " +
-         addr(map_address(src)) + ", q=" + qhex(modulus));
+         addr(map_address(src)) + ", " + midx(modulus));
 }
 
 void openfhe_cprobe_intt(uintptr_t dst, uintptr_t src, uint64_t modulus,
@@ -281,7 +278,7 @@ void openfhe_cprobe_intt(uintptr_t dst, uintptr_t src, uint64_t modulus,
     if (!should_record()) return;
     std::lock_guard<std::mutex> lock(g_probe_mutex);
     emit("sr_intt " + addr(map_address(dst)) + ", " +
-         addr(map_address(src)) + ", q=" + qhex(modulus));
+         addr(map_address(src)) + ", " + midx(modulus));
 }
 
 void openfhe_cprobe_automorphism(uintptr_t dst, uintptr_t src,
@@ -292,7 +289,7 @@ void openfhe_cprobe_automorphism(uintptr_t dst, uintptr_t src,
     std::lock_guard<std::mutex> lock(g_probe_mutex);
     emit("sr_automorph_eval " + addr(map_address(dst)) + ", " +
          addr(map_address(src)) + ", k=" + std::to_string(k) +
-         ", q=" + qhex(modulus));
+         ", " + midx(modulus));
 }
 
 void openfhe_cprobe_switchmodulus(uintptr_t dst, uintptr_t src,
@@ -304,7 +301,7 @@ void openfhe_cprobe_switchmodulus(uintptr_t dst, uintptr_t src,
     std::lock_guard<std::mutex> lock(g_probe_mutex);
     emit("# switchmodulus " + addr(map_address(dst)) + ", " +
          addr(map_address(src)) +
-         ", old_q=" + qhex(old_modulus) + ", new_q=" + qhex(new_modulus));
+         ", old_" + midx(old_modulus) + ", new_" + midx(new_modulus));
 }
 
 }  // extern "C"

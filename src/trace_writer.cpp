@@ -5,6 +5,7 @@
 
 #include <chrono>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 
 namespace niobium {
@@ -48,6 +49,17 @@ void TraceWriter::resume_recording() {
     paused_ = false;
 }
 
+uint32_t TraceWriter::register_modulus(uint64_t modulus) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = modulus_index_.find(modulus);
+    if (it != modulus_index_.end())
+        return it->second;
+    uint32_t idx = static_cast<uint32_t>(modulus_table_.size());
+    modulus_table_.push_back(modulus);
+    modulus_index_[modulus] = idx;
+    return idx;
+}
+
 void TraceWriter::emit(const std::string& instruction) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (recording_ && !paused_) {
@@ -89,26 +101,39 @@ std::filesystem::path TraceWriter::write(const std::filesystem::path& directory,
     if (!build_timestamp_.empty())
         out << "# Build: " << build_timestamp_ << "\n";
     out << "# Instruction Count: " << instructions_.size() << "\n";
+    out << "# Modulus Count: " << modulus_table_.size() << "\n";
 
     auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
     out << "# Generated: " << now << "\n";
     out << "# =========================================\n";
 
+    // Modulus table
+    out << "\n# Modulus Table\n";
+    out << "modulus_count " << modulus_table_.size() << "\n";
+    for (size_t i = 0; i < modulus_table_.size(); ++i) {
+        out << "m[" << i << "] 0x" << std::hex << std::uppercase
+            << modulus_table_[i] << std::dec << "\n";
+    }
+
     // Instructions
+    out << "\n# Instructions\n";
     for (const auto& inst : instructions_) {
         out << inst << "\n";
     }
 
     out.close();
     std::cout << "[FHETCH] Trace written: " << path
-              << " (" << instructions_.size() << " instructions)" << std::endl;
+              << " (" << instructions_.size() << " instructions, "
+              << modulus_table_.size() << " moduli)" << std::endl;
     return path;
 }
 
 void TraceWriter::clear() {
     std::lock_guard<std::mutex> lock(mutex_);
     instructions_.clear();
+    modulus_table_.clear();
+    modulus_index_.clear();
 }
 
 }  // namespace niobium
