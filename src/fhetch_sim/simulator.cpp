@@ -12,6 +12,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <set>
 #include <sstream>
 
 // OpenFHE math
@@ -375,6 +376,60 @@ uint64_t Simulator::get_modulus(uint64_t address) const {
 
 bool Simulator::is_initialized(uint64_t address) const {
     return impl_->memory.is_initialized(address);
+}
+
+std::vector<uint64_t> Simulator::get_read_before_write_addresses() const {
+    std::set<uint64_t> written;
+    std::vector<uint64_t> rbw;
+
+    for (const auto& inst : impl_->trace.instructions) {
+        if (inst.opcode == OpCode::HALT || inst.opcode == OpCode::COMMENT ||
+            inst.opcode == OpCode::UNKNOWN)
+            continue;
+
+        // Source addresses are read
+        // For poly-poly ops: src1 and src2 are sources
+        // For poly-scalar/unary ops: src1 is the source
+        // The dest is also a source for in-place ops (dest == src1)
+        uint64_t sources[2] = {inst.src1, inst.src2};
+        int nsrc = 2;
+
+        // Unary ops only have src1
+        switch (inst.opcode) {
+        case OpCode::SR_NEGP:
+        case OpCode::SR_NTT: case OpCode::SR_INTT:
+        case OpCode::SR_NEGP_NI:
+        case OpCode::SR_FT: case OpCode::SR_IFT:
+        case OpCode::SR_PERMUTE:
+        case OpCode::SR_AUTOMORPH_EVAL:
+        case OpCode::SR_AUTOMORPH_COEFF:
+        case OpCode::SR_ROT_AUTOMORPH_COEFF:
+            nsrc = 1;
+            break;
+        case OpCode::SR_ADDPS: case OpCode::SR_SUBPS: case OpCode::SR_MULPS:
+        case OpCode::SR_ADDPS_COEFF: case OpCode::SR_SUBPS_COEFF:
+        case OpCode::SR_ADDPS_NI: case OpCode::SR_SUBPS_NI: case OpCode::SR_MULPS_NI:
+        case OpCode::SR_ADDPS_COEFF_NI: case OpCode::SR_SUBPS_COEFF_NI:
+            nsrc = 1;  // scalar ops: only src1 is a poly address
+            break;
+        default:
+            break;
+        }
+
+        for (int i = 0; i < nsrc; i++) {
+            if (written.find(sources[i]) == written.end()) {
+                // First time seeing this address as a source, and it hasn't
+                // been written yet — it's a read-before-write.
+                rbw.push_back(sources[i]);
+                written.insert(sources[i]);  // prevent duplicates in result
+            }
+        }
+
+        // Dest is written
+        written.insert(inst.dest);
+    }
+
+    return rbw;
 }
 
 }  // namespace niobium::fhetch_sim
