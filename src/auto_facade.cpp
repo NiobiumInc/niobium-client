@@ -29,6 +29,7 @@
 #include <vector>
 
 using DCRTPoly = lbcrypto::DCRTPoly;
+// Format is a top-level enum in OpenFHE (utils/inttypes.h), not namespaced.
 
 // ============================================================================
 // Stored references to OpenFHE objects for re-extraction at replay() time.
@@ -260,17 +261,46 @@ void Compiler::probe<lbcrypto::Ciphertext<DCRTPoly>>(
     }
 }
 
-// Helper: capture DCRTPoly polynomials — collects addr_ids and stores values
+// Debug verbosity: set NIOBIUM_DEBUG_CAPTURE=1 to print every captured poly.
+static bool capture_debug_enabled() {
+    static int cached = -1;
+    if (cached == -1) {
+        const char* e = std::getenv("NIOBIUM_DEBUG_CAPTURE");
+        cached = (e && *e && std::string(e) != "0") ? 1 : 0;
+    }
+    return cached == 1;
+}
+
+// Helper: capture DCRTPoly polynomials — collects addr_ids and stores values.
+// Forces EVALUATION (NTT) form before reading values so the simulator sees
+// the same representation the compiler's reference captures.
 static size_t capture_dcrt_polys(Compiler& compiler,
                                  const std::string& key_name,
                                  const std::vector<DCRTPoly>& polys,
                                  std::vector<uint64_t>& addr_ids) {
     size_t count = 0;
-    for (const auto& dcrt : polys) {
-        for (const auto& poly : dcrt.GetAllElements()) {
+    size_t coeff_count = 0;   // how many polys were in COEFFICIENT form on entry
+    size_t zero_count = 0;    // captured polys whose values are all-zero
+    bool dbg = capture_debug_enabled();
+
+    for (size_t di = 0; di < polys.size(); ++di) {
+        // Cast away const so we can normalize the format — captures should
+        // always be in EVALUATION form (matches OpenFHE's post-encrypt state
+        // and the compiler's capture convention).
+        auto& dcrt = const_cast<DCRTPoly&>(polys[di]);
+        if (dcrt.GetFormat() != Format::EVALUATION) {
+            dcrt.SetFormat(Format::EVALUATION);
+        }
+
+        const auto& towers = dcrt.GetAllElements();
+        for (size_t ti = 0; ti < towers.size(); ++ti) {
+            const auto& poly = towers[ti];
             uintptr_t poly_id = poly.GetId();
             uint64_t fhetch_addr = detail::lookup_fhetch_address(poly_id);
             if (fhetch_addr == static_cast<uint64_t>(-1)) continue;
+
+            if (poly.GetFormat() != Format::EVALUATION)
+                ++coeff_count;  // unexpected — SetFormat above should have normalized
 
             addr_ids.push_back(fhetch_addr);
 
@@ -278,12 +308,40 @@ static size_t capture_dcrt_polys(Compiler& compiler,
             size_t n = poly.GetLength();
             std::vector<uint64_t> vals(n);
             const auto& vec = poly.GetValues();
-            for (size_t i = 0; i < n; ++i)
+            bool any_nonzero = false;
+            for (size_t i = 0; i < n; ++i) {
                 vals[i] = vec[i].ConvertToInt();
+                if (vals[i] != 0) any_nonzero = true;
+            }
+            if (!any_nonzero) ++zero_count;
+
+            if (dbg) {
+                std::cout << "[NIOBIUM-DBG] " << key_name
+                          << " dcrt[" << di << "].tower[" << ti << "]"
+                          << " poly_id=0x" << std::hex << poly_id << std::dec
+                          << " addr=%" << fhetch_addr
+                          << " fmt=" << (poly.GetFormat()==Format::EVALUATION?"EVAL":"COEFF")
+                          << " mod=0x" << std::hex << modulus << std::dec
+                          << " N=" << n
+                          << " vals[0..3]=" << vals[0]
+                          << "," << (n>1?vals[1]:0)
+                          << "," << (n>2?vals[2]:0)
+                          << "," << (n>3?vals[3]:0)
+                          << (any_nonzero ? "" : "  [ALL-ZERO]")
+                          << std::endl;
+            }
 
             compiler.store_input_element(key_name, fhetch_addr, modulus, vals);
             count++;
         }
+    }
+
+    if (count > 0) {
+        std::cout << "[NIOBIUM] captured " << key_name << ": " << count
+                  << " polys";
+        if (coeff_count) std::cout << "  (" << coeff_count << " still in COEFF form!)";
+        if (zero_count)  std::cout << "  (" << zero_count << " all-zero)";
+        std::cout << std::endl;
     }
     return count;
 }
