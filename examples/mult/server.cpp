@@ -92,12 +92,22 @@ int main(int argc, char* argv[]) {
     // below to diff against whatever the simulator ends up producing.
     Ciphertext<DCRTPoly> ct_openfhe;
 
+    // Bisect mode: NIOBIUM_DEBUG_NORELIN=1 swaps EvalMult for EvalMultNoRelin
+    // to isolate the tensor product (no relinearization / key-switching).
+    bool no_relin = false;
+    {
+        const char* e = std::getenv("NIOBIUM_DEBUG_NORELIN");
+        no_relin = e && *e && std::string(e) != "0";
+    }
+
     if (!niobium::compiler().is_cache_valid()) {
         // ---- RECORDING PHASE ----
-        std::cout << "\n--- Recording EvalMult ---" << std::endl;
+        std::cout << "\n--- Recording " << (no_relin ? "EvalMultNoRelin" : "EvalMult") << " ---" << std::endl;
         niobium::compiler().start();
 
-        auto ct_result = cc->EvalMult(ct_a, ct_b);
+        auto ct_result = no_relin
+            ? cc->EvalMultNoRelin(ct_a, ct_b)
+            : cc->EvalMult(ct_a, ct_b);
 
         niobium::compiler().probe("result", ct_result);
         niobium::compiler().stop();
