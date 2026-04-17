@@ -66,6 +66,18 @@ static uintptr_t resolve_inplace_src(uintptr_t src_addr, uintptr_t dst_addr) {
     return src_addr;
 }
 
+// Any arithmetic op that writes to `dst_addr` invalidates the clone-parent
+// link for that address: the destination now holds computed data, not a
+// pristine copy of anything. Without this, later in-place ops resolve
+// to a stale parent and read the wrong polynomial. (The bug that broke
+// EvalMult's d[1] = a0*b1 + a1*b0 — after `tmp = clone(cv1[0])` set
+// parent[tmp]=cv1[0], the subsequent mul overwrote tmp with a0*b1, but
+// the parent link persisted and the later `tmp += a1*b0` resolved src1
+// back to cv1[0] instead of the mul result.)
+static void invalidate_clone_parent_on_write(uintptr_t dst_addr) {
+    g_data_parent.erase(dst_addr);
+}
+
 // ============================================================================
 // Recording control
 // ============================================================================
@@ -253,6 +265,7 @@ void openfhe_cprobe_add(uintptr_t dst, uintptr_t src1, uintptr_t src2,
     uintptr_t s2 = map_address(src2);
     emit("sr_addp " + addr(da) + ", " + addr(s1) + ", " + addr(s2) +
          ", " + midx(modulus));
+    invalidate_clone_parent_on_write(da);
 }
 
 void openfhe_cprobe_sub(uintptr_t dst, uintptr_t src1, uintptr_t src2,
@@ -264,6 +277,7 @@ void openfhe_cprobe_sub(uintptr_t dst, uintptr_t src1, uintptr_t src2,
     uintptr_t s2 = map_address(src2);
     emit("sr_subp " + addr(da) + ", " + addr(s1) + ", " + addr(s2) +
          ", " + midx(modulus));
+    invalidate_clone_parent_on_write(da);
 }
 
 void openfhe_cprobe_mul(uintptr_t dst, uintptr_t src1, uintptr_t src2,
@@ -275,6 +289,7 @@ void openfhe_cprobe_mul(uintptr_t dst, uintptr_t src1, uintptr_t src2,
     uintptr_t s2 = map_address(src2);
     emit("sr_mulp " + addr(da) + ", " + addr(s1) + ", " + addr(s2) +
          ", " + midx(modulus));
+    invalidate_clone_parent_on_write(da);
 }
 
 void openfhe_cprobe_addi(uintptr_t dst, uintptr_t src, uint64_t immediate,
@@ -285,6 +300,7 @@ void openfhe_cprobe_addi(uintptr_t dst, uintptr_t src, uint64_t immediate,
     uintptr_t sa = resolve_inplace_src(map_address(src), da);
     emit("sr_addps " + addr(da) + ", " + addr(sa) + ", " + std::to_string(immediate) +
          ", " + midx(modulus));
+    invalidate_clone_parent_on_write(da);
 }
 
 void openfhe_cprobe_subi(uintptr_t dst, uintptr_t src, uint64_t immediate,
@@ -295,6 +311,7 @@ void openfhe_cprobe_subi(uintptr_t dst, uintptr_t src, uint64_t immediate,
     uintptr_t sa = resolve_inplace_src(map_address(src), da);
     emit("sr_subps " + addr(da) + ", " + addr(sa) + ", " + std::to_string(immediate) +
          ", " + midx(modulus));
+    invalidate_clone_parent_on_write(da);
 }
 
 void openfhe_cprobe_muli(uintptr_t dst, uintptr_t src, uint64_t immediate,
@@ -305,6 +322,7 @@ void openfhe_cprobe_muli(uintptr_t dst, uintptr_t src, uint64_t immediate,
     uintptr_t sa = resolve_inplace_src(map_address(src), da);
     emit("sr_mulps " + addr(da) + ", " + addr(sa) + ", " + std::to_string(immediate) +
          ", " + midx(modulus));
+    invalidate_clone_parent_on_write(da);
 }
 
 // ============================================================================
