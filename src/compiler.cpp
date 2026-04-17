@@ -249,9 +249,6 @@ bool Compiler::is_cache_valid() {
 
 void Compiler::set_ring_dimension(uint64_t N) {
     impl_->ring_dimension = N;
-    // Propagate to the probe layer so the scratch buffer returned from
-    // openfhe_cprobe_address is sized correctly for OpenFHE's CopyValues.
-    detail::set_precompute_ring_dim(static_cast<uintptr_t>(N));
 }
 
 void Compiler::set_crypto_context_info(const std::string& scheme_name,
@@ -430,28 +427,6 @@ bool Compiler::replay() {
     // get their values from the simulation itself.
     auto rbw_addrs = impl_->simulator->get_read_before_write_addresses();
     std::set<uint64_t> rbw_set(rbw_addrs.begin(), rbw_addrs.end());
-
-    // Populate simulator memory from snapshots grabbed by OpenFHE's
-    // CopyValues path (openfhe_cprobe_address → openfhe_cprobe_precompute).
-    // Those cover every FHETCH address whose poly fired the precompute
-    // probe — i.e. bootstrap DFT plaintexts AND their intermediate polys.
-    {
-        size_t snap_live = 0;
-        const auto& snaps = detail::get_precompute_snapshots();
-        for (const auto& [addr, values] : snaps) {
-            if (impl_->simulator->is_initialized(addr)) continue;
-            // modulus=0 → simulator uses the m=N from each instruction's
-            // modulus_index for the actual arithmetic; the stored modulus
-            // is only used for same-tower chaining, which matches values
-            // written by OpenFHE in EVAL form.
-            impl_->simulator->store_polynomial(addr, values, 0);
-            if (rbw_set.count(addr)) ++snap_live;
-        }
-        if (!snaps.empty()) {
-            std::cout << "[NIOBIUM]   precompute_snapshots: " << snaps.size()
-                      << " polys, " << snap_live << " live-in" << std::endl;
-        }
-    }
 
     // Populate simulator memory from captured input data.
     //

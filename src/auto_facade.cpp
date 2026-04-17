@@ -163,18 +163,18 @@ void Compiler::capture_crypto_context<lbcrypto::CryptoContext<DCRTPoly>>(
     // Store for re-extraction at replay() time
     g_stored_cc = cc;
 
+    // Register the auto-capture hook so stop() walks any CC-derived
+    // precomputed data (e.g. CKKS bootstrap precompute). Must run at
+    // stop() — not here — because EvalBootstrapSetup fires its
+    // precompute probes AFTER capture_crypto_context returns.
+    set_auto_capture_at_stop([this, cc]() {
+        this->tag_bootstrap_precompute(cc);
+    });
+
     std::cout << "[NIOBIUM] Captured crypto context: scheme=" << scheme
               << " ring_dim=" << rd
               << " depth=" << depth
               << " moduli=" << modulus_chain.size() << std::endl;
-
-    // Capture CC-derived precomputed data (e.g. CKKS bootstrap precompute)
-    // immediately — right now the plaintexts built by EvalBootstrapSetup
-    // have the same poly IDs that the subsequent EvalBootstrap trace will
-    // reference. If we wait until stop(), OpenFHE may have already
-    // regenerated the precompute at higher addresses, missing the ones
-    // the trace actually reads from.
-    tag_bootstrap_precompute(cc);
 }
 
 // Helper: collect addr_ids and coefficient data from a ciphertext
@@ -312,6 +312,10 @@ static size_t capture_dcrt_polys(Compiler& compiler,
         for (size_t ti = 0; ti < towers.size(); ++ti) {
             const auto& poly = towers[ti];
             uintptr_t poly_id = poly.GetId();
+            // Pin the OpenFHE id so its compact FHETCH address stays live
+            // through any reassignments (inputs/keys/precompute must survive
+            // the address-recycling layer).
+            detail::pin_openfhe_id(poly_id);
             uint64_t fhetch_addr = detail::lookup_fhetch_address(poly_id);
             if (fhetch_addr == static_cast<uint64_t>(-1)) continue;
 
@@ -500,7 +504,11 @@ void Compiler::tag_bootstrap_precompute<lbcrypto::CryptoContext<DCRTPoly>>(
     }
 
     std::cout << "[NIOBIUM] Tagged " << addr_ids.size()
-              << " bootstrap precompute polynomials" << std::endl;
+              << " bootstrap precompute polynomials"
+              << " (precompute probe fired " << niobium::detail::niobium_precompute_probe_count()
+              << " times, " << niobium::detail::niobium_precompute_probe_already_mapped_count()
+              << " already mapped)"
+              << std::endl;
 
     // Write .bp.bin and .bp.ids to disk (compiler-parity format).
     auto dir = get_program_directory();

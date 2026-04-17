@@ -24,14 +24,15 @@ uint64_t lookup_fhetch_address(uintptr_t openfhe_poly_id);
 /// Used to propagate input data to addresses created by copy/move probes.
 const std::unordered_map<uint64_t, uint64_t>& get_data_parent_map();
 
-/// Get snapshots of every poly that fired openfhe_cprobe_precompute, keyed
-/// by FHETCH address. Values were written by OpenFHE's CopyValues via the
-/// client-provided buffer returned from openfhe_cprobe_address.
-const std::unordered_map<uint64_t, std::vector<uint64_t>>& get_precompute_snapshots();
+/// Pin an OpenFHE poly id so its compact FHETCH address is never recycled
+/// into the free pool, even if its refcount drops to zero via
+/// openfhe_cprobe_reassign_id. Used for inputs/keys/bootstrap precompute
+/// whose values must remain accessible for the whole replay.
+void pin_openfhe_id(uintptr_t poly_id);
 
-/// Tell the probe layer what ring dimension to use when sizing the
-/// per-poly scratch buffer handed back from openfhe_cprobe_address.
-void set_precompute_ring_dim(uintptr_t n);
+/// Diagnostic counters.
+uintptr_t niobium_precompute_probe_count();
+uintptr_t niobium_precompute_probe_already_mapped_count();
 
 /// Bump the FHETCH address allocator so the next allocation returns
 /// an address >= `next_addr`. No-op if the allocator is already past
