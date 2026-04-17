@@ -34,12 +34,13 @@ int main(int argc, char* argv[]) {
 
     std::filesystem::create_directories(outputDir);
 
-    // ---- CKKS parameters ----
+    // ---- CKKS parameters (matching compiler's TOY defaults) ----
     CCParams<CryptoContextCKKSRNS> parameters;
     parameters.SetSecurityLevel(HEStd_NotSet);
     parameters.SetRingDim(2048);
     parameters.SetMultiplicativeDepth(2);
-    parameters.SetScalingModSize(50);
+    parameters.SetScalingModSize(42);
+    parameters.SetFirstModSize(57);
     parameters.SetScalingTechnique(FLEXIBLEAUTO);
 
     CryptoContext<DCRTPoly> cc = GenCryptoContext(parameters);

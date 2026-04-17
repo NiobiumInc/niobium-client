@@ -361,6 +361,10 @@ void openfhe_cprobe_switchmodulus(uintptr_t dst, uintptr_t src,
     std::string da = addr(d);
     std::string sa = addr(s);
 
+    emit("# switchmodulus " + da + ", " + sa +
+         ", old_mod=" + std::to_string(old_modulus) +
+         ", new_mod=" + std::to_string(new_modulus));
+
     // muli dst, src, 1, old_modulus
     emit("sr_mulps " + da + ", " + sa + ", 1, " + midx(old_modulus));
     // addi dst, dst, half_om, old_modulus
