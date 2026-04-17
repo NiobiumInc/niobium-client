@@ -466,6 +466,58 @@ bool Simulator::is_initialized(uint64_t address) const {
     return impl_->memory.is_initialized(address);
 }
 
+void Simulator::prematerialize_zero_inits() {
+    // Scan instructions in order. An instruction of the form
+    //   sr_mulps %x, %x, 0, m=N
+    // or
+    //   sr_addps %x, %x, 0, m=0
+    // with imm=0 (and src == dst for mulps / the dst preamble pattern for
+    // addps) initializes %x to the zero vector deterministically. If such
+    // an instruction appears for an address before that address is read
+    // anywhere, materialize a zero-vector in memory at %x now. This lets
+    // the compiler's replay() loader use these addresses as "initialized"
+    // when propagating through the data-parent chain, before the simulator
+    // has executed the preamble itself.
+    std::unordered_set<uint64_t> read_before;
+    for (const auto& inst : impl_->trace.instructions) {
+        if (inst.opcode == OpCode::HALT || inst.opcode == OpCode::COMMENT ||
+            inst.opcode == OpCode::UNKNOWN) continue;
+
+        bool is_zero_init = false;
+        if (inst.opcode == OpCode::SR_MULPS && inst.immediate == 0) {
+            // `sr_mulps %x, %x, 0, m=N` (and similar addr patterns) writes zeros
+            is_zero_init = true;
+        } else if ((inst.opcode == OpCode::SR_ADDPS ||
+                    inst.opcode == OpCode::SR_ADDPS_COEFF) &&
+                   inst.immediate == 0 && inst.src1 == inst.dest) {
+            // `sr_addps %x, %x, 0, m=0` — adding zero to self, still zero-init
+            // semantics when %x was uninit. Conservative: accept.
+            is_zero_init = true;
+        }
+
+        if (is_zero_init && read_before.count(inst.dest) == 0 &&
+            !impl_->memory.is_initialized(inst.dest)) {
+            // Materialize zero. Modulus=0 is fine — ops that use this
+            // address take their modulus from their own m=N field.
+            impl_->memory.set(inst.dest,
+                              std::vector<uint64_t>(impl_->ring_dim, 0),
+                              /*modulus=*/0);
+        }
+
+        // Track reads — once a src is read, later writes with
+        // prematerialization would be wrong (the read wanted earlier data).
+        auto note_read = [&](uint64_t a) { if (a) read_before.insert(a); };
+        note_read(inst.src1);
+        note_read(inst.src2);
+        if (inst.dest && (inst.opcode == OpCode::SR_ADDP ||
+                          inst.opcode == OpCode::SR_SUBP ||
+                          inst.opcode == OpCode::SR_MULP)) {
+            // These ops' dest is in-place read too, but already covered
+            // by src1 on typical emissions; keep defensive.
+        }
+    }
+}
+
 std::vector<uint64_t> Simulator::get_read_before_write_addresses() const {
     std::set<uint64_t> written;
     std::vector<uint64_t> rbw;

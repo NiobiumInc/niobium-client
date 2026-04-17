@@ -73,6 +73,14 @@ public:
     /// These are the "live-in" addresses that need input data.
     std::vector<uint64_t> get_read_before_write_addresses() const;
 
+    /// Scan the trace for instructions that initialize an address with a
+    /// known constant value of zero (e.g. `sr_mulps %x, %x, 0, m=...`)
+    /// BEFORE it appears as a read anywhere, and materialize the zero
+    /// vector in simulator memory at that address. Called by replay()
+    /// as part of the load-time population so the data-parent chain can
+    /// propagate from zero-initialized sources.
+    void prematerialize_zero_inits();
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
