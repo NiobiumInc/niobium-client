@@ -180,21 +180,29 @@ install-release: ## Install the client library (Release mode)
 
 ##@ Testing
 
-test-bootstrap: build ## Run the bootstrap example: client → server with hollow recording (Debug)
+test-bootstrap: build ## Run the bootstrap example: client → server → decrypt (Debug)
 	$(call set-build-config,Debug,dbuild)
+	@rm -rf bootstrap_keys bootstrap_server_*
 	@echo "=== Running bootstrap client ==="
 	$(BUILD_DIR)/examples/bootstrap_client bootstrap_keys
 	@echo ""
-	@echo "=== Running bootstrap server (hollow mode) ==="
+	@echo "=== Running bootstrap server ==="
 	$(BUILD_DIR)/examples/bootstrap_server bootstrap_keys
+	@echo ""
+	@echo "=== Running bootstrap decrypt ==="
+	$(BUILD_DIR)/examples/bootstrap_decrypt bootstrap_keys
 
-test-bootstrap-release: build-release ## Run the bootstrap example: client → server with hollow recording (Release)
+test-bootstrap-release: build-release ## Run the bootstrap example: client → server → decrypt (Release)
 	$(call set-build-config,Release,build)
+	@rm -rf bootstrap_keys bootstrap_server_*
 	@echo "=== Running bootstrap client ==="
 	$(BUILD_DIR)/examples/bootstrap_client bootstrap_keys
 	@echo ""
-	@echo "=== Running bootstrap server (hollow mode) ==="
+	@echo "=== Running bootstrap server ==="
 	$(BUILD_DIR)/examples/bootstrap_server bootstrap_keys
+	@echo ""
+	@echo "=== Running bootstrap decrypt ==="
+	$(BUILD_DIR)/examples/bootstrap_decrypt bootstrap_keys
 
 test-mult: build ## Run the multiply example: client → server → decrypt (Debug)
 	$(call set-build-config,Debug,dbuild)

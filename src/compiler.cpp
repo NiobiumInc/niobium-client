@@ -410,22 +410,27 @@ bool Compiler::replay() {
     auto rbw_addrs = impl_->simulator->get_read_before_write_addresses();
     std::set<uint64_t> rbw_set(rbw_addrs.begin(), rbw_addrs.end());
 
-    // Populate simulator memory from captured input data (only live-in addresses)
+    // Populate simulator memory from captured input data.
+    //
+    // Load captured polys unconditionally (not only live-in addresses).
+    // Rationale: inputs like bootstrap-precompute plaintexts are typically
+    // *cloned* before being consumed by the trace; the clone's address is
+    // the one that ends up live-in, and the data-parent chain carries data
+    // from the captured original to the clone. If we skip non-live-in
+    // captures here, the parent is never materialized and propagation
+    // cannot reach the clone.
     size_t direct_count = 0;
     for (const auto& input : impl_->captured_inputs) {
-        size_t loaded = 0, skipped = 0;
+        size_t live = 0, aux = 0;
         for (const auto& elem : input.elements) {
-            if (rbw_set.count(elem.addr_id)) {
-                impl_->simulator->store_polynomial(elem.addr_id, elem.values, elem.modulus);
-                direct_count++;
-                loaded++;
-            } else {
-                skipped++;
-            }
+            impl_->simulator->store_polynomial(elem.addr_id, elem.values, elem.modulus);
+            direct_count++;
+            if (rbw_set.count(elem.addr_id)) ++live;
+            else ++aux;
         }
         std::cout << "[NIOBIUM]   " << input.name << ": "
                   << input.elements.size() << " elements, "
-                  << loaded << " loaded, " << skipped << " skipped (not live-in)"
+                  << live << " live-in, " << aux << " aux (for parent chain)"
                   << std::endl;
     }
 
@@ -493,6 +498,28 @@ bool Compiler::replay() {
                           << std::endl;
             }
         }
+    }
+
+    // Debug: dump unloaded live-in addresses + a sample of captured non-live-in.
+    if (std::getenv("NIOBIUM_DEBUG_ADDRS") && !unloaded.empty()) {
+        std::sort(unloaded.begin(), unloaded.end());
+        std::set<uint64_t> captured_addrs;
+        for (const auto& input : impl_->captured_inputs)
+            for (const auto& e : input.elements)
+                captured_addrs.insert(e.addr_id);
+        std::cout << "[NIOBIUM-DBG] unloaded live-in: min=" << unloaded.front()
+                  << " max=" << unloaded.back() << " count=" << unloaded.size()
+                  << std::endl;
+        std::cout << "[NIOBIUM-DBG] captured addrs: ";
+        std::vector<uint64_t> sorted_cap(captured_addrs.begin(), captured_addrs.end());
+        std::sort(sorted_cap.begin(), sorted_cap.end());
+        if (!sorted_cap.empty())
+            std::cout << "min=" << sorted_cap.front() << " max=" << sorted_cap.back()
+                      << " count=" << sorted_cap.size();
+        std::cout << std::endl;
+        size_t overlap = 0;
+        for (uint64_t a : unloaded) if (captured_addrs.count(a)) ++overlap;
+        std::cout << "[NIOBIUM-DBG] unloaded ∩ captured = " << overlap << std::endl;
     }
 
     std::cout << "[NIOBIUM] Live-in: " << rbw_set.size()
@@ -657,6 +684,11 @@ void Compiler::write_replay_json() {
     if (std::filesystem::exists(rk_bin)) {
         files["evalautomorphism_keys"] = (dir / (prog + ".rk.bin")).string();
         files["evalautomorphism_ids"] = (dir / (prog + ".rk.ids")).string();
+    }
+    auto bp_bin = dir / (prog + ".bp.bin");
+    if (std::filesystem::exists(bp_bin)) {
+        files["bootstrap_precomp"] = (prog + ".bp.bin");
+        files["bootstrap_precomp_ids"] = (prog + ".bp.ids");
     }
 
     replay["files"] = files;

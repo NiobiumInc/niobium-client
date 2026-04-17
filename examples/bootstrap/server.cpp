@@ -78,14 +78,27 @@ int main(int argc, char* argv[]) {
     // ---- Capture crypto context and keys for simulator ----
     niobium::compiler().capture_crypto_context(cc);
     niobium::compiler().tag_keys(cc);
+    // Bootstrap precompute plaintexts are created by EvalBootstrapSetup
+    // before start() — tag them here so `.bp.bin`/`.bp.ids` are on disk
+    // before fhetch_replay.json gets written in stop().
+    niobium::compiler().tag_bootstrap_precompute(cc);
 
     // ---- Tag the input ciphertext ----
     niobium::compiler().tag_input("input_cipher", ciph);
 
+    // Hollow mode skips OpenFHE's real math during recording, which is fast
+    // but leaves intermediate polys uninitialized for the simulator.
+    // NIOBIUM_BOOTSTRAP_HOLLOW=0 forces real-math recording so every derived
+    // poly is populated before the simulator runs.
+    bool hollow = true;
+    {
+        const char* e = std::getenv("NIOBIUM_BOOTSTRAP_HOLLOW");
+        if (e && std::string(e) == "0") hollow = false;
+    }
+
     if (!niobium::compiler().is_cache_valid()) {
-        // ---- RECORDING PHASE (hollow mode) ----
-        std::cout << "\n--- Recording bootstrap operation (hollow mode) ---" << std::endl;
-        niobium::compiler().enable_hollow_mode(true);
+        std::cout << "\n--- Recording bootstrap (" << (hollow ? "hollow" : "real") << " mode) ---" << std::endl;
+        niobium::compiler().enable_hollow_mode(hollow);
         niobium::compiler().start();
 
         auto ciphertextAfter = cc->EvalBootstrap(ciph);
@@ -102,5 +115,16 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // ---- Extract the simulator's reconstructed probe and serialize ----
+    Ciphertext<DCRTPoly> ct_result;
+    if (!niobium::compiler().result(cc, "output_cipher", ct_result)) {
+        std::cerr << "[ERROR] Could not retrieve output_cipher probe" << std::endl;
+        return 1;
+    }
+    if (!Serial::SerializeToFile(keyDir + "/ct_result.bin", ct_result, SerType::BINARY)) {
+        std::cerr << "[ERROR] Failed to serialize result ciphertext" << std::endl;
+        return 1;
+    }
+    std::cout << "Result ciphertext written to " << keyDir << "/ct_result.bin" << std::endl;
     return 0;
 }
