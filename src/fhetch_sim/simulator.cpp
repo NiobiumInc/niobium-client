@@ -44,9 +44,13 @@ struct Simulator::Impl {
 
     // Get polynomial from memory, returning zero-initialized if missing
     const std::vector<uint64_t>& get_or_zero(uint64_t addr,
-                                              std::vector<uint64_t>& scratch) {
+                                              std::vector<uint64_t>& scratch,
+                                              const Instruction& inst) {
         if (memory.is_initialized(addr))
             return memory.get(addr).values;
+        std::cerr << "[FHETCH_SIM] WARNING: read from uninitialized address %"
+                  << addr << " (line " << inst.line_number << ": "
+                  << inst.raw_line << ")" << std::endl;
         scratch.assign(ring_dim, 0);
         return scratch;
     }
@@ -62,8 +66,8 @@ struct Simulator::Impl {
     bool exec_addp(const Instruction& inst) {
         uint64_t q = resolve_modulus(inst.modulus_index);
         std::vector<uint64_t> scratch1, scratch2;
-        const auto& a = get_or_zero(inst.src1, scratch1);
-        const auto& b = get_or_zero(inst.src2, scratch2);
+        const auto& a = get_or_zero(inst.src1, scratch1, inst);
+        const auto& b = get_or_zero(inst.src2, scratch2, inst);
         if (a.size() != ring_dim || b.size() != ring_dim) {
             error(inst, "ring dimension mismatch"); return false;
         }
@@ -85,8 +89,8 @@ struct Simulator::Impl {
     bool exec_subp(const Instruction& inst) {
         uint64_t q = resolve_modulus(inst.modulus_index);
         std::vector<uint64_t> scratch1, scratch2;
-        const auto& a = get_or_zero(inst.src1, scratch1);
-        const auto& b = get_or_zero(inst.src2, scratch2);
+        const auto& a = get_or_zero(inst.src1, scratch1, inst);
+        const auto& b = get_or_zero(inst.src2, scratch2, inst);
         if (a.size() != ring_dim || b.size() != ring_dim) {
             error(inst, "ring dimension mismatch"); return false;
         }
@@ -108,8 +112,8 @@ struct Simulator::Impl {
     bool exec_mulp(const Instruction& inst) {
         uint64_t q = resolve_modulus(inst.modulus_index);
         std::vector<uint64_t> scratch1, scratch2;
-        const auto& a = get_or_zero(inst.src1, scratch1);
-        const auto& b = get_or_zero(inst.src2, scratch2);
+        const auto& a = get_or_zero(inst.src1, scratch1, inst);
+        const auto& b = get_or_zero(inst.src2, scratch2, inst);
         if (a.size() != ring_dim || b.size() != ring_dim) {
             error(inst, "ring dimension mismatch"); return false;
         }
@@ -131,8 +135,15 @@ struct Simulator::Impl {
     bool exec_addps(const Instruction& inst) {
         uint64_t q = resolve_modulus(inst.modulus_index);
         std::vector<uint64_t> scratch;
-        const auto& a = get_or_zero(inst.src1, scratch);
+        const auto& a = get_or_zero(inst.src1, scratch, inst);
         if (a.size() != ring_dim) { error(inst, "ring dimension mismatch"); return false; }
+
+        // Special case: immediate 0 = copy (no modular reduction).
+        // Used by copy probes where the modulus may not match the data.
+        if (inst.immediate == 0) {
+            memory.set(inst.dest, std::vector<uint64_t>(a), q);
+            return true;
+        }
 
         NativeInteger mod(q), imm(inst.immediate);
         NativeVector va(ring_dim, mod);
@@ -147,7 +158,7 @@ struct Simulator::Impl {
     bool exec_subps(const Instruction& inst) {
         uint64_t q = resolve_modulus(inst.modulus_index);
         std::vector<uint64_t> scratch;
-        const auto& a = get_or_zero(inst.src1, scratch);
+        const auto& a = get_or_zero(inst.src1, scratch, inst);
         if (a.size() != ring_dim) { error(inst, "ring dimension mismatch"); return false; }
 
         NativeInteger mod(q), imm(inst.immediate);
@@ -170,7 +181,7 @@ struct Simulator::Impl {
         }
 
         std::vector<uint64_t> scratch;
-        const auto& a = get_or_zero(inst.src1, scratch);
+        const auto& a = get_or_zero(inst.src1, scratch, inst);
         if (a.size() != ring_dim) { error(inst, "ring dimension mismatch"); return false; }
 
         NativeInteger mod(q), imm(inst.immediate);
@@ -186,7 +197,7 @@ struct Simulator::Impl {
     bool exec_negp(const Instruction& inst) {
         uint64_t q = resolve_modulus(inst.modulus_index);
         std::vector<uint64_t> scratch;
-        const auto& a = get_or_zero(inst.src1, scratch);
+        const auto& a = get_or_zero(inst.src1, scratch, inst);
         if (a.size() != ring_dim) { error(inst, "ring dimension mismatch"); return false; }
 
         std::vector<uint64_t> result(ring_dim);
@@ -199,7 +210,7 @@ struct Simulator::Impl {
     bool exec_ntt(const Instruction& inst) {
         uint64_t q = resolve_modulus(inst.modulus_index);
         std::vector<uint64_t> scratch;
-        const auto& a = get_or_zero(inst.src1, scratch);
+        const auto& a = get_or_zero(inst.src1, scratch, inst);
         if (a.size() != ring_dim) { error(inst, "ring dimension mismatch"); return false; }
 
         NativeInteger mod(q);
@@ -219,7 +230,7 @@ struct Simulator::Impl {
     bool exec_intt(const Instruction& inst) {
         uint64_t q = resolve_modulus(inst.modulus_index);
         std::vector<uint64_t> scratch;
-        const auto& a = get_or_zero(inst.src1, scratch);
+        const auto& a = get_or_zero(inst.src1, scratch, inst);
         if (a.size() != ring_dim) { error(inst, "ring dimension mismatch"); return false; }
 
         NativeInteger mod(q);

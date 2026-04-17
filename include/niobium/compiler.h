@@ -219,10 +219,13 @@ public:
                 CiphertextType& result);
 
     /// Reconstruct probe ciphertexts from simulator output.
-    /// Called internally after replay(). Loads ciphertext templates,
-    /// fills polynomial values from the simulator, and serializes
-    /// to serialized_probes/<name>.ct.
     void reconstruct_probes();
+
+    /// Re-extract polynomial data from all stored OpenFHE objects.
+    /// Called at replay() time to capture polynomials at their current
+    /// FHETCH addresses, including derived addresses created by OpenFHE's
+    /// internal processing between tag_input/tag_keys and start().
+    void refresh_all_inputs();
 
     // ====================================================================
     // FUNCTIONAL EPOCHS
@@ -268,6 +271,9 @@ public:
         std::forward<Lambda>(work)(std::forward<Args>(args)...);
         stop();
     }
+
+    /// Clear all captured input data (called before refresh).
+    void clear_captured_inputs();
 
     // Internal: store captured input polynomial data for replay.
     // Called by the tag_input template instantiation.

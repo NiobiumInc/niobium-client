@@ -67,6 +67,11 @@ void TraceWriter::emit(const std::string& instruction) {
     }
 }
 
+void TraceWriter::emit_preamble(const std::string& instruction) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    instructions_.push_back(instruction);
+}
+
 void TraceWriter::comment(const std::string& text) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (recording_ && !paused_) {

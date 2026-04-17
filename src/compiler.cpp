@@ -267,6 +267,10 @@ void Compiler::set_key_start_addr_id(const std::string& key_type, uint64_t addr_
         impl_->evalautomorphism_start_addr_id = addr_id;
 }
 
+void Compiler::clear_captured_inputs() {
+    impl_->captured_inputs.clear();
+}
+
 void Compiler::store_input_element(const std::string& input_name,
                                    uint64_t addr_id, uint64_t modulus,
                                    const std::vector<uint64_t>& values) {
