@@ -233,6 +233,44 @@ struct Simulator::Impl {
         return true;
     }
 
+    // AutomorphismTransform for power-of-2 ring in EVALUATION form.
+    // Mirrors OpenFHE's PolyImpl::AutomorphismTransform(k) (poly-impl.h:494):
+    //   logn = log2(N)
+    //   mask = N - 1
+    //   for (j=0, jk=k; j < N; ++j, jk += 2k):
+    //       result[ReverseBits(j, logn)] = values[ReverseBits((jk>>1)&mask, logn)]
+    bool exec_automorph_eval(const Instruction& inst) {
+        uint64_t q = resolve_modulus(inst.modulus_index);
+        std::vector<uint64_t> scratch;
+        const auto& a = get_or_zero(inst.src1, scratch, inst);
+        if (a.size() != ring_dim) { error(inst, "ring dimension mismatch"); return false; }
+        if (!inst.k.has_value()) {
+            error(inst, "automorphism missing k"); return false;
+        }
+        uint32_t k = static_cast<uint32_t>(inst.k.value());
+        // logn such that (1 << logn) == ring_dim
+        uint32_t logn = 0;
+        for (uint32_t n = static_cast<uint32_t>(ring_dim); n > 1; n >>= 1) ++logn;
+        uint32_t mask = (1u << logn) - 1u;
+
+        auto rev_bits = [](uint32_t x, uint32_t bits) {
+            uint32_t r = 0;
+            for (uint32_t i = 0; i < bits; ++i)
+                if (x & (1u << i)) r |= 1u << (bits - 1 - i);
+            return r;
+        };
+
+        std::vector<uint64_t> result(ring_dim, 0);
+        uint32_t jk = k;
+        for (uint32_t j = 0; j < ring_dim; ++j, jk += 2 * k) {
+            uint32_t jrev = rev_bits(j, logn);
+            uint32_t idxrev = rev_bits((jk >> 1) & mask, logn);
+            result[jrev] = a[idxrev];
+        }
+        memory.set(inst.dest, std::move(result), q);
+        return true;
+    }
+
     bool exec_intt(const Instruction& inst) {
         uint64_t q = resolve_modulus(inst.modulus_index);
         std::vector<uint64_t> scratch;
@@ -293,11 +331,12 @@ struct Simulator::Impl {
             case OpCode::SR_NTT:         ok = exec_ntt(inst);   break;
             case OpCode::SR_INTT:        ok = exec_intt(inst);  break;
 
+            case OpCode::SR_AUTOMORPH_EVAL: ok = exec_automorph_eval(inst); break;
+
             case OpCode::SR_PERMUTE:
-            case OpCode::SR_AUTOMORPH_EVAL:
             case OpCode::SR_AUTOMORPH_COEFF:
             case OpCode::SR_ROT_AUTOMORPH_COEFF:
-                // TODO: permutation/automorphism simulation
+                // TODO: COEFF-form automorphism not yet used by our tests
                 ok = true;
                 break;
 

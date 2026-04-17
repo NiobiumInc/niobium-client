@@ -198,6 +198,7 @@ test-bootstrap-release: build-release ## Run the bootstrap example: client → s
 
 test-mult: build ## Run the multiply example: client → server → decrypt (Debug)
 	$(call set-build-config,Debug,dbuild)
+	@rm -rf mult_keys mult_server_workload_*
 	@echo "=== Running mult client ==="
 	$(BUILD_DIR)/examples/mult_client mult_keys 7 13
 	@echo ""
@@ -209,6 +210,7 @@ test-mult: build ## Run the multiply example: client → server → decrypt (Deb
 
 test-mult-release: build-release ## Run the multiply example: client → server → decrypt (Release)
 	$(call set-build-config,Release,build)
+	@rm -rf mult_keys mult_server_workload_*
 	@echo "=== Running mult client ==="
 	$(BUILD_DIR)/examples/mult_client mult_keys 7 13
 	@echo ""
@@ -254,9 +256,10 @@ test-simple-ops: build ## Run all simple_ops tests (Debug)
 	$(call run-simple-op,ADD_ADD,5,6)
 	$(call run-simple-op,ADD_SUB,5,6)
 	$(call run-simple-op,MUL,5,6)
-	$(call run-simple-op,MORPH,5,6)
 	$(call run-simple-op,MUL_ADD,5,6)
 	$(call run-simple-op,ADD_MUL,5,6)
+	$(call run-simple-op,MUL_MUL,5,6)
+	$(call run-simple-op,MORPH,5,6)
 
 test-simple-ops-release: build-release ## Run all simple_ops tests (Release)
 	$(call set-build-config,Release,build)
@@ -269,9 +272,10 @@ test-simple-ops-release: build-release ## Run all simple_ops tests (Release)
 	$(call run-simple-op,ADD_ADD,5,6)
 	$(call run-simple-op,ADD_SUB,5,6)
 	$(call run-simple-op,MUL,5,6)
-	$(call run-simple-op,MORPH,5,6)
 	$(call run-simple-op,MUL_ADD,5,6)
 	$(call run-simple-op,ADD_MUL,5,6)
+	$(call run-simple-op,MUL_MUL,5,6)
+	$(call run-simple-op,MORPH,5,6)
 
 test-op-release: build-release ## Run a single simple_ops test: make test-op-release OP=ADD A=5 B=6
 	$(call set-build-config,Release,build)

@@ -87,6 +87,10 @@ int main(int argc, char* argv[]) {
     if (has_mult_key)
         niobium::compiler().tag_keys(cc);
 
+    // Saved copy of OpenFHE's own computed result — diffed against the
+    // simulator's output after replay.
+    Ciphertext<DCRTPoly> ct_openfhe;
+
     if (!niobium::compiler().is_cache_valid()) {
         std::cout << "\n--- Recording " << operation << " ---" << std::endl;
         niobium::compiler().start();
@@ -119,6 +123,9 @@ int main(int argc, char* argv[]) {
         } else if (operation == "ADD_MUL") {
             auto tmp = cc->EvalAdd(ct_a, ct_b);
             result = cc->EvalMult(tmp, ct_a);
+        } else if (operation == "MUL_MUL") {
+            auto tmp = cc->EvalMult(ct_a, ct_b);
+            result = cc->EvalMult(tmp, ct_a);
         } else if (operation == "ALL_NO_MUL") {
             // Combines: add, sub, neg, addi, subi, muli
             // ((a + b) - a + 3 - 2) * 4 = (b + 1) * 4
@@ -135,12 +142,13 @@ int main(int argc, char* argv[]) {
             result = cc->EvalRotate(ct_a, 1);
         } else {
             std::cerr << "Unknown operation: " << operation << std::endl;
-            std::cerr << "Valid: ADD SUB MUL NEG ADDI SUBI MULI ADD_ADD ADD_SUB MUL_ADD ADD_MUL ALL_NO_MUL MORPH" << std::endl;
+            std::cerr << "Valid: ADD SUB MUL NEG ADDI SUBI MULI ADD_ADD ADD_SUB MUL_ADD ADD_MUL MUL_MUL ALL_NO_MUL MORPH" << std::endl;
             return 1;
         }
 
         niobium::compiler().probe("result", result);
         niobium::compiler().stop();
+        ct_openfhe = result;
     }
 
     // ---- Replay ----
@@ -153,6 +161,44 @@ int main(int argc, char* argv[]) {
     // ---- Retrieve and serialize result ----
     Ciphertext<DCRTPoly> ct_result;
     if (niobium::compiler().result(cc, "result", ct_result)) {
+        if (ct_openfhe) {
+            std::cout << "\n--- Differential: simulator vs OpenFHE ---" << std::endl;
+            const auto& oe = ct_openfhe->GetElements();
+            const auto& sm = ct_result->GetElements();
+            if (oe.size() != sm.size()) {
+                std::cerr << "[DIFF] ciphertext size mismatch: "
+                          << oe.size() << " vs " << sm.size() << std::endl;
+            } else {
+                for (size_t c = 0; c < oe.size(); ++c) {
+                    const auto& oet = oe[c].GetAllElements();
+                    const auto& smt = sm[c].GetAllElements();
+                    for (size_t t = 0; t < oet.size(); ++t) {
+                        const auto& ov = oet[t].GetValues();
+                        const auto& sv = smt[t].GetValues();
+                        size_t diffs = 0; size_t first = 0;
+                        uint64_t oe0 = 0, sm0 = 0;
+                        for (size_t i = 0; i < ov.GetLength(); ++i) {
+                            if (ov[i] != sv[i]) {
+                                if (diffs == 0) { first = i;
+                                    oe0 = ov[i].ConvertToInt();
+                                    sm0 = sv[i].ConvertToInt(); }
+                                ++diffs;
+                            }
+                        }
+                        std::cout << "  comp=" << c << " tower=" << t
+                                  << " mod=0x" << std::hex << oet[t].GetModulus().ConvertToInt() << std::dec
+                                  << (diffs == 0 ? "  MATCH"
+                                      : "  DIVERGE at [" + std::to_string(first)
+                                        + "]: openfhe=" + std::to_string(oe0)
+                                        + " sim=" + std::to_string(sm0)
+                                        + " (" + std::to_string(diffs) + "/"
+                                        + std::to_string(ov.GetLength()) + ")")
+                                  << std::endl;
+                    }
+                }
+            }
+            std::cout << std::endl;
+        }
         Serial::SerializeToFile(keyDir + "/ct_result.bin", ct_result, SerType::BINARY);
         std::cout << "Result written to " << keyDir << "/ct_result.bin" << std::endl;
     } else {
