@@ -78,6 +78,10 @@ int main(int argc, char* argv[]) {
     // ---- Capture crypto context and keys for simulator ----
     niobium::compiler().capture_crypto_context(cc);
     niobium::compiler().tag_keys(cc);
+    // Bootstrap precompute plaintexts are created by EvalBootstrapSetup
+    // before start() — tag them here so `.bp.bin`/`.bp.ids` are on disk
+    // before fhetch_replay.json gets written in stop().
+    niobium::compiler().tag_bootstrap_precompute(cc);
 
     // ---- Tag the input ciphertext ----
     niobium::compiler().tag_input("input_cipher", ciph);
@@ -103,11 +107,6 @@ int main(int argc, char* argv[]) {
         niobium::compiler().stop();
         niobium::compiler().enable_hollow_mode(false);
     }
-
-    // Tag bootstrap precompute plaintexts AFTER recording stops, when all
-    // poly addresses are final (matches the compiler's record_bootstrap_precomp
-    // timing, which runs during the save-trace phase).
-    niobium::compiler().tag_bootstrap_precompute(cc);
 
     // ---- REPLAY: execute trace through the FHETCH simulator ----
     std::cout << "\n--- Replay ---" << std::endl;

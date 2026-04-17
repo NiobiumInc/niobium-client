@@ -427,6 +427,9 @@ void Compiler::tag_keys<lbcrypto::CryptoContext<DCRTPoly>>(
 // m_bootPrecomMap via its probe-exposed accessor (GetBootPrecomMap), and
 // captures every DCRTPoly inside m_U0Pre / m_U0hatTPre / m_U0PreFFT /
 // m_U0hatTPreFFT as an input under the "bootstrap_precompute" name.
+//
+// Also serializes the captured data to disk as `.bp.bin` + `.bp.ids`,
+// matching niobium-compiler's CerealIO::write_bootstrap_precomp format.
 template<>
 void Compiler::tag_bootstrap_precompute<lbcrypto::CryptoContext<DCRTPoly>>(
     const lbcrypto::CryptoContext<DCRTPoly>& cc) {
@@ -441,28 +444,79 @@ void Compiler::tag_bootstrap_precompute<lbcrypto::CryptoContext<DCRTPoly>>(
     const auto& bootMap = fheCkks->GetBootPrecomMap();
     if (bootMap.empty()) return;
 
+    // Same traversal order as the compiler's write_bootstrap_precomp:
+    // per-slot entry, then m_U0hatTPreFFT, m_U0PreFFT, m_U0Pre, m_U0hatTPre.
     std::vector<uint64_t> addr_ids;
     auto capture_pt = [&](const auto& pt) {
         if (!pt) return;
-        // Plaintext wraps a single DCRTPoly; reuse capture_dcrt_polys.
         const auto& el = pt->template GetElement<lbcrypto::DCRTPoly>();
         std::vector<DCRTPoly> one;
         one.push_back(el);
         capture_dcrt_polys(*this, "bootstrap_precompute", one, addr_ids);
     };
 
-    size_t before = addr_ids.size();
     for (const auto& [slots, precom] : bootMap) {
         if (!precom) continue;
-        for (const auto& pt : precom->m_U0Pre) capture_pt(pt);
-        for (const auto& pt : precom->m_U0hatTPre) capture_pt(pt);
-        for (const auto& inner : precom->m_U0PreFFT)
-            for (const auto& pt : inner) capture_pt(pt);
         for (const auto& inner : precom->m_U0hatTPreFFT)
             for (const auto& pt : inner) capture_pt(pt);
+        for (const auto& inner : precom->m_U0PreFFT)
+            for (const auto& pt : inner) capture_pt(pt);
+        for (const auto& pt : precom->m_U0Pre) capture_pt(pt);
+        for (const auto& pt : precom->m_U0hatTPre) capture_pt(pt);
     }
-    std::cout << "[NIOBIUM] Tagged " << (addr_ids.size() - before)
+
+    std::cout << "[NIOBIUM] Tagged " << addr_ids.size()
               << " bootstrap precompute polynomials" << std::endl;
+
+    // Write .bp.bin and .bp.ids to disk (compiler-parity format).
+    auto dir = get_program_directory();
+    std::filesystem::create_directories(dir);
+    std::string prog = program_name();
+
+    auto ids_path = dir / (prog + ".bp.ids");
+    cereal_io::write_addr_ids(ids_path, addr_ids);
+
+    auto bin_path = dir / (prog + ".bp.bin");
+    std::ofstream bin(bin_path, std::ios::binary);
+    if (!bin.is_open()) return;
+    cereal::PortableBinaryOutputArchive ar(bin);
+
+    ar(static_cast<uint32_t>(bootMap.size()));
+    for (const auto& [slots, precom] : bootMap) {
+        if (!precom) continue;
+        ar(precom->m_slots);
+        ar(static_cast<uint32_t>(precom->m_paramsEnc.g));  // m_dim1
+
+        auto write_params = [&](const auto& p) {
+            ar(p.lvlb, p.layersCollapse, p.remCollapse, p.numRotations,
+               p.b, p.g, p.numRotationsRem, p.bRem, p.gRem);
+        };
+        write_params(precom->m_paramsEnc);
+        write_params(precom->m_paramsDec);
+
+        auto write_2d = [&](const auto& outer) {
+            ar(static_cast<uint32_t>(outer.size()));
+            for (const auto& inner : outer) {
+                ar(static_cast<uint32_t>(inner.size()));
+                for (const auto& pt : inner)
+                    ar(pt->template GetElement<lbcrypto::DCRTPoly>());
+            }
+        };
+        auto write_1d = [&](const auto& vec) {
+            ar(static_cast<uint32_t>(vec.size()));
+            for (const auto& pt : vec)
+                ar(pt->template GetElement<lbcrypto::DCRTPoly>());
+        };
+
+        write_2d(precom->m_U0hatTPreFFT);
+        write_2d(precom->m_U0PreFFT);
+        write_1d(precom->m_U0Pre);
+        write_1d(precom->m_U0hatTPre);
+    }
+    bin.close();
+    std::cout << "[NIOBIUM] Wrote bootstrap precompute: "
+              << bin_path.filename().string() << " + "
+              << ids_path.filename().string() << std::endl;
 }
 
 // ============================================================================

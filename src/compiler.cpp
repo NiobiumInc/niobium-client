@@ -685,6 +685,11 @@ void Compiler::write_replay_json() {
         files["evalautomorphism_keys"] = (dir / (prog + ".rk.bin")).string();
         files["evalautomorphism_ids"] = (dir / (prog + ".rk.ids")).string();
     }
+    auto bp_bin = dir / (prog + ".bp.bin");
+    if (std::filesystem::exists(bp_bin)) {
+        files["bootstrap_precomp"] = (prog + ".bp.bin");
+        files["bootstrap_precomp_ids"] = (prog + ".bp.ids");
+    }
 
     replay["files"] = files;
 
