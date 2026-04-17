@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
     CCParams<CryptoContextCKKSRNS> parameters;
     parameters.SetSecurityLevel(HEStd_NotSet);
     parameters.SetRingDim(2048);
-    parameters.SetMultiplicativeDepth(2);
+    parameters.SetMultiplicativeDepth(3);
     parameters.SetScalingModSize(42);
     parameters.SetFirstModSize(57);
     parameters.SetScalingTechnique(FLEXIBLEAUTO);
@@ -44,9 +44,12 @@ int main(int argc, char* argv[]) {
     cc->Enable(PKE);
     cc->Enable(KEYSWITCH);
     cc->Enable(LEVELEDSHE);
+    cc->Enable(ADVANCEDSHE);
 
     auto keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
+    // Rotation keys needed for the MORPH test (EvalRotate by ±1).
+    cc->EvalRotateKeyGen(keyPair.secretKey, {1, -1});
 
     // Serialize
     Serial::SerializeToFile(outputDir + "/cc.bin", cc, SerType::BINARY);
@@ -55,8 +58,13 @@ int main(int argc, char* argv[]) {
     std::ofstream mkStream(outputDir + "/mk.bin", std::ios::binary);
     cc->SerializeEvalMultKey(mkStream, SerType::BINARY);
     mkStream.close();
+    std::ofstream rkStream(outputDir + "/rk.bin", std::ios::binary);
+    cc->SerializeEvalAutomorphismKey(rkStream, SerType::BINARY);
+    rkStream.close();
 
-    std::vector<double> va = {a};
+    // Pack two slots in ct_a so rotations produce a non-trivial result:
+    //   slot 0 = a, slot 1 = b  →  EvalRotate(ct_a, 1)[0] = b
+    std::vector<double> va = {a, b};
     std::vector<double> vb = {b};
     auto ct_a = cc->Encrypt(keyPair.publicKey, cc->MakeCKKSPackedPlaintext(va));
     auto ct_b = cc->Encrypt(keyPair.publicKey, cc->MakeCKKSPackedPlaintext(vb));

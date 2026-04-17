@@ -160,6 +160,12 @@ public:
     /// Set key start addr_id for a given key type.
     void set_key_start_addr_id(const std::string& key_type, uint64_t addr_id);
 
+    /// Advance the FHETCH address allocator to at least `next_addr` so the
+    /// next call to tag_keys/tag_input places polynomials starting there.
+    /// Used to match the compiler's fixed key-start offsets (e.g. 25 for
+    /// evalmult, 49 for evalautomorphism).
+    void reserve_addresses(uint64_t next_addr);
+
     /// Capture evaluation key polynomial data for the simulator.
     /// Iterates over all EvalMult and EvalAutomorphism keys loaded in the
     /// CryptoContext and extracts their polynomial coefficients.

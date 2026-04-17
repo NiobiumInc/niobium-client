@@ -38,7 +38,7 @@ int main(int argc, char* argv[]) {
     CCParams<CryptoContextCKKSRNS> parameters;
     parameters.SetSecurityLevel(HEStd_NotSet);
     parameters.SetRingDim(2048);
-    parameters.SetMultiplicativeDepth(2);
+    parameters.SetMultiplicativeDepth(3);
     parameters.SetScalingModSize(42);
     parameters.SetFirstModSize(57);
     parameters.SetScalingTechnique(FLEXIBLEAUTO);
@@ -47,12 +47,17 @@ int main(int argc, char* argv[]) {
     cc->Enable(PKE);
     cc->Enable(KEYSWITCH);
     cc->Enable(LEVELEDSHE);
+    cc->Enable(ADVANCEDSHE);
 
     std::cout << "Ring dimension: " << cc->GetRingDimension() << std::endl;
 
     // ---- Key generation ----
     auto keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
+    // Generate a minimal rotation key set so the server can exercise the
+    // evalautomorphism-key loading path (matches the compiler reference,
+    // which always ships with rotation keys regardless of operation).
+    cc->EvalRotateKeyGen(keyPair.secretKey, {1, -1});
 
     // ---- Serialize crypto context + keys ----
     if (!Serial::SerializeToFile(outputDir + "/cc.bin", cc, SerType::BINARY))
@@ -66,6 +71,11 @@ int main(int argc, char* argv[]) {
     if (!mkStream.is_open() || !cc->SerializeEvalMultKey(mkStream, SerType::BINARY))
         throw std::runtime_error("Failed to serialize eval mult key");
     mkStream.close();
+
+    std::ofstream rkStream(outputDir + "/rk.bin", std::ios::out | std::ios::binary);
+    if (!rkStream.is_open() || !cc->SerializeEvalAutomorphismKey(rkStream, SerType::BINARY))
+        throw std::runtime_error("Failed to serialize eval automorphism key");
+    rkStream.close();
 
     // ---- Encrypt inputs ----
     std::vector<double> va = {a};
