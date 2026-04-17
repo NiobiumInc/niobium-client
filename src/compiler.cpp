@@ -409,12 +409,20 @@ bool Compiler::replay() {
     // Populate simulator memory from captured input data (only live-in addresses)
     size_t direct_count = 0;
     for (const auto& input : impl_->captured_inputs) {
+        size_t loaded = 0, skipped = 0;
         for (const auto& elem : input.elements) {
             if (rbw_set.count(elem.addr_id)) {
                 impl_->simulator->store_polynomial(elem.addr_id, elem.values, elem.modulus);
                 direct_count++;
+                loaded++;
+            } else {
+                skipped++;
             }
         }
+        std::cout << "[NIOBIUM]   " << input.name << ": "
+                  << input.elements.size() << " elements, "
+                  << loaded << " loaded, " << skipped << " skipped (not live-in)"
+                  << std::endl;
     }
 
     // Propagate data to derived addresses using the copy/move lineage,
@@ -438,9 +446,24 @@ bool Compiler::replay() {
         }
     }
 
-    std::cout << "[NIOBIUM] Live-in addresses: " << rbw_set.size()
-              << ", loaded " << direct_count << " direct + "
-              << propagated << " propagated" << std::endl;
+    // Report unloaded live-in addresses
+    std::vector<uint64_t> unloaded;
+    for (uint64_t a : rbw_set) {
+        if (!impl_->simulator->is_initialized(a))
+            unloaded.push_back(a);
+    }
+    std::cout << "[NIOBIUM] Live-in: " << rbw_set.size()
+              << ", loaded: " << direct_count << " direct + "
+              << propagated << " propagated, unloaded: " << unloaded.size();
+    if (!unloaded.empty() && unloaded.size() <= 100) {
+        std::cout << " [";
+        for (size_t i = 0; i < unloaded.size(); ++i) {
+            if (i > 0) std::cout << ", ";
+            std::cout << "%" << unloaded[i];
+        }
+        std::cout << "]";
+    }
+    std::cout << std::endl;
 
     auto result = impl_->simulator->run();
 

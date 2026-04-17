@@ -190,9 +190,6 @@ void openfhe_cprobe_copy(uintptr_t dst_id, uintptr_t src_id) {
     g_data_parent[dst_addr] = src_addr;
 
     // Emit explicit copy unconditionally (even before start()).
-    // Pre-processing copies (format conversion, SetElementAtIndex) set up
-    // the address space the trace operates on. emit_preamble bypasses
-    // the recording check. The simulator treats addps with imm=0 as raw copy.
     niobium::detail::trace_writer().emit_preamble(
         "sr_addps " + addr(dst_addr) + ", " + addr(src_addr) + ", 0, m=0");
 }
@@ -205,15 +202,30 @@ void openfhe_cprobe_move(uintptr_t dst_id, uintptr_t src_id) {
     // dst_id now points to the same FHETCH address as src_id
 }
 
-void openfhe_cprobe_reassign_id(uintptr_t /*dst_old*/, uintptr_t /*src*/) {
-    // No-op: keep address mapping stable. PolyImpl::operator= fires
-    // copy+reassign+id_overwrite which would make the address map
-    // inconsistent between tag_input time and recording time.
+void openfhe_cprobe_reassign_id(uintptr_t dst_old, uintptr_t src) {
+    std::lock_guard<std::mutex> lock(g_probe_mutex);
+    // Record the data lineage: the old dst address inherits from the src address.
+    // This captures the ID aliasing from operator= so the simulator can
+    // propagate data to addresses created by future map_address calls
+    // for the same OpenFHE ID.
+    auto dst_it = g_address_map.find(dst_old);
+    auto src_it = g_address_map.find(src);
+    if (dst_it != g_address_map.end() && src_it != g_address_map.end()) {
+        // dst_old's FHETCH addr inherits data from src's FHETCH addr
+        g_data_parent[dst_it->second] = src_it->second;
+    }
+    // Remap dst_old to src's address
+    if (src_it != g_address_map.end()) {
+        g_address_map[dst_old] = src_it->second;
+    }
 }
 
-void openfhe_cprobe_free(uintptr_t poly_id) {
-    std::lock_guard<std::mutex> lock(g_probe_mutex);
-    g_address_map.erase(poly_id);
+void openfhe_cprobe_free(uintptr_t /*poly_id*/) {
+    // Don't erase from the address map — the address mapping must persist
+    // for the lifetime of the trace. Erasing causes IDs to be re-allocated
+    // to different addresses when encountered again (e.g., after a temporary
+    // DCRTPoly from ApproxSwitchCRTBasis is destroyed and its ID reappears
+    // in the digit element during key-switching).
 }
 
 void openfhe_suppress_probes(int suppress) {

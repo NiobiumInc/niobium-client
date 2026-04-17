@@ -427,7 +427,11 @@ std::vector<uint64_t> Simulator::get_read_before_write_addresses() const {
             break;
         }
 
-        for (int i = 0; i < nsrc; i++) {
+        // Special case: sr_mulps with imm=0 writes zero without reading source.
+        // Don't count the source as a read.
+        bool skip_read = (inst.opcode == OpCode::SR_MULPS && inst.immediate == 0);
+
+        for (int i = 0; i < nsrc && !skip_read; i++) {
             if (written.find(sources[i]) == written.end()) {
                 // First time seeing this address as a source, and it hasn't
                 // been written yet — it's a read-before-write.
