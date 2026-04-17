@@ -256,15 +256,17 @@ ParsedTrace parse_trace(const std::string& trace_text) {
             }
             break;
 
-        // automorphism: dest, src1, k=N, m=N
+        // automorphism: dest, src1, m=N, mask=N, logn=N, k=N
+        // (named args can be in any order after src1; we pick up k= and m= by name)
         case OpCode::SR_AUTOMORPH_EVAL:
             if (args.size() >= 3) {
                 parse_addr(args[0], inst.dest);
                 parse_addr(args[1], inst.src1);
-                uint64_t kval;
-                if (parse_named_uint(args[2], "k=", kval)) inst.k = kval;
-                if (args.size() >= 4)
-                    parse_modulus_ref(args[3], inst.modulus_index);
+                for (size_t i = 2; i < args.size(); ++i) {
+                    uint64_t v;
+                    if (parse_named_uint(args[i], "k=", v)) inst.k = v;
+                    else parse_modulus_ref(args[i], inst.modulus_index);
+                }
             }
             break;
 

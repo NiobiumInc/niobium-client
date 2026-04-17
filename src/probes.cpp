@@ -349,15 +349,23 @@ void openfhe_cprobe_intt(uintptr_t dst, uintptr_t src, uint64_t modulus,
          ", omega=" + std::to_string(omega));
 }
 
+// OpenFHE's poly-impl.h calls this as:
+//   openfhe_cprobe_automorphism(result.GetId(), GetId(), q.ConvertToInt(),
+//                               mask, logn, k);
+// so the third argument is the *modulus*, followed by mask, logn, k.
 void openfhe_cprobe_automorphism(uintptr_t dst, uintptr_t src,
-                                 uint64_t k, uint64_t modulus,
-                                 uint64_t /*ring_dim*/,
-                                 uint64_t /*root_of_unity*/) {
+                                 uint64_t modulus, uint64_t mask,
+                                 uint64_t logn, uint64_t k) {
     if (!should_record()) return;
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    emit("sr_automorph_eval " + addr(map_address(dst)) + ", " +
-         addr(map_address(src)) + ", k=" + std::to_string(k) +
-         ", " + midx(modulus));
+    uintptr_t da = map_address(dst);
+    uintptr_t sa = resolve_inplace_src(map_address(src), da);
+    emit("sr_automorph_eval " + addr(da) + ", " + addr(sa) +
+         ", " + midx(modulus) +
+         ", mask=" + std::to_string(mask) +
+         ", logn=" + std::to_string(logn) +
+         ", k=" + std::to_string(k));
+    invalidate_clone_parent_on_write(da);
 }
 
 void openfhe_cprobe_switchmodulus(uintptr_t dst, uintptr_t src,
