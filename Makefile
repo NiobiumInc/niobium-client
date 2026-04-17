@@ -236,13 +236,52 @@ test-sim-bootstrap-release: test-bootstrap-release ## Record bootstrap trace the
 	@echo "=== Running FHETCH simulator on bootstrap trace ==="
 	$(BUILD_DIR)/fhetch_sim bootstrap_server_workload_ckks_bootstrap/bootstrap_server_workload_ckks_bootstrap.fhetch --ring-dim 2048
 
+# Helper: run a single simple_ops test
+define run-simple-op
+	@echo "=== Testing $(1): $(2) ==="
+	@rm -rf simple_ops_keys simple_ops_server_*
+	@$(BUILD_DIR)/examples/simple_ops_client simple_ops_keys $(2) $(3) 2>&1 | tail -1
+	@$(BUILD_DIR)/examples/simple_ops_server simple_ops_keys $(1) 2>&1 | grep -E "Live-in|Complete|ERROR"
+	@$(BUILD_DIR)/examples/simple_ops_decrypt simple_ops_keys $(1) 2>&1 | grep -E "PASS|FAIL"
+	@echo ""
+endef
+
+test-simple-ops: build ## Run all simple_ops tests (Debug)
+	$(call set-build-config,Debug,dbuild)
+	$(call run-simple-op,ADD,5,6)
+	$(call run-simple-op,SUB,5,6)
+	$(call run-simple-op,NEG,5,6)
+	$(call run-simple-op,ADD_ADD,5,6)
+	$(call run-simple-op,ADD_SUB,5,6)
+	$(call run-simple-op,MUL,5,6)
+	$(call run-simple-op,MUL_ADD,5,6)
+	$(call run-simple-op,ADD_MUL,5,6)
+
+test-simple-ops-release: build-release ## Run all simple_ops tests (Release)
+	$(call set-build-config,Release,build)
+	$(call run-simple-op,ADD,5,6)
+	$(call run-simple-op,SUB,5,6)
+	$(call run-simple-op,NEG,5,6)
+	$(call run-simple-op,ADDI,5,6)
+	$(call run-simple-op,SUBI,5,6)
+	$(call run-simple-op,MULI,5,6)
+	$(call run-simple-op,ADD_ADD,5,6)
+	$(call run-simple-op,ADD_SUB,5,6)
+	$(call run-simple-op,MUL,5,6)
+	$(call run-simple-op,MUL_ADD,5,6)
+	$(call run-simple-op,ADD_MUL,5,6)
+
+test-op-release: build-release ## Run a single simple_ops test: make test-op-release OP=ADD A=5 B=6
+	$(call set-build-config,Release,build)
+	$(call run-simple-op,$(OP),$(A),$(B))
+
 ##@ Cleanup
 
 clean: ## Remove all build artifacts
 	-rm -rf build dbuild
 	-rm -rf $(OPENFHE_DIR)/build $(OPENFHE_DIR)/dbuild
-	-rm -rf bootstrap_keys mult_keys
-	-rm -rf bootstrap_server_* mult_server_*
+	-rm -rf bootstrap_keys mult_keys simple_ops_keys
+	-rm -rf bootstrap_server_* mult_server_* simple_ops_server_*
 
 clean-all: clean ## Deep clean including vendor installations
 	-rm -rf $(VENDOR_LIB_DIR)
