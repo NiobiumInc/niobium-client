@@ -42,3 +42,19 @@ target_link_libraries(mult_decrypt PRIVATE niobium_client)
 set_openfhe_rpath(mult_client)
 set_openfhe_rpath(mult_server)
 set_openfhe_rpath(mult_decrypt)
+
+# ==============================================================================
+# Simple ops example — client / server / decrypt
+# ==============================================================================
+
+add_executable(simple_ops_client  simple_ops/client.cpp)
+add_executable(simple_ops_server  simple_ops/server.cpp)
+add_executable(simple_ops_decrypt simple_ops/decrypt.cpp)
+
+target_link_libraries(simple_ops_client  PRIVATE niobium_client)
+target_link_libraries(simple_ops_server  PRIVATE niobium_client)
+target_link_libraries(simple_ops_decrypt PRIVATE niobium_client)
+
+set_openfhe_rpath(simple_ops_client)
+set_openfhe_rpath(simple_ops_server)
+set_openfhe_rpath(simple_ops_decrypt)
