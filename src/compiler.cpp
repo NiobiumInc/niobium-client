@@ -93,6 +93,12 @@ struct Compiler::Impl {
     };
     std::vector<OutputRecord> captured_outputs;
 
+    // Hook invoked by stop() right before fhetch_replay.json is written.
+    // Set by capture_crypto_context<Ciphertext<DCRTPoly>> to auto-capture
+    // CC-derived precomputed data (e.g. FHECKKSRNS bootstrap precompute)
+    // without forcing the user to call a specific API for it.
+    std::function<void()> auto_capture_at_stop;
+
     // Derived program directory
     std::filesystem::path program_dir;
 
@@ -163,6 +169,14 @@ bool Compiler::stop() {
     // Write the FHETCH trace file
     auto dir = get_program_directory();
     impl_->last_trace_path = impl_->trace_writer.write(dir, impl_->full_program_name());
+
+    // Auto-capture any CC-derived precomputed data (e.g. CKKS bootstrap
+    // precompute) before writing the replay index, mirroring the compiler's
+    // create_replay_index(): user code only calls start()/stop(), never a
+    // "tag bootstrap precompute" API.
+    if (impl_->auto_capture_at_stop) {
+        impl_->auto_capture_at_stop();
+    }
 
     // Write fhetch_replay.json with inputs, outputs, and modulus table
     write_replay_json();
@@ -273,6 +287,10 @@ void Compiler::reserve_addresses(uint64_t next_addr) {
 
 void Compiler::clear_captured_inputs() {
     impl_->captured_inputs.clear();
+}
+
+void Compiler::set_auto_capture_at_stop(std::function<void()> fn) {
+    impl_->auto_capture_at_stop = std::move(fn);
 }
 
 void Compiler::store_input_element(const std::string& input_name,

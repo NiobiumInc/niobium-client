@@ -126,6 +126,13 @@ void openfhe_cprobe_save_dcrt_poly(const void* /*dcrt_poly_ptr*/) {
 
 namespace niobium {
 
+// Forward-declare the tag_bootstrap_precompute<CryptoContext> specialization
+// so capture_crypto_context() below can reference it inside the auto-capture
+// lambda without implicitly instantiating it ahead of the explicit definition.
+template<>
+void Compiler::tag_bootstrap_precompute<lbcrypto::CryptoContext<DCRTPoly>>(
+    const lbcrypto::CryptoContext<DCRTPoly>& cc);
+
 template<>
 void Compiler::capture_crypto_context<lbcrypto::CryptoContext<DCRTPoly>>(
     const lbcrypto::CryptoContext<DCRTPoly>& cc) {
@@ -155,6 +162,14 @@ void Compiler::capture_crypto_context<lbcrypto::CryptoContext<DCRTPoly>>(
 
     // Store for re-extraction at replay() time
     g_stored_cc = cc;
+
+    // Register the auto-capture hook so stop() walks any CC-derived
+    // precomputed data (e.g. CKKS bootstrap precompute) without the
+    // caller having to invoke a specific "tag" API. Mirrors the
+    // compiler's create_replay_index() -> record_bootstrap_precomp chain.
+    set_auto_capture_at_stop([this, cc]() {
+        this->tag_bootstrap_precompute(cc);
+    });
 
     std::cout << "[NIOBIUM] Captured crypto context: scheme=" << scheme
               << " ring_dim=" << rd

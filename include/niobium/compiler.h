@@ -29,6 +29,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -174,11 +175,9 @@ public:
     template<typename CryptoContextType>
     void tag_keys(const CryptoContextType& cc);
 
-    /// Capture CKKS bootstrap precomputation plaintext polynomials so the
-    /// simulator can read from them during replay. Walks the FHECKKSRNS
-    /// `m_bootPrecomMap` and tags every DCRTPoly inside m_U0Pre /
-    /// m_U0hatTPre / m_U0PreFFT / m_U0hatTPreFFT as live-in data.
-    /// Call after EvalBootstrapSetup() and before start().
+    /// Internal: capture CKKS bootstrap precomputation plaintexts. Invoked
+    /// automatically from stop() via the hook registered by
+    /// capture_crypto_context(); not meant to be called by user code.
     template<typename CryptoContextType>
     void tag_bootstrap_precompute(const CryptoContextType& cc);
 
@@ -288,6 +287,12 @@ public:
 
     /// Clear all captured input data (called before refresh).
     void clear_captured_inputs();
+
+    /// Register a callback to run inside stop() right before the replay
+    /// index is written. Used by capture_crypto_context() template
+    /// specializations to auto-capture CC-derived precomputed data
+    /// (e.g. CKKS bootstrap precompute) without a user-facing API.
+    void set_auto_capture_at_stop(std::function<void()> fn);
 
     // Internal: store captured input polynomial data for replay.
     // Called by the tag_input template instantiation.

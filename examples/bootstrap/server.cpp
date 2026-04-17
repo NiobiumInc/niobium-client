@@ -76,12 +76,11 @@ int main(int argc, char* argv[]) {
     cc->EvalBootstrapSetup(levelBudget);
 
     // ---- Capture crypto context and keys for simulator ----
+    // capture_crypto_context() registers an auto-capture hook that runs
+    // inside stop() to walk the CC's bootstrap precompute map (if any)
+    // and emit .bp.bin/.bp.ids — no user-facing API call required.
     niobium::compiler().capture_crypto_context(cc);
     niobium::compiler().tag_keys(cc);
-    // Bootstrap precompute plaintexts are created by EvalBootstrapSetup
-    // before start() — tag them here so `.bp.bin`/`.bp.ids` are on disk
-    // before fhetch_replay.json gets written in stop().
-    niobium::compiler().tag_bootstrap_precompute(cc);
 
     // ---- Tag the input ciphertext ----
     niobium::compiler().tag_input("input_cipher", ciph);
