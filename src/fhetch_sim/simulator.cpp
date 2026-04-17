@@ -270,6 +270,11 @@ struct Simulator::Impl {
                   << trace.modulus_table.size() << " moduli, N=" << ring_dim
                   << std::endl;
 
+        // Per-instruction dump: NIOBIUM_DEBUG_INSTR=N prints every instruction's
+        // result for the first N instructions. Set N=-1 for all.
+        const char* dbg_env = std::getenv("NIOBIUM_DEBUG_INSTR");
+        long dbg_limit = dbg_env ? std::atol(dbg_env) : 0;
+
         auto last_report = start;
         for (size_t i = 0; i < total; i++) {
             const auto& inst = trace.instructions[i];
@@ -322,6 +327,21 @@ struct Simulator::Impl {
             }
 
             if (ok) executed++;
+
+            // Per-instruction result dump (for pinpointing divergence)
+            if (ok && (dbg_limit < 0 || (long)i < dbg_limit)) {
+                if (memory.is_initialized(inst.dest)) {
+                    const auto& v = memory.get(inst.dest).values;
+                    std::cout << "[FHETCH_SIM-DBG] #" << i
+                              << " " << inst.raw_line
+                              << "  →  %" << inst.dest
+                              << " v[0..3]=" << (v.size()>0?v[0]:0)
+                              << "," << (v.size()>1?v[1]:0)
+                              << "," << (v.size()>2?v[2]:0)
+                              << "," << (v.size()>3?v[3]:0)
+                              << std::endl;
+                }
+            }
 
             // Progress reporting every 2 seconds
             auto now = std::chrono::steady_clock::now();

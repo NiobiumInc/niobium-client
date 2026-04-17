@@ -456,6 +456,45 @@ bool Compiler::replay() {
         if (!impl_->simulator->is_initialized(a))
             unloaded.push_back(a);
     }
+
+    // Debug: dump a few sample values for every loaded input so we can
+    // visually confirm (a) the data is non-zero, and (b) it lives at the
+    // address the trace actually reads from. Enable with NIOBIUM_DEBUG_LIVEIN=1
+    // or automatically if at least one input is all-zero.
+    {
+        const char* env = std::getenv("NIOBIUM_DEBUG_LIVEIN");
+        bool force_dump = env && *env && std::string(env) != "0";
+        size_t zero_addrs = 0;
+        for (uint64_t a : rbw_set) {
+            if (!impl_->simulator->is_initialized(a)) continue;
+            const auto& v = impl_->simulator->get_polynomial(a);
+            bool all_zero = true;
+            for (uint64_t x : v) if (x != 0) { all_zero = false; break; }
+            if (all_zero) ++zero_addrs;
+        }
+        if (force_dump || zero_addrs > 0) {
+            std::cout << "[NIOBIUM-DBG] live-in data check ("
+                      << zero_addrs << " all-zero of " << rbw_set.size() << "):" << std::endl;
+            std::vector<uint64_t> sorted(rbw_set.begin(), rbw_set.end());
+            std::sort(sorted.begin(), sorted.end());
+            for (uint64_t a : sorted) {
+                if (!impl_->simulator->is_initialized(a)) continue;
+                const auto& v = impl_->simulator->get_polynomial(a);
+                uint64_t q = impl_->simulator->get_modulus(a);
+                bool all_zero = true;
+                for (uint64_t x : v) if (x != 0) { all_zero = false; break; }
+                std::cout << "[NIOBIUM-DBG]   %" << a
+                          << " q=0x" << std::hex << q << std::dec
+                          << " v[0..3]=" << (v.size()>0?v[0]:0)
+                          << "," << (v.size()>1?v[1]:0)
+                          << "," << (v.size()>2?v[2]:0)
+                          << "," << (v.size()>3?v[3]:0)
+                          << (all_zero ? "  [ALL-ZERO]" : "")
+                          << std::endl;
+            }
+        }
+    }
+
     std::cout << "[NIOBIUM] Live-in: " << rbw_set.size()
               << ", loaded: " << direct_count << " direct + "
               << propagated << " propagated, unloaded: " << unloaded.size();

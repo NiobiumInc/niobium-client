@@ -88,6 +88,10 @@ int main(int argc, char* argv[]) {
     niobium::compiler().tag_input("ct_b", ct_b);
     niobium::compiler().tag_keys(cc);
 
+    // Saved copy of what OpenFHE actually computed — used by the differential
+    // below to diff against whatever the simulator ends up producing.
+    Ciphertext<DCRTPoly> ct_openfhe;
+
     if (!niobium::compiler().is_cache_valid()) {
         // ---- RECORDING PHASE ----
         std::cout << "\n--- Recording EvalMult ---" << std::endl;
@@ -97,6 +101,8 @@ int main(int argc, char* argv[]) {
 
         niobium::compiler().probe("result", ct_result);
         niobium::compiler().stop();
+
+        ct_openfhe = ct_result;  // stash for diff after replay
     }
 
     // ---- REPLAY: execute trace through the FHETCH simulator ----
@@ -109,6 +115,50 @@ int main(int argc, char* argv[]) {
     // ---- Retrieve result and serialize for decrypt step ----
     Ciphertext<DCRTPoly> ct_result;
     if (niobium::compiler().result(cc, "result", ct_result)) {
+        // ---- Differential: compare simulator output vs OpenFHE's own EvalMult result ----
+        if (ct_openfhe) {
+            std::cout << "\n--- Differential: simulator vs OpenFHE ---" << std::endl;
+            const auto& oe_elems = ct_openfhe->GetElements();
+            const auto& sm_elems = ct_result->GetElements();
+            if (oe_elems.size() != sm_elems.size()) {
+                std::cerr << "[DIFF] ciphertext size mismatch: openfhe=" << oe_elems.size()
+                          << " simulator=" << sm_elems.size() << std::endl;
+            } else {
+                for (size_t comp = 0; comp < oe_elems.size(); ++comp) {
+                    const auto& oe_towers = oe_elems[comp].GetAllElements();
+                    const auto& sm_towers = sm_elems[comp].GetAllElements();
+                    for (size_t t = 0; t < oe_towers.size(); ++t) {
+                        const auto& ov = oe_towers[t].GetValues();
+                        const auto& sv = sm_towers[t].GetValues();
+                        size_t diffs = 0;
+                        uint64_t first_bad = 0;
+                        uint64_t oe0 = 0, sm0 = 0;
+                        for (size_t i = 0; i < ov.GetLength(); ++i) {
+                            if (ov[i] != sv[i]) {
+                                if (diffs == 0) {
+                                    first_bad = i;
+                                    oe0 = ov[i].ConvertToInt();
+                                    sm0 = sv[i].ConvertToInt();
+                                }
+                                ++diffs;
+                            }
+                        }
+                        std::cout << "  comp=" << comp << " tower=" << t
+                                  << " mod=0x" << std::hex
+                                  << oe_towers[t].GetModulus().ConvertToInt() << std::dec
+                                  << (diffs == 0 ? "  MATCH"
+                                      : "  DIVERGE at [" + std::to_string(first_bad)
+                                        + "]: openfhe=" + std::to_string(oe0)
+                                        + " sim=" + std::to_string(sm0)
+                                        + " (" + std::to_string(diffs) + "/"
+                                        + std::to_string(ov.GetLength()) + " slots differ)")
+                                  << std::endl;
+                    }
+                }
+            }
+            std::cout << std::endl;
+        }
+
         if (!Serial::SerializeToFile(keyDir + "/ct_result.bin", ct_result, SerType::BINARY)) {
             std::cerr << "Error: Failed to serialize result ciphertext" << std::endl;
             return 1;
