@@ -312,19 +312,23 @@ void openfhe_cprobe_muli(uintptr_t dst, uintptr_t src, uint64_t immediate,
 // ============================================================================
 
 void openfhe_cprobe_ntt(uintptr_t dst, uintptr_t src, uint64_t modulus,
-                        uint64_t /*omega*/) {
+                        uint64_t omega) {
     if (!should_record()) return;
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    emit("sr_ntt " + addr(map_address(dst)) + ", " +
-         addr(map_address(src)) + ", " + midx(modulus));
+    uintptr_t da = map_address(dst);
+    uintptr_t sa = resolve_inplace_src(map_address(src), da);
+    emit("sr_ntt " + addr(da) + ", " + addr(sa) + ", " + midx(modulus) +
+         ", omega=" + std::to_string(omega));
 }
 
 void openfhe_cprobe_intt(uintptr_t dst, uintptr_t src, uint64_t modulus,
-                         uint64_t /*omega*/) {
+                         uint64_t omega) {
     if (!should_record()) return;
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    emit("sr_intt " + addr(map_address(dst)) + ", " +
-         addr(map_address(src)) + ", " + midx(modulus));
+    uintptr_t da = map_address(dst);
+    uintptr_t sa = resolve_inplace_src(map_address(src), da);
+    emit("sr_intt " + addr(da) + ", " + addr(sa) + ", " + midx(modulus) +
+         ", omega=" + std::to_string(omega));
 }
 
 void openfhe_cprobe_automorphism(uintptr_t dst, uintptr_t src,

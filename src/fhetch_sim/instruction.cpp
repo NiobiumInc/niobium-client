@@ -221,15 +221,28 @@ ParsedTrace parse_trace(const std::string& trace_text) {
             }
             break;
 
-        // unary with modulus: dest, src1, m=N
+        // unary with modulus: dest, src1, m=N [, omega=V]
         case OpCode::SR_NEGP:
-        case OpCode::SR_NTT:
-        case OpCode::SR_INTT:
         case OpCode::SR_PERMUTE:
             if (args.size() >= 3) {
                 parse_addr(args[0], inst.dest);
                 parse_addr(args[1], inst.src1);
                 parse_modulus_ref(args[2], inst.modulus_index);
+            }
+            break;
+
+        // NTT/INTT: dest, src1, m=N, omega=V
+        case OpCode::SR_NTT:
+        case OpCode::SR_INTT:
+            if (args.size() >= 3) {
+                parse_addr(args[0], inst.dest);
+                parse_addr(args[1], inst.src1);
+                parse_modulus_ref(args[2], inst.modulus_index);
+                if (args.size() >= 4) {
+                    uint64_t w;
+                    if (parse_named_uint(args[3], "omega=", w))
+                        inst.omega = w;
+                }
             }
             break;
 

@@ -41,6 +41,7 @@ struct Instruction {
     uint32_t modulus_index = 0;     // Index into the modulus table (m=N)
     std::optional<uint64_t> k;      // Automorphism index
     std::optional<uint64_t> offset; // Rotation offset
+    std::optional<uint64_t> omega;  // NTT root of unity
     std::string comment;            // Comment text (for COMMENT opcode)
     std::string raw_line;           // Original text
     int line_number = 0;

@@ -217,7 +217,13 @@ struct Simulator::Impl {
         NativeVector va(ring_dim, mod);
         for (size_t i = 0; i < ring_dim; i++) va[i] = NativeInteger(a[i]);
 
-        NativeInteger root = RootOfUnity<NativeInteger>(2 * ring_dim, mod);
+        // Use omega from trace if available, otherwise compute
+        NativeInteger root;
+        if (inst.omega.has_value() && inst.omega.value() != 0) {
+            root = NativeInteger(inst.omega.value());
+        } else {
+            root = RootOfUnity<NativeInteger>(2 * ring_dim, mod);
+        }
         ChineseRemainderTransformFTT<NativeVector> transformer;
         transformer.ForwardTransformToBitReverse(va, root, 2 * ring_dim, &va);
 
@@ -237,7 +243,12 @@ struct Simulator::Impl {
         NativeVector va(ring_dim, mod);
         for (size_t i = 0; i < ring_dim; i++) va[i] = NativeInteger(a[i]);
 
-        NativeInteger root = RootOfUnity<NativeInteger>(2 * ring_dim, mod);
+        NativeInteger root;
+        if (inst.omega.has_value() && inst.omega.value() != 0) {
+            root = NativeInteger(inst.omega.value());
+        } else {
+            root = RootOfUnity<NativeInteger>(2 * ring_dim, mod);
+        }
         ChineseRemainderTransformFTT<NativeVector> transformer;
         transformer.InverseTransformFromBitReverse(va, root, 2 * ring_dim, &va);
 
