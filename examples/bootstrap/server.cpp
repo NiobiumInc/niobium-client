@@ -71,15 +71,18 @@ int main(int argc, char* argv[]) {
     if (!Serial::DeserializeFromFile(keyDir + "/ciphertext.bin", ciph, SerType::BINARY))
         throw std::runtime_error("Failed to load ciphertext");
 
+    // Capture the crypto context; this registers the auto-capture hook
+    // that will walk the CC's bootstrap precompute map at stop() time —
+    // no user-facing precompute API call required.
+    niobium::compiler().capture_crypto_context(cc);
+
     // ---- Bootstrap precomputation ----
+    // Fires openfhe_cprobe_precompute for every DFT plaintext poly,
+    // which pins their compact FHETCH addresses against recycling.
     std::vector<uint32_t> levelBudget = {4, 4};
     cc->EvalBootstrapSetup(levelBudget);
 
-    // ---- Capture crypto context and keys for simulator ----
-    // capture_crypto_context() registers an auto-capture hook that runs
-    // inside stop() to walk the CC's bootstrap precompute map (if any)
-    // and emit .bp.bin/.bp.ids — no user-facing API call required.
-    niobium::compiler().capture_crypto_context(cc);
+    // ---- Tag keys ----
     niobium::compiler().tag_keys(cc);
 
     // ---- Tag the input ciphertext ----

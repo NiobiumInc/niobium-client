@@ -164,9 +164,9 @@ void Compiler::capture_crypto_context<lbcrypto::CryptoContext<DCRTPoly>>(
     g_stored_cc = cc;
 
     // Register the auto-capture hook so stop() walks any CC-derived
-    // precomputed data (e.g. CKKS bootstrap precompute) without the
-    // caller having to invoke a specific "tag" API. Mirrors the
-    // compiler's create_replay_index() -> record_bootstrap_precomp chain.
+    // precomputed data (e.g. CKKS bootstrap precompute). Must run at
+    // stop() — not here — because EvalBootstrapSetup fires its
+    // precompute probes AFTER capture_crypto_context returns.
     set_auto_capture_at_stop([this, cc]() {
         this->tag_bootstrap_precompute(cc);
     });
@@ -312,6 +312,10 @@ static size_t capture_dcrt_polys(Compiler& compiler,
         for (size_t ti = 0; ti < towers.size(); ++ti) {
             const auto& poly = towers[ti];
             uintptr_t poly_id = poly.GetId();
+            // Pin the OpenFHE id so its compact FHETCH address stays live
+            // through any reassignments (inputs/keys/precompute must survive
+            // the address-recycling layer).
+            detail::pin_openfhe_id(poly_id);
             uint64_t fhetch_addr = detail::lookup_fhetch_address(poly_id);
             if (fhetch_addr == static_cast<uint64_t>(-1)) continue;
 
@@ -470,18 +474,41 @@ void Compiler::tag_bootstrap_precompute<lbcrypto::CryptoContext<DCRTPoly>>(
         capture_dcrt_polys(*this, "bootstrap_precompute", one, addr_ids);
     };
 
+    auto range = [&](size_t from) {
+        if (addr_ids.size() <= from) return std::string("empty");
+        uint64_t mn = addr_ids[from], mx = addr_ids[from];
+        for (size_t i = from + 1; i < addr_ids.size(); ++i) {
+            mn = std::min(mn, addr_ids[i]);
+            mx = std::max(mx, addr_ids[i]);
+        }
+        return std::to_string(mn) + ".." + std::to_string(mx)
+               + " (" + std::to_string(addr_ids.size() - from) + ")";
+    };
     for (const auto& [slots, precom] : bootMap) {
         if (!precom) continue;
+        size_t s0 = addr_ids.size();
         for (const auto& inner : precom->m_U0hatTPreFFT)
             for (const auto& pt : inner) capture_pt(pt);
+        std::cout << "[NIOBIUM-DBG]   slots=" << slots
+                  << " m_U0hatTPreFFT addrs=" << range(s0) << std::endl;
+        size_t s1 = addr_ids.size();
         for (const auto& inner : precom->m_U0PreFFT)
             for (const auto& pt : inner) capture_pt(pt);
+        std::cout << "[NIOBIUM-DBG]   m_U0PreFFT    addrs=" << range(s1) << std::endl;
+        size_t s2 = addr_ids.size();
         for (const auto& pt : precom->m_U0Pre) capture_pt(pt);
+        std::cout << "[NIOBIUM-DBG]   m_U0Pre       addrs=" << range(s2) << std::endl;
+        size_t s3 = addr_ids.size();
         for (const auto& pt : precom->m_U0hatTPre) capture_pt(pt);
+        std::cout << "[NIOBIUM-DBG]   m_U0hatTPre   addrs=" << range(s3) << std::endl;
     }
 
     std::cout << "[NIOBIUM] Tagged " << addr_ids.size()
-              << " bootstrap precompute polynomials" << std::endl;
+              << " bootstrap precompute polynomials"
+              << " (precompute probe fired " << niobium::detail::niobium_precompute_probe_count()
+              << " times, " << niobium::detail::niobium_precompute_probe_already_mapped_count()
+              << " already mapped)"
+              << std::endl;
 
     // Write .bp.bin and .bp.ids to disk (compiler-parity format).
     auto dir = get_program_directory();

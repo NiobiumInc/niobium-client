@@ -452,24 +452,42 @@ bool Compiler::replay() {
                   << std::endl;
     }
 
-    // Propagate data to derived addresses using the copy/move lineage,
-    // but only for addresses in the live-in set.
+    // Propagate data through the copy/move lineage. Both directions:
+    //
+    //  1. Forward  (parent -> child): after `child = copy(parent)` the
+    //     child holds the parent's data, so if the parent is captured,
+    //     the child inherits.
+    //
+    //  2. Reverse (child -> parent): if a captured poly is the end of a
+    //     copy chain (e.g. an object stored in a map that was built by
+    //     copying an earlier temporary), the earlier poly still holds
+    //     the same data unless it was modified after the copy. For
+    //     pre-start captures (inputs, keys, bootstrap precompute) the
+    //     chain is stable, so reverse propagation is safe and fills in
+    //     the addresses the trace actually reads from.
+    //
+    // We iterate to a fixed point so multi-hop chains get filled in.
     const auto& parent_map = detail::get_data_parent_map();
     size_t propagated = 0;
     bool changed = true;
     while (changed) {
         changed = false;
         for (const auto& [child, parent] : parent_map) {
-            if (rbw_set.count(child) &&
-                !impl_->simulator->is_initialized(child) &&
-                 impl_->simulator->is_initialized(parent)) {
-                impl_->simulator->store_polynomial(
-                    child,
-                    impl_->simulator->get_polynomial(parent),
-                    impl_->simulator->get_modulus(parent));
-                propagated++;
-                changed = true;
-            }
+            auto copy_one = [&](uint64_t dst, uint64_t src) {
+                if (!impl_->simulator->is_initialized(dst) &&
+                     impl_->simulator->is_initialized(src)) {
+                    impl_->simulator->store_polynomial(
+                        dst,
+                        impl_->simulator->get_polynomial(src),
+                        impl_->simulator->get_modulus(src));
+                    propagated++;
+                    changed = true;
+                }
+            };
+            // forward
+            if (rbw_set.count(child)) copy_one(child, parent);
+            // reverse
+            if (rbw_set.count(parent)) copy_one(parent, child);
         }
     }
 

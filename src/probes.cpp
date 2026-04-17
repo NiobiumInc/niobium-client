@@ -15,6 +15,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 // ============================================================================
 // Address map: OpenFHE polynomial ID → FHETCH trace address
@@ -23,16 +24,38 @@
 static std::mutex g_probe_mutex;
 static std::unordered_map<uintptr_t, uintptr_t> g_address_map;
 static uintptr_t g_next_fhetch_addr = 0;
+
+// ----- Compact address recycling (mirrors niobium-compiler Generator) -----
+// Polys that OpenFHE destroys return their compact address to this pool;
+// later allocations pull from the pool before advancing g_next_fhetch_addr.
+// Addresses can also be "pinned" (inputs, keys, bootstrap precompute
+// plaintexts): pinned addresses never return to the pool.
+static std::vector<uintptr_t> g_compact_free_pool;
+static std::unordered_set<uintptr_t> g_pinned_openfhe_ids;
+static std::unordered_map<uintptr_t, int> g_refcount;  // openfhe_id -> live refs
 static bool g_suppressed = false;
 static thread_local bool g_serialization_thread = false;
 
 static uintptr_t map_address(uintptr_t openfhe_id) {
     auto it = g_address_map.find(openfhe_id);
     if (it != g_address_map.end()) return it->second;
-    uintptr_t addr = g_next_fhetch_addr++;
+    uintptr_t addr;
+    // Pinned addresses (inputs, keys, precompute) always take a fresh id so
+    // they stay stable and don't accidentally inherit a recycled address.
+    if (!g_pinned_openfhe_ids.count(openfhe_id) && !g_compact_free_pool.empty()) {
+        addr = g_compact_free_pool.back();
+        g_compact_free_pool.pop_back();
+    } else {
+        addr = g_next_fhetch_addr++;
+    }
     g_address_map[openfhe_id] = addr;
     return addr;
 }
+
+// (Note: address recycling happens inline inside openfhe_cprobe_reassign_id
+//  via refcount decrement. openfhe_cprobe_free stays a no-op — recycling on
+//  destruction is known to cause register-spill blow-up in the compiler's
+//  equivalent and isn't needed for our uses.)
 
 static std::string addr(uintptr_t a) {
     return "%" + std::to_string(a);
@@ -108,12 +131,14 @@ void openfhe_cprobe_annotate(const char* annotation) {
 void openfhe_cprobe_id(uintptr_t poly_id) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
     map_address(poly_id);
+    // A freshly-constructed poly has exactly one reference (itself).
+    g_refcount.emplace(poly_id, 1);
 }
 
 uintptr_t* openfhe_cprobe_address(uintptr_t poly_id) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
     map_address(poly_id);
-    return nullptr;  // Client doesn't use address pointers
+    return nullptr;
 }
 
 uintptr_t* openfhe_cprobe_result(uintptr_t poly_id) {
@@ -150,8 +175,20 @@ void openfhe_cprobe_ternary_uniform(uintptr_t poly_id, int /*format*/) {
     map_address(poly_id);
 }
 
+// Number of times precompute probe fired vs. how many of those id's are
+// still live in g_address_map (sanity counters for the compaction layer).
+static size_t g_precompute_probe_count = 0;
+static size_t g_precompute_probe_already_mapped = 0;
+
 void openfhe_cprobe_precompute(uintptr_t poly_id, int /*format*/) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
+    ++g_precompute_probe_count;
+    if (g_address_map.find(poly_id) != g_address_map.end())
+        ++g_precompute_probe_already_mapped;
+    // Precomputes hold irreproducible data (bootstrap DFT plaintexts,
+    // random-distribution polys, etc.); pin the id so refcount-based
+    // recycling never touches its compact FHETCH address.
+    g_pinned_openfhe_ids.insert(poly_id);
     map_address(poly_id);
 }
 
@@ -201,8 +238,13 @@ void openfhe_cprobe_copy(uintptr_t dst_id, uintptr_t src_id) {
     uintptr_t dst_addr = map_address(dst_id);
     g_data_parent[dst_addr] = src_addr;
 
-    // Emit explicit copy unconditionally (even before start()).
-    niobium::detail::trace_writer().emit_preamble(
+    // Only emit a copy instruction while recording — matches the
+    // compiler's Generator::copy() which bails out when !running_p().
+    // Copies that happen during setup don't belong in the trace;
+    // emitting them there would reference polys that die before
+    // replay and whose FHETCH addresses may be recycled.
+    if (!niobium::compiler().running_p()) return;
+    niobium::detail::trace_writer().emit(
         "sr_addps " + addr(dst_addr) + ", " + addr(src_addr) + ", 0, m=0");
 }
 
@@ -214,22 +256,37 @@ void openfhe_cprobe_move(uintptr_t dst_id, uintptr_t src_id) {
     // dst_id now points to the same FHETCH address as src_id
 }
 
+// Copy-assignment: `poly_dst = poly_src` causes OpenFHE to set
+// dst->m_id = src->m_id. The old dst id is abandoned (OpenFHE no longer
+// uses it). Refcount bookkeeping: src gains a reference; dst_old loses one.
+// If dst_old's refcount hits zero and it isn't pinned, its compact FHETCH
+// address is returned to the free pool so a later allocation can reuse it.
+// This is how bootstrap precompute plaintexts, built by reassigning earlier
+// intermediates, end up at the same compact addresses the trace reads from.
 void openfhe_cprobe_reassign_id(uintptr_t dst_old, uintptr_t src) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    // Record the data lineage: the old dst address inherits from the src address.
-    // This captures the ID aliasing from operator= so the simulator can
-    // propagate data to addresses created by future map_address calls
-    // for the same OpenFHE ID.
-    auto dst_it = g_address_map.find(dst_old);
-    auto src_it = g_address_map.find(src);
-    if (dst_it != g_address_map.end() && src_it != g_address_map.end()) {
-        // dst_old's FHETCH addr inherits data from src's FHETCH addr
-        g_data_parent[dst_it->second] = src_it->second;
+
+    // src gains a reference.
+    ++g_refcount[src];
+
+    // dst_old loses a reference.
+    auto rc = g_refcount.find(dst_old);
+    if (rc != g_refcount.end()) {
+        if (--rc->second == 0) {
+            g_refcount.erase(rc);
+            if (!g_pinned_openfhe_ids.count(dst_old)) {
+                auto dst_it = g_address_map.find(dst_old);
+                if (dst_it != g_address_map.end()) {
+                    g_compact_free_pool.push_back(dst_it->second);
+                    g_data_parent.erase(dst_it->second);
+                    g_address_map.erase(dst_it);
+                }
+            }
+        }
     }
-    // Remap dst_old to src's address
-    if (src_it != g_address_map.end()) {
-        g_address_map[dst_old] = src_it->second;
-    }
+    // Note: we do NOT remap dst_old to src's address. OpenFHE has already
+    // overwritten dst->m_id to src.m_id in C++, so any future lookup on
+    // dst_old is a bug in the caller, not something we need to paper over.
 }
 
 void openfhe_cprobe_free(uintptr_t /*poly_id*/) {
@@ -422,6 +479,20 @@ uint64_t lookup_fhetch_address(uintptr_t openfhe_poly_id) {
 
 const std::unordered_map<uint64_t, uint64_t>& get_data_parent_map() {
     return g_data_parent;
+}
+
+void pin_openfhe_id(uintptr_t poly_id) {
+    std::lock_guard<std::mutex> lock(g_probe_mutex);
+    g_pinned_openfhe_ids.insert(poly_id);
+}
+
+uintptr_t niobium_precompute_probe_count() {
+    std::lock_guard<std::mutex> lock(g_probe_mutex);
+    return g_precompute_probe_count;
+}
+uintptr_t niobium_precompute_probe_already_mapped_count() {
+    std::lock_guard<std::mutex> lock(g_probe_mutex);
+    return g_precompute_probe_already_mapped;
 }
 
 void reserve_fhetch_addresses(uint64_t next_addr) {
