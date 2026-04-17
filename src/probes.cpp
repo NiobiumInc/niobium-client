@@ -143,9 +143,15 @@ void openfhe_cprobe_precompute(uintptr_t poly_id, int /*format*/) {
     map_address(poly_id);
 }
 
-void openfhe_cprobe_zero(uintptr_t poly_id, int /*format*/, uint64_t /*modulus*/) {
+void openfhe_cprobe_zero(uintptr_t poly_id, int /*format*/, uint64_t modulus) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    map_address(poly_id);
+    uintptr_t a = map_address(poly_id);
+
+    // Emit muli by 0 unconditionally to initialize the address to zero.
+    // emit_preamble works even before start().
+    std::string mi = (modulus != 0) ? midx(modulus) : "m=0";
+    niobium::detail::trace_writer().emit_preamble(
+        "sr_mulps " + addr(a) + ", " + addr(a) + ", 0, " + mi);
 }
 
 void openfhe_cprobe_max(uintptr_t poly_id, int /*format*/, uint64_t /*modulus*/) {
@@ -177,13 +183,18 @@ void openfhe_cprobe_key(uintptr_t poly_id, int /*format*/) {
 // ============================================================================
 
 void openfhe_cprobe_copy(uintptr_t dst_id, uintptr_t src_id) {
-    // Always track copies — even before start() — so the address lineage
-    // is preserved for simulator input population.
     std::lock_guard<std::mutex> lock(g_probe_mutex);
     if (g_serialization_thread) return;
     uintptr_t src_addr = map_address(src_id);
     uintptr_t dst_addr = map_address(dst_id);
     g_data_parent[dst_addr] = src_addr;
+
+    // Emit explicit copy unconditionally (even before start()).
+    // Pre-processing copies (format conversion, SetElementAtIndex) set up
+    // the address space the trace operates on. emit_preamble bypasses
+    // the recording check. The simulator treats addps with imm=0 as raw copy.
+    niobium::detail::trace_writer().emit_preamble(
+        "sr_addps " + addr(dst_addr) + ", " + addr(src_addr) + ", 0, m=0");
 }
 
 void openfhe_cprobe_move(uintptr_t dst_id, uintptr_t src_id) {
@@ -194,12 +205,10 @@ void openfhe_cprobe_move(uintptr_t dst_id, uintptr_t src_id) {
     // dst_id now points to the same FHETCH address as src_id
 }
 
-void openfhe_cprobe_reassign_id(uintptr_t dst_old, uintptr_t src) {
-    std::lock_guard<std::mutex> lock(g_probe_mutex);
-    auto it = g_address_map.find(src);
-    if (it != g_address_map.end()) {
-        g_address_map[dst_old] = it->second;
-    }
+void openfhe_cprobe_reassign_id(uintptr_t /*dst_old*/, uintptr_t /*src*/) {
+    // No-op: keep address mapping stable. PolyImpl::operator= fires
+    // copy+reassign+id_overwrite which would make the address map
+    // inconsistent between tag_input time and recording time.
 }
 
 void openfhe_cprobe_free(uintptr_t poly_id) {

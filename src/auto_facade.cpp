@@ -26,8 +26,18 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
 
 using DCRTPoly = lbcrypto::DCRTPoly;
+
+// ============================================================================
+// Stored references to OpenFHE objects for re-extraction at replay() time.
+// The fhetch_driver approach: capture ALL polynomial data right before
+// simulation, including derived addresses from OpenFHE's pre-processing.
+// ============================================================================
+
+static std::vector<lbcrypto::Ciphertext<DCRTPoly>> g_stored_ciphertexts;
+static lbcrypto::CryptoContext<DCRTPoly> g_stored_cc;
 
 // ============================================================================
 // Global flags read by instrumented OpenFHE headers
@@ -141,6 +151,9 @@ void Compiler::capture_crypto_context<lbcrypto::CryptoContext<DCRTPoly>>(
 
     set_crypto_context_info(scheme, depth, 0, "HEStd_NotSet", modulus_chain);
 
+    // Store for re-extraction at replay() time
+    g_stored_cc = cc;
+
     std::cout << "[NIOBIUM] Captured crypto context: scheme=" << scheme
               << " ring_dim=" << rd
               << " depth=" << depth
@@ -205,6 +218,9 @@ void Compiler::tag_input<lbcrypto::Ciphertext<DCRTPoly>>(
             }
         }
     }
+
+    // Store reference for re-extraction at replay() time
+    g_stored_ciphertexts.push_back(ct);
 }
 
 template<>
@@ -345,6 +361,84 @@ void Compiler::tag_keys<lbcrypto::CryptoContext<DCRTPoly>>(
     } catch (...) {}
 
     std::cout << "[NIOBIUM] Tagged " << total << " key polynomials for replay" << std::endl;
+}
+
+// ============================================================================
+// refresh_all_inputs() — re-extract ALL polynomial data at replay() time
+// ============================================================================
+// This is the fhetch_driver approach: walk all stored OpenFHE objects
+// (ciphertexts + keys) and capture their polynomial data at whatever
+// FHETCH addresses their current poly IDs map to. This captures
+// derived addresses created by OpenFHE's pre-processing.
+
+static size_t extract_all_polys_from_dcrt(niobium::Compiler& compiler,
+                                          const std::string& name,
+                                          const std::vector<DCRTPoly>& dcrts) {
+    size_t count = 0;
+    for (const auto& dcrt : dcrts) {
+        for (const auto& poly : dcrt.GetAllElements()) {
+            uintptr_t poly_id = poly.GetId();
+            uint64_t fhetch_addr = niobium::detail::lookup_fhetch_address(poly_id);
+            if (fhetch_addr == static_cast<uint64_t>(-1)) continue;
+
+            uint64_t modulus = poly.GetModulus().ConvertToInt();
+            size_t n = poly.GetLength();
+            std::vector<uint64_t> vals(n);
+            const auto& vec = poly.GetValues();
+            for (size_t i = 0; i < n; ++i)
+                vals[i] = vec[i].ConvertToInt();
+
+            compiler.store_input_element(name, fhetch_addr, modulus, vals);
+            count++;
+        }
+    }
+    return count;
+}
+
+void niobium::Compiler::refresh_all_inputs() {
+    // Clear previously captured inputs — we're re-capturing everything
+    // from the live OpenFHE objects at their current state.
+    clear_captured_inputs();
+
+    size_t total = 0;
+
+    // Re-extract from stored ciphertexts
+    for (size_t i = 0; i < g_stored_ciphertexts.size(); ++i) {
+        const auto& ct = g_stored_ciphertexts[i];
+        if (!ct) continue;
+        total += extract_all_polys_from_dcrt(*this, "ct_" + std::to_string(i),
+                                             ct->GetElements());
+    }
+
+    // Re-extract from ALL EvalMult keys
+    try {
+        const auto& allMultKeys = lbcrypto::CryptoContextImpl<DCRTPoly>::GetAllEvalMultKeys();
+        for (const auto& [keyTag, keyVec] : allMultKeys) {
+            for (const auto& evalKey : keyVec) {
+                total += extract_all_polys_from_dcrt(*this, "evalmult_key",
+                             evalKey->GetAVector());
+                total += extract_all_polys_from_dcrt(*this, "evalmult_key",
+                             evalKey->GetBVector());
+            }
+        }
+    } catch (...) {}
+
+    // Re-extract from ALL EvalAutomorphism keys
+    try {
+        const auto& allAutoKeys = lbcrypto::CryptoContextImpl<DCRTPoly>::GetAllEvalAutomorphismKeys();
+        for (const auto& [keyTag, keyMap] : allAutoKeys) {
+            if (!keyMap) continue;
+            for (const auto& [idx, evalKey] : *keyMap) {
+                total += extract_all_polys_from_dcrt(*this, "automorphism_key",
+                             evalKey->GetAVector());
+                total += extract_all_polys_from_dcrt(*this, "automorphism_key",
+                             evalKey->GetBVector());
+            }
+        }
+    } catch (...) {}
+
+    std::cout << "[NIOBIUM] Refreshed " << total
+              << " polynomials from live OpenFHE objects" << std::endl;
 }
 
 // ============================================================================

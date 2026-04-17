@@ -37,6 +37,10 @@ public:
     // Emit a FHETCH instruction line into the trace.
     void emit(const std::string& instruction);
 
+    // Emit unconditionally (even before start_recording).
+    // Used for copy instructions that set up the simulator's address space.
+    void emit_preamble(const std::string& instruction);
+
     // Emit a comment line (prefixed with #).
     void comment(const std::string& text);
 
