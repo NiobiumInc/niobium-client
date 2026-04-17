@@ -163,18 +163,18 @@ void Compiler::capture_crypto_context<lbcrypto::CryptoContext<DCRTPoly>>(
     // Store for re-extraction at replay() time
     g_stored_cc = cc;
 
-    // Register the auto-capture hook so stop() walks any CC-derived
-    // precomputed data (e.g. CKKS bootstrap precompute) without the
-    // caller having to invoke a specific "tag" API. Mirrors the
-    // compiler's create_replay_index() -> record_bootstrap_precomp chain.
-    set_auto_capture_at_stop([this, cc]() {
-        this->tag_bootstrap_precompute(cc);
-    });
-
     std::cout << "[NIOBIUM] Captured crypto context: scheme=" << scheme
               << " ring_dim=" << rd
               << " depth=" << depth
               << " moduli=" << modulus_chain.size() << std::endl;
+
+    // Capture CC-derived precomputed data (e.g. CKKS bootstrap precompute)
+    // immediately — right now the plaintexts built by EvalBootstrapSetup
+    // have the same poly IDs that the subsequent EvalBootstrap trace will
+    // reference. If we wait until stop(), OpenFHE may have already
+    // regenerated the precompute at higher addresses, missing the ones
+    // the trace actually reads from.
+    tag_bootstrap_precompute(cc);
 }
 
 // Helper: collect addr_ids and coefficient data from a ciphertext
@@ -470,14 +470,33 @@ void Compiler::tag_bootstrap_precompute<lbcrypto::CryptoContext<DCRTPoly>>(
         capture_dcrt_polys(*this, "bootstrap_precompute", one, addr_ids);
     };
 
+    auto range = [&](size_t from) {
+        if (addr_ids.size() <= from) return std::string("empty");
+        uint64_t mn = addr_ids[from], mx = addr_ids[from];
+        for (size_t i = from + 1; i < addr_ids.size(); ++i) {
+            mn = std::min(mn, addr_ids[i]);
+            mx = std::max(mx, addr_ids[i]);
+        }
+        return std::to_string(mn) + ".." + std::to_string(mx)
+               + " (" + std::to_string(addr_ids.size() - from) + ")";
+    };
     for (const auto& [slots, precom] : bootMap) {
         if (!precom) continue;
+        size_t s0 = addr_ids.size();
         for (const auto& inner : precom->m_U0hatTPreFFT)
             for (const auto& pt : inner) capture_pt(pt);
+        std::cout << "[NIOBIUM-DBG]   slots=" << slots
+                  << " m_U0hatTPreFFT addrs=" << range(s0) << std::endl;
+        size_t s1 = addr_ids.size();
         for (const auto& inner : precom->m_U0PreFFT)
             for (const auto& pt : inner) capture_pt(pt);
+        std::cout << "[NIOBIUM-DBG]   m_U0PreFFT    addrs=" << range(s1) << std::endl;
+        size_t s2 = addr_ids.size();
         for (const auto& pt : precom->m_U0Pre) capture_pt(pt);
+        std::cout << "[NIOBIUM-DBG]   m_U0Pre       addrs=" << range(s2) << std::endl;
+        size_t s3 = addr_ids.size();
         for (const auto& pt : precom->m_U0hatTPre) capture_pt(pt);
+        std::cout << "[NIOBIUM-DBG]   m_U0hatTPre   addrs=" << range(s3) << std::endl;
     }
 
     std::cout << "[NIOBIUM] Tagged " << addr_ids.size()

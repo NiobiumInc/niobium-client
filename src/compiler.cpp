@@ -249,6 +249,9 @@ bool Compiler::is_cache_valid() {
 
 void Compiler::set_ring_dimension(uint64_t N) {
     impl_->ring_dimension = N;
+    // Propagate to the probe layer so the scratch buffer returned from
+    // openfhe_cprobe_address is sized correctly for OpenFHE's CopyValues.
+    detail::set_precompute_ring_dim(static_cast<uintptr_t>(N));
 }
 
 void Compiler::set_crypto_context_info(const std::string& scheme_name,
@@ -428,6 +431,28 @@ bool Compiler::replay() {
     auto rbw_addrs = impl_->simulator->get_read_before_write_addresses();
     std::set<uint64_t> rbw_set(rbw_addrs.begin(), rbw_addrs.end());
 
+    // Populate simulator memory from snapshots grabbed by OpenFHE's
+    // CopyValues path (openfhe_cprobe_address → openfhe_cprobe_precompute).
+    // Those cover every FHETCH address whose poly fired the precompute
+    // probe — i.e. bootstrap DFT plaintexts AND their intermediate polys.
+    {
+        size_t snap_live = 0;
+        const auto& snaps = detail::get_precompute_snapshots();
+        for (const auto& [addr, values] : snaps) {
+            if (impl_->simulator->is_initialized(addr)) continue;
+            // modulus=0 → simulator uses the m=N from each instruction's
+            // modulus_index for the actual arithmetic; the stored modulus
+            // is only used for same-tower chaining, which matches values
+            // written by OpenFHE in EVAL form.
+            impl_->simulator->store_polynomial(addr, values, 0);
+            if (rbw_set.count(addr)) ++snap_live;
+        }
+        if (!snaps.empty()) {
+            std::cout << "[NIOBIUM]   precompute_snapshots: " << snaps.size()
+                      << " polys, " << snap_live << " live-in" << std::endl;
+        }
+    }
+
     // Populate simulator memory from captured input data.
     //
     // Load captured polys unconditionally (not only live-in addresses).
@@ -452,24 +477,42 @@ bool Compiler::replay() {
                   << std::endl;
     }
 
-    // Propagate data to derived addresses using the copy/move lineage,
-    // but only for addresses in the live-in set.
+    // Propagate data through the copy/move lineage. Both directions:
+    //
+    //  1. Forward  (parent -> child): after `child = copy(parent)` the
+    //     child holds the parent's data, so if the parent is captured,
+    //     the child inherits.
+    //
+    //  2. Reverse (child -> parent): if a captured poly is the end of a
+    //     copy chain (e.g. an object stored in a map that was built by
+    //     copying an earlier temporary), the earlier poly still holds
+    //     the same data unless it was modified after the copy. For
+    //     pre-start captures (inputs, keys, bootstrap precompute) the
+    //     chain is stable, so reverse propagation is safe and fills in
+    //     the addresses the trace actually reads from.
+    //
+    // We iterate to a fixed point so multi-hop chains get filled in.
     const auto& parent_map = detail::get_data_parent_map();
     size_t propagated = 0;
     bool changed = true;
     while (changed) {
         changed = false;
         for (const auto& [child, parent] : parent_map) {
-            if (rbw_set.count(child) &&
-                !impl_->simulator->is_initialized(child) &&
-                 impl_->simulator->is_initialized(parent)) {
-                impl_->simulator->store_polynomial(
-                    child,
-                    impl_->simulator->get_polynomial(parent),
-                    impl_->simulator->get_modulus(parent));
-                propagated++;
-                changed = true;
-            }
+            auto copy_one = [&](uint64_t dst, uint64_t src) {
+                if (!impl_->simulator->is_initialized(dst) &&
+                     impl_->simulator->is_initialized(src)) {
+                    impl_->simulator->store_polynomial(
+                        dst,
+                        impl_->simulator->get_polynomial(src),
+                        impl_->simulator->get_modulus(src));
+                    propagated++;
+                    changed = true;
+                }
+            };
+            // forward
+            if (rbw_set.count(child)) copy_one(child, parent);
+            // reverse
+            if (rbw_set.count(parent)) copy_one(parent, child);
         }
     }
 

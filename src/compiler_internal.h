@@ -9,6 +9,7 @@
 
 #include "trace_writer.h"
 #include <cstdint>
+#include <unordered_set>
 
 namespace niobium::detail {
 
@@ -22,6 +23,15 @@ uint64_t lookup_fhetch_address(uintptr_t openfhe_poly_id);
 /// Get the data parent map: derived_addr → source_addr.
 /// Used to propagate input data to addresses created by copy/move probes.
 const std::unordered_map<uint64_t, uint64_t>& get_data_parent_map();
+
+/// Get snapshots of every poly that fired openfhe_cprobe_precompute, keyed
+/// by FHETCH address. Values were written by OpenFHE's CopyValues via the
+/// client-provided buffer returned from openfhe_cprobe_address.
+const std::unordered_map<uint64_t, std::vector<uint64_t>>& get_precompute_snapshots();
+
+/// Tell the probe layer what ring dimension to use when sizing the
+/// per-poly scratch buffer handed back from openfhe_cprobe_address.
+void set_precompute_ring_dim(uintptr_t n);
 
 /// Bump the FHETCH address allocator so the next allocation returns
 /// an address >= `next_addr`. No-op if the allocator is already past

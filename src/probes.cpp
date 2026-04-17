@@ -15,6 +15,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 // ============================================================================
 // Address map: OpenFHE polynomial ID → FHETCH trace address
@@ -23,6 +24,11 @@
 static std::mutex g_probe_mutex;
 static std::unordered_map<uintptr_t, uintptr_t> g_address_map;
 static uintptr_t g_next_fhetch_addr = 0;
+
+// Scratch buffer openfhe_cprobe_address returns so OpenFHE can CopyValues()
+// the poly's coefficients into it; the subsequent precompute probe snapshots.
+static std::unordered_map<uint64_t, std::vector<uint64_t>> g_cprobe_scratch;
+static uintptr_t g_precompute_ring_dim = 0;
 static bool g_suppressed = false;
 static thread_local bool g_serialization_thread = false;
 
@@ -113,7 +119,15 @@ void openfhe_cprobe_id(uintptr_t poly_id) {
 uintptr_t* openfhe_cprobe_address(uintptr_t poly_id) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
     map_address(poly_id);
-    return nullptr;  // Client doesn't use address pointers
+    // Return a pointer to a per-poly scratch buffer so OpenFHE's
+    // CopyValues(base) can write the poly's coefficients into it.
+    // The subsequent openfhe_cprobe_precompute will snapshot the values.
+    // Only allocate if we know the ring dimension; otherwise return null
+    // and OpenFHE's CopyValues becomes a no-op.
+    if (g_precompute_ring_dim == 0) return nullptr;
+    auto& buf = g_cprobe_scratch[poly_id];
+    if (buf.size() < g_precompute_ring_dim) buf.resize(g_precompute_ring_dim);
+    return reinterpret_cast<uintptr_t*>(buf.data());
 }
 
 uintptr_t* openfhe_cprobe_result(uintptr_t poly_id) {
@@ -150,9 +164,16 @@ void openfhe_cprobe_ternary_uniform(uintptr_t poly_id, int /*format*/) {
     map_address(poly_id);
 }
 
+// Snapshot of poly values keyed by FHETCH address, captured when
+// openfhe_cprobe_precompute fires after OpenFHE's CopyValues.
+static std::unordered_map<uint64_t, std::vector<uint64_t>> g_precompute_snapshots;
+
 void openfhe_cprobe_precompute(uintptr_t poly_id, int /*format*/) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    map_address(poly_id);
+    uintptr_t addr = map_address(poly_id);
+    auto it = g_cprobe_scratch.find(poly_id);
+    if (it == g_cprobe_scratch.end()) return;
+    g_precompute_snapshots[addr] = it->second;
 }
 
 void openfhe_cprobe_zero(uintptr_t poly_id, int /*format*/, uint64_t modulus) {
@@ -422,6 +443,15 @@ uint64_t lookup_fhetch_address(uintptr_t openfhe_poly_id) {
 
 const std::unordered_map<uint64_t, uint64_t>& get_data_parent_map() {
     return g_data_parent;
+}
+
+const std::unordered_map<uint64_t, std::vector<uint64_t>>& get_precompute_snapshots() {
+    return g_precompute_snapshots;
+}
+
+void set_precompute_ring_dim(uintptr_t n) {
+    std::lock_guard<std::mutex> lock(g_probe_mutex);
+    g_precompute_ring_dim = n;
 }
 
 void reserve_fhetch_addresses(uint64_t next_addr) {
