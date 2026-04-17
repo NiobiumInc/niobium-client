@@ -3,6 +3,8 @@
 
 #include "trace_writer.h"
 
+#include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <fstream>
 #include <iomanip>
@@ -10,7 +12,11 @@
 
 namespace niobium {
 
-TraceWriter::TraceWriter() = default;
+TraceWriter::TraceWriter() {
+    // Reserve index 0 for the copy/zero-init sentinel modulus.
+    modulus_table_.push_back(COPY_MODULUS_VALUE);
+    modulus_index_[COPY_MODULUS_VALUE] = COPY_MODULUS_INDEX;
+}
 
 void TraceWriter::set_program_info(const std::string& name,
                                    const std::string& version,
@@ -79,8 +85,53 @@ void TraceWriter::comment(const std::string& text) {
     }
 }
 
+void TraceWriter::normalize_modulus_table() {
+    if (modulus_table_.size() <= 1) return;  // only sentinel — nothing to sort
+
+    std::vector<uint64_t> regular(modulus_table_.begin() + 1, modulus_table_.end());
+    std::sort(regular.begin(), regular.end());
+
+    // Build old-index -> new-index map (sentinel stays at 0).
+    std::vector<uint32_t> remap(modulus_table_.size());
+    remap[COPY_MODULUS_INDEX] = COPY_MODULUS_INDEX;
+    std::unordered_map<uint64_t, uint32_t> new_index;
+    new_index[COPY_MODULUS_VALUE] = COPY_MODULUS_INDEX;
+    for (size_t i = 0; i < regular.size(); ++i)
+        new_index[regular[i]] = static_cast<uint32_t>(i + 1);
+    for (size_t i = 0; i < modulus_table_.size(); ++i)
+        remap[i] = new_index[modulus_table_[i]];
+
+    // Rewrite table and index map.
+    modulus_table_.resize(1);
+    for (uint64_t q : regular) modulus_table_.push_back(q);
+    modulus_index_ = std::move(new_index);
+
+    // Remap every "m=N" token inside the recorded instruction strings.
+    for (auto& inst : instructions_) {
+        size_t pos = 0;
+        while ((pos = inst.find("m=", pos)) != std::string::npos) {
+            size_t start = pos + 2;
+            size_t end = start;
+            while (end < inst.size() && std::isdigit(static_cast<unsigned char>(inst[end])))
+                ++end;
+            if (end > start) {
+                uint32_t old = static_cast<uint32_t>(std::stoul(inst.substr(start, end - start)));
+                if (old < remap.size()) {
+                    std::string repl = std::to_string(remap[old]);
+                    inst.replace(start, end - start, repl);
+                    pos = start + repl.size();
+                    continue;
+                }
+            }
+            pos = end;
+        }
+    }
+}
+
 std::filesystem::path TraceWriter::write(const std::filesystem::path& directory,
                                          const std::string& program_name) {
+    normalize_modulus_table();
+
     std::filesystem::create_directories(directory);
     auto path = directory / (program_name + ".fhetch");
 
@@ -139,6 +190,8 @@ void TraceWriter::clear() {
     instructions_.clear();
     modulus_table_.clear();
     modulus_index_.clear();
+    modulus_table_.push_back(COPY_MODULUS_VALUE);
+    modulus_index_[COPY_MODULUS_VALUE] = COPY_MODULUS_INDEX;
 }
 
 }  // namespace niobium

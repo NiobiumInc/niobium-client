@@ -54,7 +54,18 @@ int main(int argc, char* argv[]) {
     if (!Serial::DeserializeFromFile(keyDir + "/cc.bin", cc, SerType::BINARY))
         throw std::runtime_error("Failed to load crypto context");
 
-    // ---- Load eval mult key (needed for MUL operations) ----
+    // Compiler-matching FHETCH layout: inputs in 1..24, evalmult keys at 25+.
+    niobium::compiler().reserve_addresses(1);
+
+    // ---- Load ciphertexts (consume addresses 1..16) ----
+    Ciphertext<DCRTPoly> ct_a, ct_b;
+    if (!Serial::DeserializeFromFile(keyDir + "/ct_a.bin", ct_a, SerType::BINARY))
+        throw std::runtime_error("Failed to load ciphertext a");
+    if (!Serial::DeserializeFromFile(keyDir + "/ct_b.bin", ct_b, SerType::BINARY))
+        throw std::runtime_error("Failed to load ciphertext b");
+
+    // ---- Reserve and load eval mult + automorphism keys at address 25+ ----
+    niobium::compiler().reserve_addresses(25);
     bool has_mult_key = false;
     {
         std::ifstream mkStream(keyDir + "/mk.bin", std::ios::binary);
@@ -63,22 +74,18 @@ int main(int argc, char* argv[]) {
                 has_mult_key = true;
         }
     }
+    {
+        std::ifstream rkStream(keyDir + "/rk.bin", std::ios::binary);
+        if (rkStream.is_open())
+            cc->DeserializeEvalAutomorphismKey(rkStream, SerType::BINARY);
+    }
 
-    // ---- Load ciphertexts ----
-    Ciphertext<DCRTPoly> ct_a, ct_b;
-    if (!Serial::DeserializeFromFile(keyDir + "/ct_a.bin", ct_a, SerType::BINARY))
-        throw std::runtime_error("Failed to load ciphertext a");
-    if (!Serial::DeserializeFromFile(keyDir + "/ct_b.bin", ct_b, SerType::BINARY))
-        throw std::runtime_error("Failed to load ciphertext b");
-
-    // ---- Capture crypto context and keys ----
+    // ---- Capture crypto context and tag polys ----
     niobium::compiler().capture_crypto_context(cc);
-    if (has_mult_key)
-        niobium::compiler().tag_keys(cc);
-
-    // ---- Tag inputs ----
     niobium::compiler().tag_input("ct_a", ct_a);
     niobium::compiler().tag_input("ct_b", ct_b);
+    if (has_mult_key)
+        niobium::compiler().tag_keys(cc);
 
     if (!niobium::compiler().is_cache_valid()) {
         std::cout << "\n--- Recording " << operation << " ---" << std::endl;
@@ -122,9 +129,13 @@ int main(int argc, char* argv[]) {
             auto t5 = cc->EvalMult(t4, 4.0);         // (b + 1) * 4
             auto t6 = cc->EvalNegate(t5);             // -(b + 1) * 4
             result = cc->EvalNegate(t6);              // (b + 1) * 4
+        } else if (operation == "MORPH") {
+            // Rotate ct_a left by 1 slot. ct_a packs (a, b) so slot 0 of
+            // the rotated result equals b.
+            result = cc->EvalRotate(ct_a, 1);
         } else {
             std::cerr << "Unknown operation: " << operation << std::endl;
-            std::cerr << "Valid: ADD SUB MUL NEG ADDI SUBI MULI ADD_ADD ADD_SUB MUL_ADD ADD_MUL ALL_NO_MUL" << std::endl;
+            std::cerr << "Valid: ADD SUB MUL NEG ADDI SUBI MULI ADD_ADD ADD_SUB MUL_ADD ADD_MUL ALL_NO_MUL MORPH" << std::endl;
             return 1;
         }
 

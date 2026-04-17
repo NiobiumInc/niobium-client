@@ -18,6 +18,12 @@ class TraceWriter {
 public:
     TraceWriter();
 
+    // Reserved index 0: sentinel modulus used by copy/zero-init ops.
+    // Matches the compiler's ModulusTable::COPY_MODULUS_VALUE convention so
+    // our modulus_chain ordering aligns for replay artifact comparison.
+    static constexpr uint32_t COPY_MODULUS_INDEX = 0;
+    static constexpr uint64_t COPY_MODULUS_VALUE = 0xFFFFFFFFFFFFFFFFULL;
+
     void set_program_info(const std::string& name, const std::string& version,
                           const std::string& description);
     void set_source_info(const std::string& file, int line,
@@ -51,6 +57,11 @@ public:
 
     // Clear all recorded instructions and modulus table (for epoch reset).
     void clear();
+
+    // Sort regular moduli ascending (sentinel stays at index 0) and remap
+    // every "m=N" token in recorded instruction strings accordingly.
+    // Called automatically from write(); exposed for tests.
+    void normalize_modulus_table();
 
     size_t instruction_count() const { return instructions_.size(); }
 

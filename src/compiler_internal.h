@@ -23,4 +23,9 @@ uint64_t lookup_fhetch_address(uintptr_t openfhe_poly_id);
 /// Used to propagate input data to addresses created by copy/move probes.
 const std::unordered_map<uint64_t, uint64_t>& get_data_parent_map();
 
+/// Bump the FHETCH address allocator so the next allocation returns
+/// an address >= `next_addr`. No-op if the allocator is already past
+/// that point. Used to carve out fixed ID ranges for inputs vs. keys.
+void reserve_fhetch_addresses(uint64_t next_addr);
+
 }  // namespace niobium::detail

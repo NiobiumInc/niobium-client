@@ -398,4 +398,10 @@ const std::unordered_map<uint64_t, uint64_t>& get_data_parent_map() {
     return g_data_parent;
 }
 
+void reserve_fhetch_addresses(uint64_t next_addr) {
+    std::lock_guard<std::mutex> lock(g_probe_mutex);
+    if (next_addr > g_next_fhetch_addr)
+        g_next_fhetch_addr = next_addr;
+}
+
 }  // namespace niobium::detail

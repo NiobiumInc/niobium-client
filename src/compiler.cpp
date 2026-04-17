@@ -267,6 +267,10 @@ void Compiler::set_key_start_addr_id(const std::string& key_type, uint64_t addr_
         impl_->evalautomorphism_start_addr_id = addr_id;
 }
 
+void Compiler::reserve_addresses(uint64_t next_addr) {
+    detail::reserve_fhetch_addresses(next_addr);
+}
+
 void Compiler::clear_captured_inputs() {
     impl_->captured_inputs.clear();
 }

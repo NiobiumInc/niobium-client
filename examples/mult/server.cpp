@@ -47,7 +47,24 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Ring dimension: " << cc->GetRingDimension() << std::endl;
 
-    // ---- Load keys ----
+    // Compiler-matching FHETCH address layout:
+    //   1..24    — inputs / scratch (ct_a, ct_b, plus reserved slots)
+    //   25..48   — evalmult keys
+    //   49..     — evalautomorphism keys
+    // OpenFHE polynomials get a FHETCH address the moment they are
+    // constructed (during deserialization), so we must interleave
+    // reserve_addresses() calls with the deserialization order.
+    niobium::compiler().reserve_addresses(1);
+
+    // ---- Load ciphertexts (consume low addresses 1..16) ----
+    Ciphertext<DCRTPoly> ct_a, ct_b;
+    if (!Serial::DeserializeFromFile(keyDir + "/ct_a.bin", ct_a, SerType::BINARY))
+        throw std::runtime_error("Failed to load ciphertext a");
+    if (!Serial::DeserializeFromFile(keyDir + "/ct_b.bin", ct_b, SerType::BINARY))
+        throw std::runtime_error("Failed to load ciphertext b");
+
+    // ---- Reserve slots 17..24 (compiler's VirtualZero range) and load keys ----
+    niobium::compiler().reserve_addresses(25);
     {
         std::ifstream mkStream(keyDir + "/mk.bin", std::ios::in | std::ios::binary);
         if (mkStream.is_open()) {
@@ -56,21 +73,20 @@ int main(int argc, char* argv[]) {
             std::cout << "Loaded eval mult key" << std::endl;
         }
     }
+    {
+        std::ifstream rkStream(keyDir + "/rk.bin", std::ios::in | std::ios::binary);
+        if (rkStream.is_open()) {
+            if (!cc->DeserializeEvalAutomorphismKey(rkStream, SerType::BINARY))
+                throw std::runtime_error("Failed to load eval automorphism key");
+            std::cout << "Loaded eval automorphism key" << std::endl;
+        }
+    }
 
-    // ---- Load ciphertexts ----
-    Ciphertext<DCRTPoly> ct_a, ct_b;
-    if (!Serial::DeserializeFromFile(keyDir + "/ct_a.bin", ct_a, SerType::BINARY))
-        throw std::runtime_error("Failed to load ciphertext a");
-    if (!Serial::DeserializeFromFile(keyDir + "/ct_b.bin", ct_b, SerType::BINARY))
-        throw std::runtime_error("Failed to load ciphertext b");
-
-    // ---- Capture crypto context and keys for simulator ----
+    // ---- Capture crypto context and tag polys for simulator ----
     niobium::compiler().capture_crypto_context(cc);
-    niobium::compiler().tag_keys(cc);
-
-    // ---- Tag inputs ----
     niobium::compiler().tag_input("ct_a", ct_a);
     niobium::compiler().tag_input("ct_b", ct_b);
+    niobium::compiler().tag_keys(cc);
 
     if (!niobium::compiler().is_cache_valid()) {
         // ---- RECORDING PHASE ----

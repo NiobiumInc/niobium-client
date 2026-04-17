@@ -63,6 +63,7 @@ int main(int argc, char* argv[]) {
     else if (operation == "MUL_ADD") expected = a * b + a;
     else if (operation == "ADD_MUL") expected = (a + b) * a;
     else if (operation == "ALL_NO_MUL") expected = (b + 1.0) * 4.0;
+    else if (operation == "MORPH")   expected = b;  // EvalRotate(ct_a={a,b}, 1)[0]
     else {
         std::cerr << "Unknown operation: " << operation << std::endl;
         return 1;
