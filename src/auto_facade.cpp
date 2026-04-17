@@ -15,6 +15,7 @@
 #include "cryptocontext-ser.h"
 #include "key/key-ser.h"
 #include "scheme/ckksrns/ckksrns-ser.h"
+#include "scheme/ckksrns/ckksrns-fhe.h"
 
 #include "cereal_io.h"
 #include <cereal/archives/portable_binary.hpp>
@@ -419,6 +420,49 @@ void Compiler::tag_keys<lbcrypto::CryptoContext<DCRTPoly>>(
     } catch (...) {}
 
     std::cout << "[NIOBIUM] Tagged " << total << " key polynomials for replay" << std::endl;
+}
+
+// Capture the CKKS bootstrap precomputation plaintexts so the simulator
+// has their polynomial values as live-in. Walks the FHECKKSRNS private
+// m_bootPrecomMap via its probe-exposed accessor (GetBootPrecomMap), and
+// captures every DCRTPoly inside m_U0Pre / m_U0hatTPre / m_U0PreFFT /
+// m_U0hatTPreFFT as an input under the "bootstrap_precompute" name.
+template<>
+void Compiler::tag_bootstrap_precompute<lbcrypto::CryptoContext<DCRTPoly>>(
+    const lbcrypto::CryptoContext<DCRTPoly>& cc) {
+    if (!cc) return;
+    auto scheme = cc->GetScheme();
+    if (!scheme) return;
+    auto fheBase = scheme->GetFHE();
+    if (!fheBase) return;
+    auto fheCkks = std::dynamic_pointer_cast<lbcrypto::FHECKKSRNS>(fheBase);
+    if (!fheCkks) return;
+
+    const auto& bootMap = fheCkks->GetBootPrecomMap();
+    if (bootMap.empty()) return;
+
+    std::vector<uint64_t> addr_ids;
+    auto capture_pt = [&](const auto& pt) {
+        if (!pt) return;
+        // Plaintext wraps a single DCRTPoly; reuse capture_dcrt_polys.
+        const auto& el = pt->template GetElement<lbcrypto::DCRTPoly>();
+        std::vector<DCRTPoly> one;
+        one.push_back(el);
+        capture_dcrt_polys(*this, "bootstrap_precompute", one, addr_ids);
+    };
+
+    size_t before = addr_ids.size();
+    for (const auto& [slots, precom] : bootMap) {
+        if (!precom) continue;
+        for (const auto& pt : precom->m_U0Pre) capture_pt(pt);
+        for (const auto& pt : precom->m_U0hatTPre) capture_pt(pt);
+        for (const auto& inner : precom->m_U0PreFFT)
+            for (const auto& pt : inner) capture_pt(pt);
+        for (const auto& inner : precom->m_U0hatTPreFFT)
+            for (const auto& pt : inner) capture_pt(pt);
+    }
+    std::cout << "[NIOBIUM] Tagged " << (addr_ids.size() - before)
+              << " bootstrap precompute polynomials" << std::endl;
 }
 
 // ============================================================================

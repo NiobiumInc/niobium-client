@@ -174,6 +174,14 @@ public:
     template<typename CryptoContextType>
     void tag_keys(const CryptoContextType& cc);
 
+    /// Capture CKKS bootstrap precomputation plaintext polynomials so the
+    /// simulator can read from them during replay. Walks the FHECKKSRNS
+    /// `m_bootPrecomMap` and tags every DCRTPoly inside m_U0Pre /
+    /// m_U0hatTPre / m_U0PreFFT / m_U0hatTPreFFT as live-in data.
+    /// Call after EvalBootstrapSetup() and before start().
+    template<typename CryptoContextType>
+    void tag_bootstrap_precompute(const CryptoContextType& cc);
+
     // ====================================================================
     // RECORDING MODES
     // ====================================================================
