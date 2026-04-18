@@ -36,19 +36,46 @@ static std::unordered_map<uintptr_t, int> g_refcount;  // openfhe_id -> live ref
 static bool g_suppressed = false;
 static thread_local bool g_serialization_thread = false;
 
+// Debug: track the lifecycle of a specific FHETCH address.
+// Set via NIOBIUM_TRACK_ADDR=65574 to follow what probe activity is
+// associated with that address.
+static uintptr_t g_track_addr = [](){
+    const char* e = std::getenv("NIOBIUM_TRACK_ADDR");
+    return e ? static_cast<uintptr_t>(std::strtoull(e, nullptr, 10))
+             : static_cast<uintptr_t>(-1);
+}();
+
+static void dbg_track(const char* event, uintptr_t openfhe_id, uintptr_t fhetch_addr,
+                      const char* note = nullptr) {
+    if (g_track_addr == static_cast<uintptr_t>(-1)) return;
+    if (fhetch_addr != g_track_addr) return;
+    std::cerr << "[TRACK %" << fhetch_addr << "] " << event
+              << " openfhe_id=0x" << std::hex << openfhe_id << std::dec
+              << (note ? std::string(" ") + note : std::string())
+              << std::endl;
+}
+
 static uintptr_t map_address(uintptr_t openfhe_id) {
     auto it = g_address_map.find(openfhe_id);
-    if (it != g_address_map.end()) return it->second;
+    if (it != g_address_map.end()) {
+        dbg_track("map_address (existing)", openfhe_id, it->second);
+        return it->second;
+    }
     uintptr_t addr;
+    bool from_pool = false;
     // Pinned addresses (inputs, keys, precompute) always take a fresh id so
     // they stay stable and don't accidentally inherit a recycled address.
     if (!g_pinned_openfhe_ids.count(openfhe_id) && !g_compact_free_pool.empty()) {
         addr = g_compact_free_pool.back();
         g_compact_free_pool.pop_back();
+        from_pool = true;
     } else {
         addr = g_next_fhetch_addr++;
     }
     g_address_map[openfhe_id] = addr;
+    dbg_track(from_pool ? "map_address (from free pool)"
+                        : "map_address (fresh monotonic)",
+              openfhe_id, addr);
     return addr;
 }
 

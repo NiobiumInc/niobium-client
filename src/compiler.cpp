@@ -422,6 +422,14 @@ bool Compiler::replay() {
         return false;
     }
 
+    // Pre-materialize zero-initialized addresses so the data-parent chain
+    // below can propagate through them. Preamble instructions that write
+    // a known zero to an address (e.g. `sr_mulps %x, %x, 0, m=N`) are
+    // emitted when OpenFHE's SetValuesToZero fires, but the simulator
+    // wouldn't execute them until run() — populating up-front lets
+    // downstream children inherit correctly during the propagation pass.
+    impl_->simulator->prematerialize_zero_inits();
+
     // Compute the "live-in" set: addresses read before being written in the trace.
     // Only these addresses need input data; addresses that are written first
     // get their values from the simulation itself.
