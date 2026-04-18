@@ -186,7 +186,10 @@ static void capture_ciphertext_polys(niobium::Compiler& compiler,
     for (const auto& dcrt : elements) {
         for (const auto& poly : dcrt.GetAllElements()) {
             uintptr_t poly_id = poly.GetId();
-            uint64_t fhetch_addr = niobium::detail::lookup_fhetch_address(poly_id);
+            // Pin + allocate a FHETCH address lazily (matches the
+            // compiler's compact_address at tag time).
+            niobium::detail::pin_openfhe_id(poly_id);
+            uint64_t fhetch_addr = niobium::detail::ensure_fhetch_address(poly_id);
             if (fhetch_addr == static_cast<uint64_t>(-1)) continue;
 
             addr_ids.push_back(fhetch_addr);
@@ -316,7 +319,11 @@ static size_t capture_dcrt_polys(Compiler& compiler,
             // through any reassignments (inputs/keys/precompute must survive
             // the address-recycling layer).
             detail::pin_openfhe_id(poly_id);
-            uint64_t fhetch_addr = detail::lookup_fhetch_address(poly_id);
+            // Allocate a FHETCH address if the poly didn't already get one.
+            // Setup-time probes no longer allocate addresses — tag_* is the
+            // intended mapping point, giving inputs/keys/precompute low
+            // compact ids before the trace starts consuming the space.
+            uint64_t fhetch_addr = detail::ensure_fhetch_address(poly_id);
             if (fhetch_addr == static_cast<uint64_t>(-1)) continue;
 
             if (poly.GetFormat() != Format::EVALUATION)

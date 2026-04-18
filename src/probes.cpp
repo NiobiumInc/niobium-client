@@ -155,22 +155,27 @@ void openfhe_cprobe_annotate(const char* annotation) {
 // Polynomial identity and address tracking
 // ============================================================================
 
+// Mirrors the compiler's Generator::allocate(): on every Poly construction
+// we track the refcount (used by reassign-id recycling) but DO NOT assign a
+// FHETCH address here. Addresses are allocated lazily — for inputs / keys /
+// bootstrap precompute via explicit tag_* calls before start(), for trace-
+// referenced polys via the arithmetic/copy probes during recording. This
+// prevents setup-time intermediates (thousands of them allocated during
+// EvalBootstrapSetup) from eating up the low-address range.
 void openfhe_cprobe_id(uintptr_t poly_id) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    map_address(poly_id);
-    // A freshly-constructed poly has exactly one reference (itself).
     g_refcount.emplace(poly_id, 1);
 }
 
 uintptr_t* openfhe_cprobe_address(uintptr_t poly_id) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    map_address(poly_id);
+    if (niobium::compiler().running_p()) map_address(poly_id);
     return nullptr;
 }
 
 uintptr_t* openfhe_cprobe_result(uintptr_t poly_id) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    map_address(poly_id);
+    if (niobium::compiler().running_p()) map_address(poly_id);
     return nullptr;
 }
 
@@ -182,24 +187,32 @@ uintptr_t* openfhe_cprobe_cache() {
 // Polynomial initialization
 // ============================================================================
 
+// Random-distribution probes: just pin the id (non-reproducible data).
+// Address is assigned lazily when the poly is actually referenced in the
+// trace or tagged. Matches the compiler's Generator::discrete_gaussian
+// etc. which bail with !running_p() except for pinning bookkeeping.
 void openfhe_cprobe_discrete_gaussian(uintptr_t poly_id, int /*format*/) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    map_address(poly_id);
+    g_pinned_openfhe_ids.insert(poly_id);
+    if (niobium::compiler().running_p()) map_address(poly_id);
 }
 
 void openfhe_cprobe_discrete_uniform(uintptr_t poly_id, int /*format*/) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    map_address(poly_id);
+    g_pinned_openfhe_ids.insert(poly_id);
+    if (niobium::compiler().running_p()) map_address(poly_id);
 }
 
 void openfhe_cprobe_binary_uniform(uintptr_t poly_id, int /*format*/) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    map_address(poly_id);
+    g_pinned_openfhe_ids.insert(poly_id);
+    if (niobium::compiler().running_p()) map_address(poly_id);
 }
 
 void openfhe_cprobe_ternary_uniform(uintptr_t poly_id, int /*format*/) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    map_address(poly_id);
+    g_pinned_openfhe_ids.insert(poly_id);
+    if (niobium::compiler().running_p()) map_address(poly_id);
 }
 
 // Number of times precompute probe fired vs. how many of those id's are
@@ -212,27 +225,28 @@ void openfhe_cprobe_precompute(uintptr_t poly_id, int /*format*/) {
     ++g_precompute_probe_count;
     if (g_address_map.find(poly_id) != g_address_map.end())
         ++g_precompute_probe_already_mapped;
-    // Precomputes hold irreproducible data (bootstrap DFT plaintexts,
-    // random-distribution polys, etc.); pin the id so refcount-based
-    // recycling never touches its compact FHETCH address.
+    // Pin the id; address assignment is deferred to tag_bootstrap_precompute
+    // (or lazy trace-time allocation if the poly ends up in an op).
     g_pinned_openfhe_ids.insert(poly_id);
-    map_address(poly_id);
 }
 
 void openfhe_cprobe_zero(uintptr_t poly_id, int /*format*/, uint64_t modulus) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    uintptr_t a = map_address(poly_id);
+    // Skip outside recording (matches compiler's Generator::zero which
+    // bails on !running_p()). During EvalBootstrapSetup this probe fires
+    // thousands of times for intermediate DCRTPoly towers — allocating
+    // addresses for them eats up the compact id space.
+    if (!niobium::compiler().running_p()) return;
 
-    // Emit muli by 0 unconditionally to initialize the address to zero.
-    // emit_preamble works even before start().
+    uintptr_t a = map_address(poly_id);
     std::string mi = (modulus != 0) ? midx(modulus) : "m=0";
-    niobium::detail::trace_writer().emit_preamble(
+    niobium::detail::trace_writer().emit(
         "sr_mulps " + addr(a) + ", " + addr(a) + ", 0, " + mi);
 }
 
 void openfhe_cprobe_max(uintptr_t poly_id, int /*format*/, uint64_t /*modulus*/) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    map_address(poly_id);
+    if (niobium::compiler().running_p()) map_address(poly_id);
 }
 
 // ============================================================================
@@ -241,17 +255,17 @@ void openfhe_cprobe_max(uintptr_t poly_id, int /*format*/, uint64_t /*modulus*/)
 
 void openfhe_cprobe_input(uintptr_t poly_id, int /*format*/) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    map_address(poly_id);
+    if (niobium::compiler().running_p()) map_address(poly_id);
 }
 
 void openfhe_cprobe_output(uintptr_t poly_id, int /*format*/) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    map_address(poly_id);
+    if (niobium::compiler().running_p()) map_address(poly_id);
 }
 
 void openfhe_cprobe_key(uintptr_t poly_id, int /*format*/) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
-    map_address(poly_id);
+    if (niobium::compiler().running_p()) map_address(poly_id);
 }
 
 // ============================================================================
@@ -261,16 +275,15 @@ void openfhe_cprobe_key(uintptr_t poly_id, int /*format*/) {
 void openfhe_cprobe_copy(uintptr_t dst_id, uintptr_t src_id) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
     if (g_serialization_thread) return;
+    // Matches the compiler's Generator::copy(): bail entirely if not
+    // recording. Setup-time copies shouldn't reach the trace or
+    // allocate addresses — they just consume compact id space.
+    if (!niobium::compiler().running_p()) return;
+
     uintptr_t src_addr = map_address(src_id);
     uintptr_t dst_addr = map_address(dst_id);
     g_data_parent[dst_addr] = src_addr;
 
-    // Only emit a copy instruction while recording — matches the
-    // compiler's Generator::copy() which bails out when !running_p().
-    // Copies that happen during setup don't belong in the trace;
-    // emitting them there would reference polys that die before
-    // replay and whose FHETCH addresses may be recycled.
-    if (!niobium::compiler().running_p()) return;
     niobium::detail::trace_writer().emit(
         "sr_addps " + addr(dst_addr) + ", " + addr(src_addr) + ", 0, m=0");
 }
@@ -278,9 +291,12 @@ void openfhe_cprobe_copy(uintptr_t dst_id, uintptr_t src_id) {
 void openfhe_cprobe_move(uintptr_t dst_id, uintptr_t src_id) {
     std::lock_guard<std::mutex> lock(g_probe_mutex);
     if (g_serialization_thread) return;
+    // Matches the compiler's Generator::move(): bail if not recording.
+    // Setup-time moves (very common from std::move() of intermediate
+    // polys in OpenFHE's EvalBootstrapSetup) must not allocate addresses.
+    if (!niobium::compiler().running_p()) return;
     uintptr_t src_addr = map_address(src_id);
     g_address_map[dst_id] = src_addr;
-    // dst_id now points to the same FHETCH address as src_id
 }
 
 // Copy-assignment: `poly_dst = poly_src` causes OpenFHE to set
@@ -502,6 +518,11 @@ uint64_t lookup_fhetch_address(uintptr_t openfhe_poly_id) {
     auto it = g_address_map.find(openfhe_poly_id);
     if (it != g_address_map.end()) return it->second;
     return static_cast<uint64_t>(-1);
+}
+
+uint64_t ensure_fhetch_address(uintptr_t openfhe_poly_id) {
+    std::lock_guard<std::mutex> lock(g_probe_mutex);
+    return map_address(openfhe_poly_id);
 }
 
 const std::unordered_map<uint64_t, uint64_t>& get_data_parent_map() {

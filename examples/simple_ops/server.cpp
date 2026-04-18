@@ -54,18 +54,13 @@ int main(int argc, char* argv[]) {
     if (!Serial::DeserializeFromFile(keyDir + "/cc.bin", cc, SerType::BINARY))
         throw std::runtime_error("Failed to load crypto context");
 
-    // Compiler-matching FHETCH layout: inputs in 1..24, evalmult keys at 25+.
-    niobium::compiler().reserve_addresses(1);
-
-    // ---- Load ciphertexts (consume addresses 1..16) ----
+    // ---- Load ciphertexts and keys (addresses assigned later at tag time) ----
     Ciphertext<DCRTPoly> ct_a, ct_b;
     if (!Serial::DeserializeFromFile(keyDir + "/ct_a.bin", ct_a, SerType::BINARY))
         throw std::runtime_error("Failed to load ciphertext a");
     if (!Serial::DeserializeFromFile(keyDir + "/ct_b.bin", ct_b, SerType::BINARY))
         throw std::runtime_error("Failed to load ciphertext b");
 
-    // ---- Reserve and load eval mult + automorphism keys at address 25+ ----
-    niobium::compiler().reserve_addresses(25);
     bool has_mult_key = false;
     {
         std::ifstream mkStream(keyDir + "/mk.bin", std::ios::binary);
