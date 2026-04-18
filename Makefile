@@ -1,10 +1,16 @@
 # ==============================================================================
 # Niobium Client — Build System
 # ==============================================================================
-# Convention: dbuild/ for Debug, build/ for Release (matches niobium-compiler)
+# Convention: dbuild/ for Debug, build/ for Release (matches niobium-compiler).
+#
+# Layout: the FHETCH library, compiler session API, and simulator live in
+# vendor/niobium-fhetch (a submodule). OpenFHE is a nested submodule inside
+# that (vendor/niobium-fhetch/vendor/openfhe). This Makefile builds OpenFHE,
+# then the top-level CMake add_subdirectory()s niobium-fhetch and the client
+# examples into a single build tree.
 #
 # Quick start:
-#   make sync             # One-time: sync OpenFHE submodule
+#   make sync             # One-time: sync submodules (recursive)
 #   make config           # Configure OpenFHE + client (Debug)
 #   make build            # Build OpenFHE + client (Debug)
 #
@@ -50,7 +56,8 @@ endef
 VENDOR_DIR       := $(CURDIR)/vendor
 VENDOR_LIB_DIR   := $(VENDOR_DIR)/lib
 
-OPENFHE_DIR          := $(VENDOR_DIR)/openfhe
+FHETCH_DIR           := $(VENDOR_DIR)/niobium-fhetch
+OPENFHE_DIR          := $(FHETCH_DIR)/vendor/openfhe
 OPENFHE_INSTALL_DIR  := $(VENDOR_LIB_DIR)/openfhe
 CLIENT_INSTALL_DIR   := $(VENDOR_LIB_DIR)/niobium-client
 
@@ -64,7 +71,8 @@ NATIVEOPT ?= OFF
 # Targets
 # ==============================================================================
 
-.PHONY: help sync config config-release build build-release release \
+.PHONY: help sync sync-submodules update-openfhe update-niobium-fhetch \
+        config config-release build build-release release \
         config-openfhe config-openfhe-release build-openfhe build-openfhe-release \
         config-client config-client-release \
         install install-release clean clean-all
@@ -83,20 +91,20 @@ help: ## Display this help message
 
 ##@ Submodules
 
-sync: sync-openfhe sync-json ## Sync all submodules to pinned commits
+sync: sync-submodules ## Sync all submodules (recursive) — niobium-fhetch + its nested openfhe/json
 
-sync-openfhe: ## Sync OpenFHE submodule to pinned commit
-	git submodule update --init --recursive vendor/openfhe
+sync-submodules: ## Sync niobium-fhetch and its nested submodules
+	git submodule update --init --recursive
 
-sync-json: ## Sync nlohmann/json submodule to pinned commit
-	git submodule update --init vendor/json
+update-niobium-fhetch: ## Update niobium-fhetch to latest remote commit on main
+	cd $(FHETCH_DIR) && git fetch origin && git checkout main && git pull origin main
 
-update-openfhe: ## Update OpenFHE submodule to latest remote commit
+update-openfhe: ## Update OpenFHE (inside niobium-fhetch) to latest remote commit
 	cd $(OPENFHE_DIR) && git fetch origin && git checkout nb_main && git pull origin nb_main
 
 ##@ OpenFHE Build
 
-config-openfhe: ## Configure OpenFHE (Debug mode)
+config-openfhe: ## Configure OpenFHE (Debug)
 	$(call set-build-config,Debug,dbuild)
 	cmake -S $(OPENFHE_DIR) -B $(OPENFHE_DIR)/dbuild \
 		-DCMAKE_BUILD_TYPE=Debug \
@@ -110,7 +118,7 @@ config-openfhe: ## Configure OpenFHE (Debug mode)
 		-DWITH_OPENMP=$(OPENMP) \
 		-DCMAKE_INSTALL_PREFIX=$(OPENFHE_INSTALL_DIR)
 
-config-openfhe-release: ## Configure OpenFHE (Release mode)
+config-openfhe-release: ## Configure OpenFHE (Release)
 	$(call set-build-config,Release,build)
 	cmake -S $(OPENFHE_DIR) -B $(OPENFHE_DIR)/build \
 		-DCMAKE_BUILD_TYPE=Release \
@@ -124,19 +132,19 @@ config-openfhe-release: ## Configure OpenFHE (Release mode)
 		-DWITH_OPENMP=$(OPENMP) \
 		-DCMAKE_INSTALL_PREFIX=$(OPENFHE_INSTALL_DIR)
 
-build-openfhe: ## Build and install OpenFHE (Debug mode)
+build-openfhe: ## Build and install OpenFHE (Debug)
 	$(call set-build-config,Debug,dbuild)
 	cd $(OPENFHE_DIR) && \
 		cmake --build dbuild -j $(NUM_CPUS) --target install --config Debug
 
-build-openfhe-release: ## Build and install OpenFHE (Release mode)
+build-openfhe-release: ## Build and install OpenFHE (Release)
 	$(call set-build-config,Release,build)
 	cd $(OPENFHE_DIR) && \
 		cmake --build build -j $(NUM_CPUS) --target install --config Release
 
 ##@ Client Build
 
-config-client: ## Configure the client library (Debug mode, requires OpenFHE built)
+config-client: ## Configure the client + fhetch library + examples (Debug)
 	$(call set-build-config,Debug,dbuild)
 	cmake -S $(CURDIR) -B $(CURDIR)/dbuild \
 		-DCMAKE_BUILD_TYPE=Debug \
@@ -144,7 +152,7 @@ config-client: ## Configure the client library (Debug mode, requires OpenFHE bui
 		-DNIOBIUM_CLIENT_WITH_EXAMPLES=ON \
 		-DCMAKE_INSTALL_PREFIX=$(CLIENT_INSTALL_DIR)
 
-config-client-release: ## Configure the client library (Release mode, requires OpenFHE built)
+config-client-release: ## Configure the client + fhetch library + examples (Release)
 	$(call set-build-config,Release,build)
 	cmake -S $(CURDIR) -B $(CURDIR)/build \
 		-DCMAKE_BUILD_TYPE=Release \
@@ -154,15 +162,15 @@ config-client-release: ## Configure the client library (Release mode, requires O
 
 ##@ Combined Targets
 
-config: config-openfhe config-client ## Configure everything (Debug mode)
+config: config-openfhe config-client ## Configure everything (Debug)
 
-config-release: config-openfhe-release config-client-release ## Configure everything (Release mode)
+config-release: config-openfhe-release config-client-release ## Configure everything (Release)
 
-build: build-openfhe ## Build everything (Debug mode)
+build: build-openfhe ## Build everything (Debug)
 	$(call set-build-config,Debug,dbuild)
 	cmake --build dbuild -j $(NUM_CPUS) --config Debug
 
-build-release: build-openfhe-release ## Build everything (Release mode)
+build-release: build-openfhe-release ## Build everything (Release)
 	$(call set-build-config,Release,build)
 	cmake --build build -j $(NUM_CPUS) --config Release
 
@@ -170,11 +178,11 @@ release: config-release build-release ## Shortcut: configure + build everything 
 
 ##@ Installation
 
-install: ## Install the client library (Debug mode)
+install: ## Install the client + fhetch library (Debug)
 	$(call set-build-config,Debug,dbuild)
 	cmake --install dbuild
 
-install-release: ## Install the client library (Release mode)
+install-release: ## Install the client + fhetch library (Release)
 	$(call set-build-config,Release,build)
 	cmake --install build
 
@@ -232,19 +240,19 @@ test-sim-mult: test-mult ## Record mult trace then simulate it (Debug)
 	$(call set-build-config,Debug,dbuild)
 	@echo ""
 	@echo "=== Running FHETCH simulator on mult trace ==="
-	$(BUILD_DIR)/fhetch_sim mult_server_workload_bfv_mult/mult_server_workload_bfv_mult.fhetch --ring-dim 8192
+	$(BUILD_DIR)/vendor/niobium-fhetch/fhetch_sim mult_server_workload_bfv_mult/mult_server_workload_bfv_mult.fhetch --ring-dim 8192
 
 test-sim-mult-release: test-mult-release ## Record mult trace then simulate it (Release)
 	$(call set-build-config,Release,build)
 	@echo ""
 	@echo "=== Running FHETCH simulator on mult trace ==="
-	$(BUILD_DIR)/fhetch_sim mult_server_workload_bfv_mult/mult_server_workload_bfv_mult.fhetch --ring-dim 8192
+	$(BUILD_DIR)/vendor/niobium-fhetch/fhetch_sim mult_server_workload_bfv_mult/mult_server_workload_bfv_mult.fhetch --ring-dim 8192
 
 test-sim-bootstrap-release: test-bootstrap-release ## Record bootstrap trace then simulate it (Release)
 	$(call set-build-config,Release,build)
 	@echo ""
 	@echo "=== Running FHETCH simulator on bootstrap trace ==="
-	$(BUILD_DIR)/fhetch_sim bootstrap_server_workload_ckks_bootstrap/bootstrap_server_workload_ckks_bootstrap.fhetch --ring-dim 2048
+	$(BUILD_DIR)/vendor/niobium-fhetch/fhetch_sim bootstrap_server_workload_ckks_bootstrap/bootstrap_server_workload_ckks_bootstrap.fhetch --ring-dim 2048
 
 # Helper: run a single simple_ops test
 define run-simple-op
