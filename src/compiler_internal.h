@@ -30,6 +30,13 @@ const std::unordered_map<uint64_t, uint64_t>& get_data_parent_map();
 /// whose values must remain accessible for the whole replay.
 void pin_openfhe_id(uintptr_t poly_id);
 
+/// Allocate a FHETCH address for this OpenFHE poly id if one hasn't been
+/// assigned yet. Matches the compiler's compact_address() semantics:
+/// lazy allocation at the point of first use. Used by tag_* paths before
+/// start() so that inputs / keys / bootstrap precompute get low, stable
+/// compact ids before trace-referenced polys start consuming the space.
+uint64_t ensure_fhetch_address(uintptr_t openfhe_poly_id);
+
 /// Diagnostic counters.
 uintptr_t niobium_precompute_probe_count();
 uintptr_t niobium_precompute_probe_already_mapped_count();

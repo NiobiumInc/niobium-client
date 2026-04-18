@@ -43,13 +43,11 @@ int main(int argc, char* argv[]) {
     std::cout << "=== CKKS Bootstrap — Server ===" << std::endl;
     std::cout << "Loading keys from: " << keyDir << std::endl;
 
-    // Mirrors the order of niobium-compiler/examples/simple-ckks-bootstrapping.cpp:
-    // load cc, then keys, then input ciphertext, then EvalBootstrapSetup,
-    // then capture_crypto_context, then tag_input. The compiler's compaction
-    // layer then lays out addresses as inputs -> mk -> rk -> bp (inputs at
-    // low addrs). Our client allocates addresses at poly-construction time,
-    // so to mirror that layout we reserve a small input range up front and
-    // let the rest cascade naturally.
+    // Mirrors the order of the compiler's simple-ckks-bootstrapping.cpp.
+    // Address allocation is lazy (compact_address-style), so the loading
+    // order no longer matters for the resulting FHETCH id layout — only
+    // the order of tag_* calls does. Inputs → keys → precompute gives the
+    // same id layout the compiler produces under -O0.
 
     // ---- Load crypto context ----
     CryptoContext<DCRTPoly> cc;
@@ -58,16 +56,6 @@ int main(int argc, char* argv[]) {
 
     usint ringDim = cc->GetRingDimension();
     std::cout << "Ring dimension: " << ringDim << std::endl;
-
-    // ---- Reserve addresses 1..4 for the input ciphertext (inputs come
-    // first in the compiler's layout; our monotonic allocator matches this
-    // if we carve out the first slot and load the ciphertext before keys). ----
-    niobium::compiler().reserve_addresses(1);
-
-    // ---- Load ciphertext BEFORE keys so its polys get low addresses ----
-    Ciphertext<DCRTPoly> ciph;
-    if (!Serial::DeserializeFromFile(keyDir + "/ciphertext.bin", ciph, SerType::BINARY))
-        throw std::runtime_error("Failed to load ciphertext");
 
     // ---- Load keys ----
     std::cout << "Loading eval mult key..." << std::endl;
@@ -84,14 +72,19 @@ int main(int argc, char* argv[]) {
             throw std::runtime_error("Failed to load eval automorphism keys");
     }
 
+    // ---- Load input ciphertext ----
+    Ciphertext<DCRTPoly> ciph;
+    if (!Serial::DeserializeFromFile(keyDir + "/ciphertext.bin", ciph, SerType::BINARY))
+        throw std::runtime_error("Failed to load ciphertext");
+
     // ---- Bootstrap precomputation (fires precompute probes) ----
     std::vector<uint32_t> levelBudget = {4, 4};
     cc->EvalBootstrapSetup(levelBudget);
 
-    // ---- Capture crypto context and tag inputs/keys ----
-    // capture_crypto_context() registers the auto-capture hook that walks
-    // the CC's bootstrap precompute map at stop() time — no user-facing
-    // precompute API call required.
+    // ---- Capture crypto context and tag inputs/keys in the order we
+    // want them laid out in the FHETCH address space ----
+    // capture_crypto_context() also registers the auto-capture hook that
+    // walks the CC's bootstrap precompute map at stop() time.
     niobium::compiler().capture_crypto_context(cc);
     niobium::compiler().tag_input("input_cipher", ciph);
     niobium::compiler().tag_keys(cc);

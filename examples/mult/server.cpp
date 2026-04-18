@@ -47,24 +47,14 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Ring dimension: " << cc->GetRingDimension() << std::endl;
 
-    // Compiler-matching FHETCH address layout:
-    //   1..24    — inputs / scratch (ct_a, ct_b, plus reserved slots)
-    //   25..48   — evalmult keys
-    //   49..     — evalautomorphism keys
-    // OpenFHE polynomials get a FHETCH address the moment they are
-    // constructed (during deserialization), so we must interleave
-    // reserve_addresses() calls with the deserialization order.
-    niobium::compiler().reserve_addresses(1);
-
-    // ---- Load ciphertexts (consume low addresses 1..16) ----
+    // ---- Load ciphertexts (poly IDs allocated; addresses assigned at tag time) ----
     Ciphertext<DCRTPoly> ct_a, ct_b;
     if (!Serial::DeserializeFromFile(keyDir + "/ct_a.bin", ct_a, SerType::BINARY))
         throw std::runtime_error("Failed to load ciphertext a");
     if (!Serial::DeserializeFromFile(keyDir + "/ct_b.bin", ct_b, SerType::BINARY))
         throw std::runtime_error("Failed to load ciphertext b");
 
-    // ---- Reserve slots 17..24 (compiler's VirtualZero range) and load keys ----
-    niobium::compiler().reserve_addresses(25);
+    // ---- Load keys ----
     {
         std::ifstream mkStream(keyDir + "/mk.bin", std::ios::in | std::ios::binary);
         if (mkStream.is_open()) {
@@ -83,6 +73,9 @@ int main(int argc, char* argv[]) {
     }
 
     // ---- Capture crypto context and tag polys for simulator ----
+    // Address allocation is lazy (matches compiler's compact_address):
+    // poly IDs exist from deserialization but only get FHETCH addresses
+    // when they're first tagged or referenced in the trace.
     niobium::compiler().capture_crypto_context(cc);
     niobium::compiler().tag_input("ct_a", ct_a);
     niobium::compiler().tag_input("ct_b", ct_b);

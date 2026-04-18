@@ -152,6 +152,17 @@ void Compiler::init(int& argc, char** argv) {
 
 bool Compiler::start() {
     if (impl_->running) return false;
+
+    // Auto-register any CC-derived precomputed data (e.g. CKKS bootstrap
+    // precompute) BEFORE recording begins — mirrors the compiler's
+    // Compiler::start() which calls pin_address + compact_address on every
+    // bootstrap precompute poly so they get compact ids in a contiguous
+    // block right after eval keys, ahead of any trace-intermediate polys.
+    if (impl_->auto_capture_at_stop) {
+        impl_->auto_capture_at_stop();
+        impl_->auto_capture_at_stop = nullptr;  // don't run twice
+    }
+
     impl_->running = true;
     impl_->stopped = false;
     impl_->trace_writer.start_recording();
