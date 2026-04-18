@@ -14,6 +14,7 @@
 #include <iostream>
 #include <set>
 #include <sstream>
+#include <unordered_set>
 
 // OpenFHE math
 #include "math/math-hal.h"
@@ -42,15 +43,21 @@ struct Simulator::Impl {
         return 0;
     }
 
+    // Addresses we've already warned about once — keeps uninit-read
+    // warnings readable when the same address is consumed by many ops.
+    std::unordered_set<uint64_t> warned_uninit_addrs;
+
     // Get polynomial from memory, returning zero-initialized if missing
     const std::vector<uint64_t>& get_or_zero(uint64_t addr,
                                               std::vector<uint64_t>& scratch,
                                               const Instruction& inst) {
         if (memory.is_initialized(addr))
             return memory.get(addr).values;
-        std::cerr << "[FHETCH_SIM] WARNING: read from uninitialized address %"
-                  << addr << " (line " << inst.line_number << ": "
-                  << inst.raw_line << ")" << std::endl;
+        if (warned_uninit_addrs.insert(addr).second) {
+            std::cerr << "[FHETCH_SIM] WARNING: read from uninitialized address %"
+                      << addr << " (first seen at line " << inst.line_number
+                      << ": " << inst.raw_line << ")" << std::endl;
+        }
         scratch.assign(ring_dim, 0);
         return scratch;
     }
