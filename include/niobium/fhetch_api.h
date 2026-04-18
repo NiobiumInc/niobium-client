@@ -1,27 +1,15 @@
-// Copyright 2024-present Niobium Microsystems, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// FHETCH Polynomial IR API
-//
-// Complete FHETCH instruction set for the Niobium client.
-// These functions are called by the probe mechanism inside the
-// Niobium-instrumented OpenFHE branch — not by user code directly.
-// Each function records one FHETCH operation into the instruction trace.
-//
-// Specification reference: https://fhetch.org
-//   "Polynomial Intermediate Representation for Fully Homomorphic Encryption"
-//   (FHETCH Consortium, 2025)
+// Copyright (C) 2023-2026, All rights reserved by Niobium Microsystems.
+// The contents of this file and all related materials provided herein (the
+// "Product") may not be used except pursuant to a separate written
+// agreement signed by a duly authorized officer of Niobium Microsystems,
+// Inc. (a "License Agreement").
+// Without limiting the foregoing, you may not, at any time or for any
+// reason, directly or indirectly, in whole or in part: (i) copy, modify,
+// or create derivative works of the Product; (ii) rent, lease, lend, sell,
+// sublicense, assign, distribute, publish, transfer, or otherwise make
+// available the Product; (iii) reverse engineer, disassemble, decompile,
+// decode, or adapt the Product; or (iv) remove any proprietary notices
+// from the Product.
 
 #pragma once
 
@@ -376,13 +364,16 @@ private:
 // ============================================================================
 //  INPUT / OUTPUT TAGGING
 // ============================================================================
-// Mark polynomials as inputs or outputs so the server-side optimizer knows
-// which addresses are observable and must not be eliminated.
+// Mark polynomials as inputs or outputs so the optimizer knows which
+// addresses are observable and must not be eliminated.
 
 /// Mark a single-residue polynomial as a named input.
+/// The name is used as the key in the inputs JSON file and registers the
+/// polynomial data for serialization during replay index creation.
 void tag_input(const std::string& name, const Polynomial& p);
 
 /// Mark a single-residue polynomial as a named output (probe point).
+/// The name is used as the key in the outputs JSON file.
 void tag_output(const std::string& name, const Polynomial& p);
 
 /// Mark all residues of an MRP as named inputs.
@@ -392,6 +383,8 @@ void tag_input(const std::string& name, const MRP& m);
 void tag_output(const std::string& name, const MRP& m);
 
 /// Mark all elements of an SRP array as named inputs.
+/// SRPArray is indexed by position (not modulus), so it can hold
+/// polynomials with duplicate moduli — unlike MRP.
 void tag_input(const std::string& name, const SRPArray& arr);
 
 /// Mark all elements of an SRP array as named outputs.
@@ -404,19 +397,50 @@ void tag_input(const std::string& name, const MRPArray& arr);
 void tag_output(const std::string& name, const MRPArray& arr);
 
 /// Reset FHETCH state for a new epoch.
-/// Clears input/output registries and resets address allocator to 0.
+/// Clears input/output registries, resets address allocator to 0,
+/// and invalidates the replay output cache.
 void reset_for_epoch();
 
 /// Get the ring dimension from the first registered input (0 if none).
+/// Used internally to populate synthetic crypto_context for replay.
 uint64_t get_input_ring_dimension();
 
-/// Save all named input data to JSON files in the program directory.
-/// Called automatically during Compiler::stop() in FHETCH mode.
+/// Save all named input data to JSON files.
+/// Writes per-input files and a master index to the program directory
+/// in the format expected by the replay engine.
+/// Called automatically during create_replay_index() in FHETCH mode.
 void save_input_data();
 
-/// Save all named probe outputs to a JSON file in the program directory.
-/// Called automatically during Compiler::stop() in FHETCH mode.
+/// Save all named probe outputs to a JSON file.
+/// Writes to <program_dir>/<program_name>.outputs.json using the same
+/// format as the regular compiler flow.
+/// Called automatically during Compiler::stop() in FHETCH mode, or
+/// can be called explicitly.
 void save_probe_outputs();
+
+// ============================================================================
+//  RESULT RETRIEVAL (after replay)
+// ============================================================================
+
+/// Retrieve a single-residue polynomial result from replay output.
+/// Reads from replay_outputs_integer.json, finds the named output,
+/// and populates the Polynomial with computed coefficient values.
+/// @param name  The output name used in tag_output().
+/// @param p     Polynomial to populate with result data.
+/// @return true if the result was found and populated successfully.
+bool result(const std::string& name, Polynomial& p);
+
+/// Retrieve a multi-residue polynomial result from replay output.
+/// @param name  The output name used in tag_output().
+/// @param m     MRP to populate with result data.
+/// @return true if the result was found and populated successfully.
+bool result(const std::string& name, MRP& m);
+
+/// Retrieve an MRP array result from replay output.
+/// @param name  The output name used in tag_output().
+/// @param arr   MRPArray to populate with result data.
+/// @return true if the result was found and populated successfully.
+bool result(const std::string& name, MRPArray& arr);
 
 // ============================================================================
 //  BASELINE INSTRUCTIONS (required by all compliant hardware)
@@ -448,17 +472,21 @@ Polynomial sr_subps(const Polynomial& a, const Scalar& s, uint64_t q);
 Polynomial sr_subps_coeff(const Polynomial& a, const Scalar& s, uint64_t q);
 
 /// Polynomial (component-wise) multiplication: f_i = (a_i * b_i) mod q
+/// This is the polynomial product only when both a and b are in evaluation
+/// representation.
 Polynomial sr_mulp(const Polynomial& a, const Polynomial& b, uint64_t q);
 
 /// Polynomial scalar multiplication: f_i = (a_i * s) mod q
 Polynomial sr_mulps(const Polynomial& a, const Scalar& s, uint64_t q);
 
 /// Negacyclic Number Theoretic Transform.
-/// Coefficient representation → evaluation representation mod q.
+/// Takes a from coefficient representation to evaluation representation
+/// relative to modulus q, using a 2N-th primitive root of unity psi mod q.
 Polynomial sr_ntt(const Polynomial& a, uint64_t q);
 
 /// Inverse Negacyclic Number Theoretic Transform.
-/// Evaluation representation → coefficient representation mod q.
+/// Takes a from evaluation representation to coefficient representation
+/// relative to modulus q.
 Polynomial sr_intt(const Polynomial& a, uint64_t q);
 
 /// General permutation with sign flips.
@@ -466,12 +494,13 @@ Polynomial sr_intt(const Polynomial& a, uint64_t q);
 /// @param srcs  Source index for each output position (values in [0, N-1]).
 /// @param signs Sign flip for each position (+1 or -1).
 /// @param q     Modulus (used for sign flip via q - value).
+/// @return      f_i = signs[i] * a[srcs[i]]  (mod q when signs[i] == -1).
 Polynomial sr_permute(const Polynomial& a,
                       const std::vector<uint64_t>& srcs,
                       const std::vector<int>& signs,
                       uint64_t q);
 
-/// Halt: signal end of instruction trace.
+/// Halt: signal the hardware to stop and notify the host.
 void halt();
 
 // ============================================================================
@@ -480,42 +509,84 @@ void halt();
 
 // --- Non-integer polynomial arithmetic (no modulus) ---
 
+/// Non-integer polynomial addition: f_i = a_i + b_i
 Polynomial sr_addp_ni(const Polynomial& a, const Polynomial& b);
+
+/// Non-integer polynomial scalar addition (evaluation): f_i = a_i + s
 Polynomial sr_addps_ni(const Polynomial& a, const Scalar& s);
+
+/// Non-integer polynomial scalar addition (coefficient):
+///   f_0 = a_0 + s,  f_{i>0} = a_i
 Polynomial sr_addps_coeff_ni(const Polynomial& a, const Scalar& s);
+
+/// Non-integer polynomial negation: f_i = -a_i
 Polynomial sr_negp_ni(const Polynomial& a);
+
+/// Non-integer polynomial subtraction: f_i = a_i - b_i
 Polynomial sr_subp_ni(const Polynomial& a, const Polynomial& b);
+
+/// Non-integer polynomial scalar subtraction (evaluation): f_i = a_i - s
 Polynomial sr_subps_ni(const Polynomial& a, const Scalar& s);
+
+/// Non-integer polynomial scalar subtraction (coefficient):
+///   f_0 = a_0 - s,  f_{i>0} = a_i
 Polynomial sr_subps_coeff_ni(const Polynomial& a, const Scalar& s);
+
+/// Non-integer polynomial multiplication: f_i = a_i * b_i
 Polynomial sr_mulp_ni(const Polynomial& a, const Polynomial& b);
+
+/// Non-integer polynomial scalar multiplication: f_i = a_i * s
 Polynomial sr_mulps_ni(const Polynomial& a, const Scalar& s);
 
 // --- Fourier Transforms (alternative to NTT for TFHE/FHEW) ---
 
+/// Negacyclic Fourier Transform (complex-valued).
+/// Alternative to sr_ntt for hardware supporting only FHEW/TFHE schemes.
 Polynomial sr_ft(const Polynomial& a);
+
+/// Inverse Negacyclic Fourier Transform (complex-valued).
+/// Must be used if and only if sr_ft is used in place of sr_ntt.
 Polynomial sr_ift(const Polynomial& a);
 
 // --- Coefficient access ---
 
+/// Extract the i-th component of polynomial p as a scalar.
 Scalar sr_coeff_extract(const Polynomial& p, uint64_t i);
+
+/// Return a new polynomial with component at position i set to val.
 Polynomial sr_coeff_assign(const Polynomial& p, uint64_t i, const Scalar& val);
 
 // --- Torus and sample operations (TFHE/FHEW) ---
 
+/// Torus modular reduction.
+/// Returns a polynomial with coefficients in [c-0.5, c+0.5) equal to
+/// those of p up to an integer polynomial.
 Polynomial sr_torus_mod_reduce(const Polynomial& p, double c);
+
+/// Sample extraction (TFHE/FHEW).
+/// Takes an RLWE cipher (a, b) as an SRPArray of length 2 and returns
+/// an LWE cipher as a vector of integer components.
 std::vector<uint64_t> sr_sample_extract(const SRPArray& rlwe, uint64_t lwe_dim);
 
 // ============================================================================
-//  GADGETS — Polynomial level
+//  GADGETS — Polynomial level (Class I: simple, verifiable by inspection)
 // ============================================================================
 
 /// Galois automorphism in evaluation representation.
+/// @param x  Integer polynomial in evaluation form.
+/// @param k  Odd integer in [1, 2N-1].
 Polynomial sr_automorph_eval(const Polynomial& x, uint64_t k);
 
 /// Galois automorphism in coefficient representation.
+/// @param x  Integer polynomial in coefficient form.
+/// @param k  Odd integer in [1, 2N-1].
+/// @param q  Modulus.
 Polynomial sr_automorph_coeff(const Polynomial& x, uint64_t k, uint64_t q);
 
 /// Negacyclic rotation automorphism in coefficient representation.
+/// @param x       Integer polynomial in coefficient form.
+/// @param offset  Rotation offset in [0, N-1].
+/// @param q       Modulus.
 Polynomial sr_rot_automorph_coeff(const Polynomial& x, uint64_t offset, uint64_t q);
 
 /// Batch forward Fourier/NTT transform over an SRP array.
@@ -528,13 +599,14 @@ SRPArray sr_batch_ift(const SRPArray& x);
 //  GADGETS — Multi-Residue basic arithmetic
 // ============================================================================
 
-/// MRP addition: z[q] = sr_addp(x[q], y[q], q) for each q in base.
+/// MRP addition: for each q in base, z[q] = sr_addp(x[q], y[q], q).
+/// Both operands must share the same base.
 MRP mr_addp(const MRP& x, const MRP& y);
 
-/// MRP subtraction.
+/// MRP subtraction: for each q in base, z[q] = sr_subp(x[q], y[q], q).
 MRP mr_subp(const MRP& x, const MRP& y);
 
-/// MRP multiplication.
+/// MRP multiplication: for each q in base, z[q] = sr_mulp(x[q], y[q], q).
 MRP mr_mulp(const MRP& x, const MRP& y);
 
 /// MRP-scalar multiplication: z[q] = sr_mulps(x[q], s[q], q).
@@ -556,30 +628,44 @@ MRP mr_zeros(const ModuliBase& target_base, uint64_t ring_dim);
 //  GADGETS — MRP residue manipulation
 // ============================================================================
 
-/// Append a single-residue polynomial under modulus q_a.
+/// Append a single-residue polynomial to an MRP under modulus q_a.
+/// Returns a new MRP with base = x.base ∪ {q_a}.
 MRP mr_append_srp(const MRP& x, const Polynomial& a, uint64_t q_a);
 
 /// Union of two MRPs with mutually exclusive bases.
+/// Returns a new MRP with base = x.base ∪ y.base.
 MRP mr_union(const MRP& x, const MRP& y);
 
 /// Subset of an MRP restricted to a sub-base.
+/// @param subbase  Must be a subset of x.base().
 MRP mr_subset(const MRP& x, const ModuliBase& subbase);
 
 // ============================================================================
 //  GADGETS — Fast Base Conversion and CKKS Rescale
 // ============================================================================
 
-/// Fast base conversion (CRT-based approximate conversion).
+/// Fast base conversion.
+/// Converts a coefficient-mode MRP from its current base to target_base
+/// using the CRT-based approximate conversion algorithm.
+/// @param x            Coefficient-mode MRP in source base.
+/// @param target_base  Target moduli base.
 MRP fast_base_convert(const MRP& x, const ModuliBase& target_base);
 
 /// CKKS rescale using fast base conversion.
+/// Removes the residues in rescale_base from x and rescales.
+/// @param x              Coefficient-mode MRP.
+/// @param rescale_base   Moduli to remove (subset of x.base()).
+/// @return MRP in base = x.base() \ rescale_base.
 MRP rescale_fbc(const MRP& x, const ModuliBase& rescale_base);
 
 // ============================================================================
 //  GADGETS — MRP Array operations
 // ============================================================================
 
-/// MRPA dot-product: z = sum_i mr_mulp(x[i], y[i]).
+/// MRPA dot-product.
+/// Returns a single MRP that is the sum of element-wise MRP products:
+///   z = sum_i mr_mulp(x[i], y[i])
+/// Both arrays must have the same length. All MRPs must share the same base.
 MRP mrpa_dotproduct(const MRPArray& x, const MRPArray& y);
 
 // ============================================================================
@@ -587,21 +673,39 @@ MRP mrpa_dotproduct(const MRPArray& x, const MRPArray& y);
 // ============================================================================
 
 /// CKKS/BGV/BFV digit decomposition for hybrid key-switching.
+/// @param x            Coefficient-mode MRP in RNS base representing Q.
+/// @param digit_bases  List of d mutually exclusive moduli sub-bases.
+/// @param p_base       RNS base for the temporary modulus P.
+/// @return MRPA of length d; element i is base-extended from digit_bases[i]
+///         to (x.base() ∪ p_base).
 MRPArray dig_decomp(const MRP& x,
                      const std::vector<ModuliBase>& digit_bases,
                      const ModuliBase& p_base);
 
 /// TFHE gadget decomposition (unsigned integer version).
+/// @param x         Single-residue polynomial with integer coefficients.
+/// @param base      Decomposition basis B.
+/// @param n_levels  Number of decomposition levels l.
+/// @return SRPArray of length n_levels.
 SRPArray gadget_decomp(const Polynomial& x, uint64_t base, uint64_t n_levels);
 
 /// TFHE gadget decomposition for power-of-two base.
+/// @param x          Single-residue polynomial with integer coefficients.
+/// @param log_base   log2 of the decomposition basis.
+/// @param n_levels   Number of decomposition levels l.
+/// @return SRPArray of length n_levels.
 SRPArray gadget_decomp_pow2(const Polynomial& x, uint64_t log_base, uint64_t n_levels);
 
 // ============================================================================
-//  GADGETS — GSW/RLWE External Product
+//  GADGETS — GSW/RLWE External Product (requires optional TFHE ops)
 // ============================================================================
 
 /// GSW/RLWE external product.
+/// @param gsw       GSW ciphertext as SRPArray of 4*l polynomials.
+/// @param rlwe_in   RLWE ciphertext as SRPArray of 2 polynomials.
+/// @param l         Number of gadget decomposition levels.
+/// @param base      Decomposition basis B.
+/// @return RLWE ciphertext as SRPArray of 2 polynomials.
 SRPArray gsw_rlwe_ext_prod(const SRPArray& gsw,
                            const SRPArray& rlwe_in,
                            uint64_t l,
@@ -612,17 +716,95 @@ SRPArray gsw_rlwe_ext_prod(const SRPArray& gsw,
 // ============================================================================
 
 /// CKKS bootstrapping.
+/// @param ct_in     Input ciphertext as MRPA of length 2.
+/// @param aux_data  Auxiliary data (key-switching keys, plaintext polynomials).
+/// @return Refreshed ciphertext as MRPA of length 2.
 MRPArray ckks_bootstrap(const MRPArray& ct_in, const MRPArray& aux_data);
 
 // ============================================================================
-//  FILE I/O — JSON (human-readable)
+//  FILE I/O — Single objects
 // ============================================================================
 
+/// Save a single polynomial to a binary file.
+/// @return true on success.
+bool save_polynomial(const Polynomial& p, const std::filesystem::path& file);
+
+/// Load a single polynomial from a binary file.
+/// @return true on success (p is populated).
+bool load_polynomial(Polynomial& p, const std::filesystem::path& file);
+
+/// Save a single scalar to a binary file.
+bool save_scalar(const Scalar& s, const std::filesystem::path& file);
+
+/// Load a single scalar from a binary file.
+bool load_scalar(Scalar& s, const std::filesystem::path& file);
+
+/// Save a single MRP to a binary file (all residues + base metadata).
+bool save_mrp(const MRP& m, const std::filesystem::path& file);
+
+/// Load a single MRP from a binary file.
+bool load_mrp(MRP& m, const std::filesystem::path& file);
+
+/// Save a single MRS to a binary file.
+bool save_mrs(const MRS& m, const std::filesystem::path& file);
+
+/// Load a single MRS from a binary file.
+bool load_mrs(MRS& m, const std::filesystem::path& file);
+
+// ============================================================================
+//  FILE I/O — Arrays / groups
+// ============================================================================
+
+/// Save an SRP array (group of single-residue polynomials) to a binary file.
+bool save_srp_array(const SRPArray& arr, const std::filesystem::path& file);
+
+/// Load an SRP array from a binary file.
+bool load_srp_array(SRPArray& arr, const std::filesystem::path& file);
+
+/// Save an MRP array (group of multi-residue polynomials) to a binary file.
+bool save_mrp_array(const MRPArray& arr, const std::filesystem::path& file);
+
+/// Load an MRP array from a binary file.
+bool load_mrp_array(MRPArray& arr, const std::filesystem::path& file);
+
+// ============================================================================
+//  FILE I/O — Directory-based (one file per residue/tower)
+// ============================================================================
+
+/// Save an MRP to a directory with one file per residue polynomial.
+/// Creates files named <dir>/residue_<modulus>.bin plus a manifest.json.
+bool save_mrp_dir(const MRP& m, const std::filesystem::path& dir);
+
+/// Load an MRP from a directory written by save_mrp_dir.
+bool load_mrp_dir(MRP& m, const std::filesystem::path& dir);
+
+/// Save an MRP array to a directory with one subdirectory per element.
+/// Creates <dir>/mrp_<index>/ subdirectories, each containing per-residue files.
+bool save_mrp_array_dir(const MRPArray& arr, const std::filesystem::path& dir);
+
+/// Load an MRP array from a directory written by save_mrp_array_dir.
+bool load_mrp_array_dir(MRPArray& arr, const std::filesystem::path& dir);
+
+// ============================================================================
+//  FILE I/O — JSON (human-readable, for debugging)
+// ============================================================================
+
+/// Save a polynomial in JSON format.
 bool save_polynomial_json(const Polynomial& p, const std::filesystem::path& file);
+
+/// Load a polynomial from JSON format.
 bool load_polynomial_json(Polynomial& p, const std::filesystem::path& file);
+
+/// Save an MRP in JSON format (all residues + base metadata).
 bool save_mrp_json(const MRP& m, const std::filesystem::path& file);
+
+/// Load an MRP from JSON format.
 bool load_mrp_json(MRP& m, const std::filesystem::path& file);
+
+/// Save an MRP array in JSON format.
 bool save_mrp_array_json(const MRPArray& arr, const std::filesystem::path& file);
+
+/// Load an MRP array from JSON format.
 bool load_mrp_array_json(MRPArray& arr, const std::filesystem::path& file);
 
 }  // namespace niobium::fhetch
