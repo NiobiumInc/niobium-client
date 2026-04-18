@@ -23,7 +23,9 @@
 
 static std::mutex g_probe_mutex;
 static std::unordered_map<uintptr_t, uintptr_t> g_address_map;
-static uintptr_t g_next_fhetch_addr = 0;
+// Address 0 is reserved as a sentinel (matches the compiler's layout,
+// which leaves id 0 unused); first allocated FHETCH address is 1.
+static uintptr_t g_next_fhetch_addr = 1;
 
 // ----- Compact address recycling (mirrors niobium-compiler Generator) -----
 // Polys that OpenFHE destroys return their compact address to this pool;
