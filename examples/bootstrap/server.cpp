@@ -43,6 +43,14 @@ int main(int argc, char* argv[]) {
     std::cout << "=== CKKS Bootstrap — Server ===" << std::endl;
     std::cout << "Loading keys from: " << keyDir << std::endl;
 
+    // Mirrors the order of niobium-compiler/examples/simple-ckks-bootstrapping.cpp:
+    // load cc, then keys, then input ciphertext, then EvalBootstrapSetup,
+    // then capture_crypto_context, then tag_input. The compiler's compaction
+    // layer then lays out addresses as inputs -> mk -> rk -> bp (inputs at
+    // low addrs). Our client allocates addresses at poly-construction time,
+    // so to mirror that layout we reserve a small input range up front and
+    // let the rest cascade naturally.
+
     // ---- Load crypto context ----
     CryptoContext<DCRTPoly> cc;
     if (!Serial::DeserializeFromFile(keyDir + "/cc.bin", cc, SerType::BINARY))
@@ -50,6 +58,16 @@ int main(int argc, char* argv[]) {
 
     usint ringDim = cc->GetRingDimension();
     std::cout << "Ring dimension: " << ringDim << std::endl;
+
+    // ---- Reserve addresses 1..4 for the input ciphertext (inputs come
+    // first in the compiler's layout; our monotonic allocator matches this
+    // if we carve out the first slot and load the ciphertext before keys). ----
+    niobium::compiler().reserve_addresses(1);
+
+    // ---- Load ciphertext BEFORE keys so its polys get low addresses ----
+    Ciphertext<DCRTPoly> ciph;
+    if (!Serial::DeserializeFromFile(keyDir + "/ciphertext.bin", ciph, SerType::BINARY))
+        throw std::runtime_error("Failed to load ciphertext");
 
     // ---- Load keys ----
     std::cout << "Loading eval mult key..." << std::endl;
@@ -66,27 +84,17 @@ int main(int argc, char* argv[]) {
             throw std::runtime_error("Failed to load eval automorphism keys");
     }
 
-    // ---- Load ciphertext ----
-    Ciphertext<DCRTPoly> ciph;
-    if (!Serial::DeserializeFromFile(keyDir + "/ciphertext.bin", ciph, SerType::BINARY))
-        throw std::runtime_error("Failed to load ciphertext");
-
-    // Capture the crypto context; this registers the auto-capture hook
-    // that will walk the CC's bootstrap precompute map at stop() time —
-    // no user-facing precompute API call required.
-    niobium::compiler().capture_crypto_context(cc);
-
-    // ---- Bootstrap precomputation ----
-    // Fires openfhe_cprobe_precompute for every DFT plaintext poly,
-    // which pins their compact FHETCH addresses against recycling.
+    // ---- Bootstrap precomputation (fires precompute probes) ----
     std::vector<uint32_t> levelBudget = {4, 4};
     cc->EvalBootstrapSetup(levelBudget);
 
-    // ---- Tag keys ----
-    niobium::compiler().tag_keys(cc);
-
-    // ---- Tag the input ciphertext ----
+    // ---- Capture crypto context and tag inputs/keys ----
+    // capture_crypto_context() registers the auto-capture hook that walks
+    // the CC's bootstrap precompute map at stop() time — no user-facing
+    // precompute API call required.
+    niobium::compiler().capture_crypto_context(cc);
     niobium::compiler().tag_input("input_cipher", ciph);
+    niobium::compiler().tag_keys(cc);
 
     // Hollow mode skips OpenFHE's real math during recording, which is fast
     // but leaves intermediate polys uninitialized for the simulator.
