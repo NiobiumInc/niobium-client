@@ -212,6 +212,18 @@ test-bootstrap-release: build-release ## Run the bootstrap example: client → s
 	@echo "=== Running bootstrap decrypt ==="
 	$(BUILD_DIR)/examples/bootstrap_decrypt bootstrap_keys
 
+test-bootstrap-auto: build ## Auto-facade bootstrap: keygen → record → replay (Debug, no niobium:: in user code)
+	$(call set-build-config,Debug,dbuild)
+	@python3 $(CURDIR)/examples/bootstrap_auto/run_bootstrap_auto.py \
+		--build-dir $(BUILD_DIR) \
+		--openfhe-lib $(OPENFHE_INSTALL_DIR)/lib
+
+test-bootstrap-auto-release: build-release ## Auto-facade bootstrap: keygen → record → replay (Release, no niobium:: in user code)
+	$(call set-build-config,Release,build)
+	@python3 $(CURDIR)/examples/bootstrap_auto/run_bootstrap_auto.py \
+		--build-dir $(BUILD_DIR) \
+		--openfhe-lib $(OPENFHE_INSTALL_DIR)/lib
+
 test-mult: build ## Run the multiply example: client → server → decrypt (Debug)
 	$(call set-build-config,Debug,dbuild)
 	@rm -rf mult_keys mult_server_workload_*
