@@ -355,6 +355,46 @@ test-op-release: build-release ## Run a single simple_ops test: make test-op-rel
 	$(call set-build-config,Release,build)
 	$(call run-simple-op,$(OP),$(A),$(B))
 
+# ==============================================================================
+# test-fhetch-release — delegate to the niobium-fhetch submodule's own
+# test-release target. Forwards OPENFHE_INSTALL_DIR so the submodule reuses
+# the OpenFHE install produced by this repo's build-openfhe-release rule
+# (no second OpenFHE compile). Configures + builds the submodule's own
+# build tree (separate from this repo's build/, since the submodule's
+# test targets reference $(BUILD_DIR)/… paths relative to its own root).
+# ==============================================================================
+
+test-fhetch-release: build-openfhe-release ## Run the fhetch submodule's test-release (simple_fhetch + fhetch_driver + simple_ops roundtrip)
+	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR=$(OPENFHE_INSTALL_DIR) config-fhetch-release
+	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR=$(OPENFHE_INSTALL_DIR) test-release
+
+# ==============================================================================
+# test-release — everything that currently passes
+# ==============================================================================
+# Aggregates the Release test targets known to succeed end-to-end in
+# both this repo AND the niobium-fhetch submodule:
+#
+#   Client-level:
+#     - test-simple-ops-release      (13 simple_ops, primary decrypt)
+#     - test-mult-release            (CKKS EvalMult, primary decrypt)
+#     - test-auto-ciphers-release    (auto-facade, AUTO_OP defaults to ADD)
+#
+#   Submodule-level (via test-fhetch-release):
+#     - simple_fhetch                (FHETCH-only example, no OpenFHE)
+#     - fhetch_driver                (re-drive a .fhetch through the API)
+#     - roundtrip-simple-ops         (13 ops × primary + secondary decrypt)
+#
+# Deliberately excluded:
+#   - test-bootstrap-release       (known primary-side CKKS approximation
+#                                   error; tracked as a simulator precision
+#                                   follow-up)
+#   - bootstrap roundtrip in fhetch (same precision issue)
+#
+# Override AUTO_OP=MUL AUTO_EXPECTED=21 to exercise the known-failing
+# relin path inside the auto-facade test.
+
+test-release: test-simple-ops-release test-mult-release test-auto-ciphers-release test-fhetch-release ## Run all currently-passing Release tests (this repo + niobium-fhetch submodule)
+
 ##@ Cleanup
 
 clean: ## Remove all build artifacts
