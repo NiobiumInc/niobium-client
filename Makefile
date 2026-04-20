@@ -259,7 +259,7 @@ test-auto-ciphers-release: build-release ## Auto-facade ciphers_ops: keygen → 
 		python3 $(CURDIR)/tools/nbcc.py \
 		--name auto_ops_$(AUTO_OP) --cache wl=TOY --cache op=$(AUTO_OP) \
 		--keys-mult io/toy/keys/mk.bin --keys-auto io/toy/keys/rk.bin \
-		--target FUNC_SIM -- \
+		-- \
 		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_server_auto 0 output_a.bin output_b.bin $(AUTO_EXPECTED) $(AUTO_OP) $(AUTO_IMM)
 	@echo ""
 	@echo "=== replay pass (cache hit) ==="
@@ -267,7 +267,7 @@ test-auto-ciphers-release: build-release ## Auto-facade ciphers_ops: keygen → 
 		python3 $(CURDIR)/tools/nbcc.py \
 		--name auto_ops_$(AUTO_OP) --cache wl=TOY --cache op=$(AUTO_OP) \
 		--keys-mult io/toy/keys/mk.bin --keys-auto io/toy/keys/rk.bin \
-		--target FUNC_SIM -- \
+		-- \
 		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_server_auto 0 output_a.bin output_b.bin $(AUTO_EXPECTED) $(AUTO_OP) $(AUTO_IMM)
 
 test-mult: build ## Run the multiply example: client → server → decrypt (Debug)
