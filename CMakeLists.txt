@@ -27,6 +27,9 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -Wextra -Wno-unknown-pragmas -Wno-unused-
     CACHE STRING "C++ flags for Release builds" FORCE)
 
 option(BUILD_SHARED_LIBS "Build shared libraries instead of static ones" ON)
+option(NIOBIUM_CLIENT_WITH_AUTO_FACADE
+    "Build libnbclient_autofacade (transparent record/replay for unmodified OpenFHE programs). Requires yaml-cpp."
+    ON)
 
 # ==============================================================================
 # Dependencies
@@ -46,6 +49,15 @@ set(OPENFHE_LIBRARY_PATH "${OPENFHE_INSTALL_DIR}/lib")
 # fhetch_sim CLI. We forward OPENFHE_INSTALL_DIR so its CMakeLists can find
 # OpenFHE headers/libs from the same install tree the client built.
 add_subdirectory(vendor/niobium-fhetch)
+
+# ==============================================================================
+# Optional: auto-facade helper library (transparent record/replay for
+# unmodified OpenFHE programs; see docs/AUTO_FACADE.md).
+# ==============================================================================
+
+if(NIOBIUM_CLIENT_WITH_AUTO_FACADE)
+    add_subdirectory(src/auto_facade)
+endif()
 
 # ==============================================================================
 # Examples (optional)

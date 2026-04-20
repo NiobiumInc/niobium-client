@@ -212,6 +212,32 @@ test-bootstrap-release: build-release ## Run the bootstrap example: client → s
 	@echo "=== Running bootstrap decrypt ==="
 	$(BUILD_DIR)/examples/bootstrap_decrypt bootstrap_keys
 
+test-auto-ciphers-release: build-release ## Auto-facade ciphers_ops: keygen → record → replay (no niobium:: in user code)
+	$(call set-build-config,Release,build)
+	@rm -rf ciphers_auto
+	@mkdir -p ciphers_auto
+	@echo "=== keygen ==="
+	@cd ciphers_auto && LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib \
+		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_cache_keys 0
+	@echo "=== encrypt ==="
+	@cd ciphers_auto && LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib \
+		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_client 0 7 3 output_a.bin output_b.bin
+	@echo "=== record pass (auto-facade) ==="
+	@cd ciphers_auto && LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib \
+		python3 $(CURDIR)/tools/nbcc.py \
+		--name auto_ops_ADD --cache wl=TOY --cache op=ADD \
+		--keys-mult io/toy/keys/mk.bin --keys-auto io/toy/keys/rk.bin \
+		--target FUNC_SIM -- \
+		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_server_auto 0 output_a.bin output_b.bin 10 ADD
+	@echo ""
+	@echo "=== replay pass (cache hit) ==="
+	@cd ciphers_auto && LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib \
+		python3 $(CURDIR)/tools/nbcc.py \
+		--name auto_ops_ADD --cache wl=TOY --cache op=ADD \
+		--keys-mult io/toy/keys/mk.bin --keys-auto io/toy/keys/rk.bin \
+		--target FUNC_SIM -- \
+		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_server_auto 0 output_a.bin output_b.bin 10 ADD
+
 test-mult: build ## Run the multiply example: client → server → decrypt (Debug)
 	$(call set-build-config,Debug,dbuild)
 	@rm -rf mult_keys mult_server_workload_*
