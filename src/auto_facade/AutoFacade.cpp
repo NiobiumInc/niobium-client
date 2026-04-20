@@ -297,6 +297,15 @@ void lazy_init(const lbcrypto::CryptoContext<lbcrypto::DCRTPoly> &cc) {
     const auto &ctx = g_cc ? g_cc : cc;
     niobium::compiler().capture_crypto_context(ctx);
 
+    // Tag evaluation keys (mult + automorphism) into captured_inputs so
+    // instructions that reference them via the FHETCH address space find
+    // populated data at replay time. The compiler-side version of this
+    // facade relied on a cached_key() codepath that niobium-fhetch doesn't
+    // expose; the niobium::compiler().tag_keys() helper walks the CC's
+    // EvalMult + EvalAutomorphism key maps and tags every DCRTPoly tower,
+    // which is what we need here.
+    niobium::compiler().tag_keys(ctx);
+
     // Determine mode EARLY — this informs whether hollow_mode should be set
     bool cache_valid = niobium::compiler().is_cache_valid();
 
@@ -353,8 +362,15 @@ void on_deserialize_crypto_context(lbcrypto::CryptoContext<lbcrypto::DCRTPoly> &
   if (g_mode == Mode::DORMANT)
     return;
 
-  // Install the proxy scheme after mode is determined but before any FHE ops run.
-  cc->SetScheme(std::make_shared<lbcrypto::NiobiumAutoScheme>(cc->GetScheme(), cc));
+  // Install the proxy scheme only on replay. During recording the real
+  // scheme + OPENFHE_CPROBES probes already capture every operation, and
+  // the proxy's extra ct-mutation path was observed to produce templates
+  // whose sim-reconstructed values decrypt past the CKKS approximation
+  // tolerance for relin-heavy ops like MUL. On replay we need the proxy
+  // so Eval* returns dummies cheaply.
+  if (g_mode == Mode::REPLAY) {
+    cc->SetScheme(std::make_shared<lbcrypto::NiobiumAutoScheme>(cc->GetScheme(), cc));
+  }
 
   // If auto-facade determined recording mode, start now.
   // The running_p() guard prevents double-starting if Compiler::start() already ran.

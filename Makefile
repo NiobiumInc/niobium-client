@@ -212,7 +212,30 @@ test-bootstrap-release: build-release ## Run the bootstrap example: client → s
 	@echo "=== Running bootstrap decrypt ==="
 	$(BUILD_DIR)/examples/bootstrap_decrypt bootstrap_keys
 
-test-auto-ciphers-release: build-release ## Auto-facade ciphers_ops: keygen → record → replay (no niobium:: in user code)
+# Default op exercised by the auto-facade test. MUL uses the EvalMult
+# key + the relinearization path — the canonical demo of the auto-facade
+# routing eval-key-backed OpenFHE operations through record and replay
+# without any niobium:: calls in user code.
+#
+# With a=7, b=3: MUL = ct1 * ct2 = 21.
+#
+# KNOWN LIMITATION: the record pass PASSES (OpenFHE computes 21,
+# auto-facade captures + writes the .fhetch trace + saves the
+# ciphertext template), but the replay pass decrypt currently FAILS
+# with "approximation error too high". The sim-reconstructed relin
+# ciphertext is past the CKKS decrypt tolerance — same family of
+# precision issues as the bootstrap primary-side replay we've seen.
+# Tracked as a simulator-precision follow-up.
+#
+# Override AUTO_OP=ADD to exercise the green-path case (no eval keys,
+# both passes PASS) while the simulator limitation is being fixed.
+AUTO_OP        ?= MUL
+AUTO_A         ?= 7
+AUTO_B         ?= 3
+AUTO_IMM       ?= 0
+AUTO_EXPECTED  ?= 21
+
+test-auto-ciphers-release: build-release ## Auto-facade ciphers_ops: keygen → record → replay (no niobium:: in user code). Op/values overridable: AUTO_OP=... AUTO_A=... AUTO_B=... AUTO_IMM=... AUTO_EXPECTED=...
 	$(call set-build-config,Release,build)
 	@rm -rf ciphers_auto
 	@mkdir -p ciphers_auto
@@ -221,22 +244,22 @@ test-auto-ciphers-release: build-release ## Auto-facade ciphers_ops: keygen → 
 		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_cache_keys 0
 	@echo "=== encrypt ==="
 	@cd ciphers_auto && LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib \
-		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_client 0 7 3 output_a.bin output_b.bin
-	@echo "=== record pass (auto-facade) ==="
+		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_client 0 $(AUTO_A) $(AUTO_B) output_a.bin output_b.bin
+	@echo "=== record pass (auto-facade, op=$(AUTO_OP), imm=$(AUTO_IMM), expected=$(AUTO_EXPECTED)) ==="
 	@cd ciphers_auto && LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib \
 		python3 $(CURDIR)/tools/nbcc.py \
-		--name auto_ops_ADD --cache wl=TOY --cache op=ADD \
+		--name auto_ops_$(AUTO_OP) --cache wl=TOY --cache op=$(AUTO_OP) \
 		--keys-mult io/toy/keys/mk.bin --keys-auto io/toy/keys/rk.bin \
 		--target FUNC_SIM -- \
-		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_server_auto 0 output_a.bin output_b.bin 10 ADD
+		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_server_auto 0 output_a.bin output_b.bin $(AUTO_EXPECTED) $(AUTO_OP) $(AUTO_IMM)
 	@echo ""
 	@echo "=== replay pass (cache hit) ==="
 	@cd ciphers_auto && LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib \
 		python3 $(CURDIR)/tools/nbcc.py \
-		--name auto_ops_ADD --cache wl=TOY --cache op=ADD \
+		--name auto_ops_$(AUTO_OP) --cache wl=TOY --cache op=$(AUTO_OP) \
 		--keys-mult io/toy/keys/mk.bin --keys-auto io/toy/keys/rk.bin \
 		--target FUNC_SIM -- \
-		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_server_auto 0 output_a.bin output_b.bin 10 ADD
+		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_server_auto 0 output_a.bin output_b.bin $(AUTO_EXPECTED) $(AUTO_OP) $(AUTO_IMM)
 
 test-mult: build ## Run the multiply example: client → server → decrypt (Debug)
 	$(call set-build-config,Debug,dbuild)

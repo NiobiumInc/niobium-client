@@ -61,8 +61,12 @@ int main(int argc, char* argv[]) {
     cParams.SetRingDim(prms.getRingDim());
     cParams.SetBatchSize(prms.getRingDim() / 2);
     cParams.SetScalingTechnique(FLEXIBLEAUTO);
-    cParams.SetScalingModSize(50);
-    cParams.SetFirstModSize(60);
+    // Match niobium-client/examples/simple_ops params for ring_dim 2048 —
+    // those values (42/57) are what the FHETCH simulator has been
+    // tuned against for this repo's roundtrip tests; using the larger
+    // 50/60 pair drifts past the 0.01 tolerance on replay.
+    cParams.SetScalingModSize(42);
+    cParams.SetFirstModSize(57);
 
     CryptoContext<DCRTPoly> cc = GenCryptoContext(cParams);
     cc->Enable(PKE);

@@ -74,19 +74,22 @@ int main(int argc, char** argv) {
     throw std::runtime_error("Failed to get public key from "+prms.keydir().string());
   }
 
-  // Create plaintext and encrypt first value
+  // Encode plaintexts with the default full slot set (ring_dim/2). The
+  // compiler-side version of this example passes slots=1 to
+  // MakeCKKSPackedPlaintext; the FHETCH simulator replay we use for
+  // verification here is tuned for full-slot encodings, so we omit the
+  // slot-1 override and keep the encoding consistent with the rest of
+  // niobium-client's CKKS examples.
   std::vector<double> x1{num1};
-  Plaintext pt1 = cc->MakeCKKSPackedPlaintext(x1, 1, 0, nullptr, 1);
+  Plaintext pt1 = cc->MakeCKKSPackedPlaintext(x1);
   Ciphertext<DCRTPoly> ct1 = cc->Encrypt(pk, pt1);
 
-  // Create plaintext and encrypt second value
   std::vector<double> x2{num2};
-  Plaintext pt2 = cc->MakeCKKSPackedPlaintext(x2, 1, 0, nullptr, 1);
+  Plaintext pt2 = cc->MakeCKKSPackedPlaintext(x2);
   Ciphertext<DCRTPoly> ct2 = cc->Encrypt(pk, pt2);
 
-  // Create plaintext and encrypt Zero value
   std::vector<double> xZero{0};
-  Plaintext ptZero = cc->MakeCKKSPackedPlaintext(xZero, 1, 0, nullptr, 1);
+  Plaintext ptZero = cc->MakeCKKSPackedPlaintext(xZero);
   Ciphertext<DCRTPoly> ctZero = cc->Encrypt(pk, ptZero);
 
   // Serialize ciphertexts to files
