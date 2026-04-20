@@ -1,0 +1,212 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build + tests (ubuntu-latest, Release)
+    runs-on: ubuntu-latest
+
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+      OPENMP: OFF
+      NATIVEOPT: OFF
+      # Canonical OpenFHE install location used by BOTH the client's Makefile
+      # (vendor/lib/openfhe is its default) AND the nested niobium-fhetch
+      # Makefile (we override OPENFHE_INSTALL_DIR to point at the same path
+      # so the subsystem tests re-use the single compiled OpenFHE instead of
+      # building it twice).
+      OPENFHE_ROOT: ${{ github.workspace }}/vendor/lib/openfhe
+
+    steps:
+      # ------------------------------------------------------------
+      # Checkout — niobium-fhetch is a submodule, and OpenFHE lives one
+      # level deeper as a nested submodule. --recursive pulls both.
+      # ------------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_COMPANY_TOKEN || github.token }}
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean
+          df -h
+
+      - name: Install build tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ccache ninja-build
+          ccache --version
+
+      # ------------------------------------------------------------
+      # ccache: shared across the client build, the nested fhetch library
+      # build, and all the example / test compilations.
+      # ------------------------------------------------------------
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ubuntu-latest-ccache-release-${{ hashFiles('**/CMakeLists.txt', '**/*.cpp', '**/*.h', 'Makefile', 'vendor/niobium-fhetch/Makefile') }}
+          restore-keys: |
+            ubuntu-latest-ccache-release-
+
+      - name: Prime ccache
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          ccache --max-size=2G
+          ccache --zero-stats
+
+      # ------------------------------------------------------------
+      # OpenFHE (nested submodule) — cache install tree + build tree,
+      # keyed by the pinned submodule commit so any bump invalidates.
+      # ------------------------------------------------------------
+      - name: Capture OpenFHE submodule commit
+        id: openfhe_rev
+        run: |
+          cd vendor/niobium-fhetch/vendor/openfhe
+          rev=$(git rev-parse HEAD)
+          echo "rev=$rev" >> "$GITHUB_OUTPUT"
+
+      - name: Restore OpenFHE build
+        id: restore_openfhe
+        uses: actions/cache@v4
+        with:
+          path: |
+            vendor/lib/openfhe
+            vendor/niobium-fhetch/vendor/openfhe/build
+          key: ubuntu-latest-openfhe-release-${{ steps.openfhe_rev.outputs.rev }}
+          restore-keys: |
+            ubuntu-latest-openfhe-release-
+
+      - name: Build OpenFHE
+        run: |
+          export CC="ccache gcc"
+          export CXX="ccache g++"
+
+          TARGETS_FILE="vendor/lib/openfhe/lib/OpenFHE/OpenFHETargets.cmake"
+          if [ -f "$TARGETS_FILE" ] && grep -q "${{ github.workspace }}" "$TARGETS_FILE"; then
+            echo "✓ OpenFHE cache valid for this workspace"
+          else
+            if [ -f "$TARGETS_FILE" ]; then
+              echo "✗ OpenFHE cache has a stale workspace path — rebuilding"
+              rm -rf vendor/lib/openfhe vendor/niobium-fhetch/vendor/openfhe/build
+            fi
+            make config-openfhe-release NATIVEOPT=${NATIVEOPT} OPENMP=${OPENMP}
+            make build-openfhe-release
+          fi
+
+      # ------------------------------------------------------------
+      # Client: library + OpenFHE examples (bootstrap / mult / simple_ops)
+      # ------------------------------------------------------------
+      - name: Configure client
+        run: |
+          export CC="ccache gcc"
+          export CXX="ccache g++"
+          make config-client-release
+
+      - name: Build client
+        run: |
+          export CC="ccache gcc"
+          export CXX="ccache g++"
+          make build-release
+
+      # ------------------------------------------------------------
+      # Client-side tests (primary path only): simple_ops + mult.
+      # Bootstrap is excluded — it has a pre-existing primary-side
+      # numerical-precision issue tracked separately.
+      # ------------------------------------------------------------
+      - name: Client tests — simple_ops (13 ops)
+        run: |
+          export LD_LIBRARY_PATH="$OPENFHE_ROOT/lib:$LD_LIBRARY_PATH"
+          make test-simple-ops-release
+
+      - name: Client tests — mult
+        run: |
+          export LD_LIBRARY_PATH="$OPENFHE_ROOT/lib:$LD_LIBRARY_PATH"
+          make test-mult-release
+
+      # ------------------------------------------------------------
+      # niobium-fhetch subsystem tests — run the roundtrip test from the
+      # submodule so the fhetch_driver binary exists and its Makefile
+      # orchestration is picked up verbatim. Override OPENFHE_INSTALL_DIR
+      # to reuse the client's already-compiled OpenFHE (no rebuild).
+      # ------------------------------------------------------------
+      - name: Configure niobium-fhetch (with tests)
+        run: |
+          export CC="ccache gcc"
+          export CXX="ccache g++"
+          make -C vendor/niobium-fhetch \
+               OPENFHE_INSTALL_DIR="$OPENFHE_ROOT" \
+               config-fhetch-release
+
+      - name: Build niobium-fhetch (with tests)
+        run: |
+          export CC="ccache gcc"
+          export CXX="ccache g++"
+          make -C vendor/niobium-fhetch \
+               OPENFHE_INSTALL_DIR="$OPENFHE_ROOT" \
+               build-release
+
+      - name: Subsystem tests — simple_fhetch + fhetch_driver sanity
+        run: |
+          export LD_LIBRARY_PATH="$OPENFHE_ROOT/lib:$LD_LIBRARY_PATH"
+          make -C vendor/niobium-fhetch \
+               OPENFHE_INSTALL_DIR="$OPENFHE_ROOT" \
+               test-simple-fhetch-release
+          make -C vendor/niobium-fhetch \
+               OPENFHE_INSTALL_DIR="$OPENFHE_ROOT" \
+               test-fhetch-driver-release
+
+      - name: Subsystem tests — simple_ops roundtrip (primary + secondary decrypt)
+        run: |
+          export LD_LIBRARY_PATH="$OPENFHE_ROOT/lib:$LD_LIBRARY_PATH"
+          make -C vendor/niobium-fhetch \
+               OPENFHE_INSTALL_DIR="$OPENFHE_ROOT" \
+               test-roundtrip-simple-ops-release
+
+      - name: ccache stats
+        if: always()
+        run: ccache --show-stats
+
+      # ------------------------------------------------------------
+      # Artifacts on failure
+      # ------------------------------------------------------------
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs-${{ github.run_attempt }}
+          path: |
+            build/CMakeFiles/CMakeOutput.log
+            build/CMakeFiles/CMakeError.log
+            vendor/niobium-fhetch/build/CMakeFiles/CMakeOutput.log
+            vendor/niobium-fhetch/build/CMakeFiles/CMakeError.log
+            simple_ops_keys/
+            mult_keys/
+            simple_ops_server_workload_*/
+            mult_server_workload_*/
+            vendor/niobium-fhetch/simple_ops_keys/
+            vendor/niobium-fhetch/simple_ops_server_workload_*/
+            vendor/niobium-fhetch/fhetch_driver_source_*/
+            vendor/niobium-fhetch/simple_fhetch_example_simple/
+          if-no-files-found: ignore
+          retention-days: 7
