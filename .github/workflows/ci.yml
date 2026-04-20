@@ -185,7 +185,14 @@ jobs:
 
       - name: ccache stats
         if: always()
-        run: ccache --show-stats
+        run: |
+          # Skip silently if an earlier step (e.g. checkout of a private
+          # submodule) bailed before the install step ran.
+          if command -v ccache >/dev/null 2>&1; then
+            ccache --show-stats
+          else
+            echo "[ccache-stats] ccache not installed — skipping."
+          fi
 
       # ------------------------------------------------------------
       # Artifacts on failure
