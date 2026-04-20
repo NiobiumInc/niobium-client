@@ -1,0 +1,194 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build + tests (ubuntu-latest, Release)
+    runs-on: ubuntu-latest
+
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+      OPENMP: OFF
+      NATIVEOPT: OFF
+      # Canonical OpenFHE install location used by BOTH the client's Makefile
+      # (vendor/lib/openfhe is its default) AND the nested niobium-fhetch
+      # Makefile (we override OPENFHE_INSTALL_DIR to point at the same path
+      # so the subsystem tests re-use the single compiled OpenFHE instead of
+      # building it twice).
+      OPENFHE_ROOT: ${{ github.workspace }}/vendor/lib/openfhe
+
+    steps:
+      # ------------------------------------------------------------
+      # Checkout — niobium-fhetch is a submodule, and OpenFHE lives one
+      # level deeper as a nested submodule. --recursive pulls both.
+      # ------------------------------------------------------------
+      - name: Generate token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean
+          df -h
+
+      - name: Install build tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ccache ninja-build
+          ccache --version
+
+      # ------------------------------------------------------------
+      # ccache: shared across the client build, the nested fhetch library
+      # build, and all the example / test compilations.
+      # ------------------------------------------------------------
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ubuntu-latest-ccache-release-${{ hashFiles('**/CMakeLists.txt', '**/*.cpp', '**/*.h', 'Makefile', 'vendor/niobium-fhetch/Makefile') }}
+          restore-keys: |
+            ubuntu-latest-ccache-release-
+
+      - name: Prime ccache
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          ccache --max-size=2G
+          ccache --zero-stats
+
+      # ------------------------------------------------------------
+      # OpenFHE (nested submodule) — cache install tree + build tree,
+      # keyed by the pinned submodule commit so any bump invalidates.
+      # ------------------------------------------------------------
+      - name: Capture OpenFHE submodule commit
+        id: openfhe_rev
+        run: |
+          cd vendor/niobium-fhetch/vendor/openfhe
+          rev=$(git rev-parse HEAD)
+          echo "rev=$rev" >> "$GITHUB_OUTPUT"
+
+      - name: Restore OpenFHE build
+        id: restore_openfhe
+        uses: actions/cache@v4
+        with:
+          path: |
+            vendor/lib/openfhe
+            vendor/niobium-fhetch/vendor/openfhe/build
+          key: ubuntu-latest-openfhe-release-${{ steps.openfhe_rev.outputs.rev }}
+          restore-keys: |
+            ubuntu-latest-openfhe-release-
+
+      - name: Build OpenFHE
+        run: |
+          export CC="ccache gcc"
+          export CXX="ccache g++"
+
+          TARGETS_FILE="vendor/lib/openfhe/lib/OpenFHE/OpenFHETargets.cmake"
+          if [ -f "$TARGETS_FILE" ] && grep -q "${{ github.workspace }}" "$TARGETS_FILE"; then
+            echo "✓ OpenFHE cache valid for this workspace"
+          else
+            if [ -f "$TARGETS_FILE" ]; then
+              echo "✗ OpenFHE cache has a stale workspace path — rebuilding"
+              rm -rf vendor/lib/openfhe vendor/niobium-fhetch/vendor/openfhe/build
+            fi
+            make config-openfhe-release NATIVEOPT=${NATIVEOPT} OPENMP=${OPENMP}
+            make build-openfhe-release
+          fi
+
+      # ------------------------------------------------------------
+      # Client: library + OpenFHE examples (bootstrap / mult / simple_ops)
+      # ------------------------------------------------------------
+      - name: Configure client
+        run: |
+          export CC="ccache gcc"
+          export CXX="ccache g++"
+          make config-client-release
+
+      - name: Build client
+        run: |
+          export CC="ccache gcc"
+          export CXX="ccache g++"
+          make build-release
+
+      # ------------------------------------------------------------
+      # Tests — single aggregate target.
+      #
+      # test-release runs every Release test known to succeed end-to-end,
+      # both client-level (simple_ops, mult, auto-ciphers) and the
+      # delegated niobium-fhetch submodule tests (simple_fhetch,
+      # fhetch_driver, simple_ops roundtrip). Bootstrap is deliberately
+      # excluded in the Makefile — its primary-side CKKS approximation
+      # error is tracked as a simulator-precision follow-up.
+      #
+      # The client's test-release target forwards OPENFHE_INSTALL_DIR so
+      # the submodule reuses the OpenFHE install we just built here
+      # instead of compiling OpenFHE a second time.
+      # ------------------------------------------------------------
+      - name: Run test-release (client + fhetch submodule)
+        run: |
+          export CC="ccache gcc"
+          export CXX="ccache g++"
+          export LD_LIBRARY_PATH="$OPENFHE_ROOT/lib:$LD_LIBRARY_PATH"
+          make test-release
+
+      - name: ccache stats
+        if: always()
+        run: |
+          # Skip silently if an earlier step (e.g. checkout of a private
+          # submodule) bailed before the install step ran.
+          if command -v ccache >/dev/null 2>&1; then
+            ccache --show-stats
+          else
+            echo "[ccache-stats] ccache not installed — skipping."
+          fi
+
+      # ------------------------------------------------------------
+      # Artifacts on failure
+      # ------------------------------------------------------------
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs-${{ github.run_attempt }}
+          path: |
+            build/CMakeFiles/CMakeOutput.log
+            build/CMakeFiles/CMakeError.log
+            vendor/niobium-fhetch/build/CMakeFiles/CMakeOutput.log
+            vendor/niobium-fhetch/build/CMakeFiles/CMakeError.log
+            simple_ops_keys/
+            mult_keys/
+            simple_ops_server_workload_*/
+            mult_server_workload_*/
+            vendor/niobium-fhetch/simple_ops_keys/
+            vendor/niobium-fhetch/simple_ops_server_workload_*/
+            vendor/niobium-fhetch/fhetch_driver_source_*/
+            vendor/niobium-fhetch/simple_fhetch_example_simple/
+          if-no-files-found: ignore
+          retention-days: 7

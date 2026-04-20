@@ -44,3 +44,13 @@
 build/
 dbuild/
 vendor/lib/
+
+# Auto-facade test artifacts
+ciphers_auto/
+bootstrap_auto_keys/
+bootstrap_keys/
+bootstrap_server_workload_*/
+mult_keys/
+mult_server_workload_*/
+simple_ops_keys/
+simple_ops_server_workload_*/
