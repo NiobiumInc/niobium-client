@@ -1,0 +1,189 @@
+name: PR - Claude Code Review
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  full-review:
+    name: PR - Full Code Review
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'reopened')) ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       contains(github.event.comment.body, '@claude'))
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+        with:
+          separator: " "
+
+      - name: Claude Full Review
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.CLAUDE_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_args: |
+            --model claude-sonnet-4-6
+            --max-turns 45
+            --allowedTools Edit,Read,Write
+          track_progress: true
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+            You are a code reviewer for PR #${{ github.event.pull_request.number }} in ${{ github.repository }}.
+
+            Start by reading the review guide at:
+            .github/instructions/CODE_REVIEW_GUIDE.md
+
+            Then review this PR following the guide.
+            The changed files are: ${{ steps.changed-files.outputs.all_changed_files }}
+
+            For each changed file:
+            1. Read the FULL file content using the Read tool
+            2. Apply the universal checklist from the guide (sections 3)
+
+            Turn limit safety: after reading each file, count the tool calls you have made
+            so far against the --max-turns 45 limit. If the number of files you have not
+            yet read exceeds your estimated remaining turns, stop reading new files and
+            post the review immediately with findings gathered so far, noting which files
+            were skipped due to the turn limit.
+
+            Post a single concise PR comment with only:
+            1. Summary (2–4 lines)
+            2. Blockers (must-fix)
+            3. Risks / Watch-outs
+            4. Non-blocking suggestions
+
+            Rules:
+            - Each issue must be one line: [Severity] file:line — problem — fix
+            - No prose, no elaboration, no closing summary
+            - If a section has no findings, omit it entirely
+            - Label each issue: Blocker / High / Medium / Low
+
+      - name: Usage Summary
+        if: always()
+        run: |
+          EXECUTION_FILE="${{ steps.claude-review.outputs.execution_file }}"
+
+          INPUT=0; OUTPUT=0; TURNS=0
+          if [ -f "$EXECUTION_FILE" ]; then
+            INPUT=$(jq '[.. | objects | select(has("usage")) | .usage.input_tokens // 0] | add // 0' "$EXECUTION_FILE" 2>/dev/null || echo 0)
+            OUTPUT=$(jq '[.. | objects | select(has("usage")) | .usage.output_tokens // 0] | add // 0' "$EXECUTION_FILE" 2>/dev/null || echo 0)
+            TURNS=$(jq '[.. | objects | select(has("type") and (.type == "assistant"))] | length' "$EXECUTION_FILE" 2>/dev/null || echo 0)
+          fi
+          TOTAL=$((INPUT + OUTPUT))
+          COST=$(echo "scale=4; ($INPUT * 3 + $OUTPUT * 15) / 1000000" | bc)
+
+          echo "## PR - Full Code Review — Usage" >> $GITHUB_STEP_SUMMARY
+          echo "| | |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Model | claude-sonnet-4-6 |" >> $GITHUB_STEP_SUMMARY
+          echo "| Input tokens | $INPUT |" >> $GITHUB_STEP_SUMMARY
+          echo "| Output tokens | $OUTPUT |" >> $GITHUB_STEP_SUMMARY
+          echo "| Total tokens | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+          echo "| Estimated cost | \$$COST USD |" >> $GITHUB_STEP_SUMMARY
+          echo "| Turns used | $TURNS |" >> $GITHUB_STEP_SUMMARY
+
+  partial-review:
+    name: PR - Partial Code Review
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'pull_request' && github.event.action == 'synchronize'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Get files changed in latest push
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+        with:
+          separator: " "
+          since_last_remote_commit: true
+
+      - name: Claude Partial Review
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.CLAUDE_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_args: |
+            --model claude-sonnet-4-6
+            --max-turns 25
+            --allowedTools Edit,Read,Write
+          track_progress: true
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            You are performing a PARTIAL review of the latest commit to PR #${{ github.event.pull_request.number }}.
+
+            Files changed in this push: ${{ steps.changed-files.outputs.all_changed_files }}
+
+            Start by reading the review guide at:
+            .github/instructions/CODE_REVIEW_GUIDE.md
+
+            For each changed file:
+            1. Read the relevant sections using the Read tool
+            2. Apply the full checklist from the guide (sections 3), but report ONLY findings
+               rated Blocker or High — skip Medium and Low entirely
+
+            Turn limit safety: after reading each file, count the tool calls you have made
+            so far against the --max-turns 25 limit. If the number of files you have not
+            yet read exceeds your estimated remaining turns, stop reading new files and
+            post the review immediately with findings gathered so far, noting which files
+            were skipped due to the turn limit.
+
+            Post a single concise PR comment with only:
+            1. What changed in this commit (1 line)
+            2. Blockers — if any
+            3. High risks — if any
+
+            Rules:
+            - Each issue must be one line: [Severity] file:line — problem — fix
+            - No prose, no elaboration, no closing summary
+            - If no blockers or high risks found, post only: "✅ No blockers or high risks in this commit."
+
+      - name: Usage Summary
+        if: always()
+        run: |
+          EXECUTION_FILE="${{ steps.claude-review.outputs.execution_file }}"
+
+          INPUT=0; OUTPUT=0; TURNS=0
+          if [ -f "$EXECUTION_FILE" ]; then
+            INPUT=$(jq '[.. | objects | select(has("usage")) | .usage.input_tokens // 0] | add // 0' "$EXECUTION_FILE" 2>/dev/null || echo 0)
+            OUTPUT=$(jq '[.. | objects | select(has("usage")) | .usage.output_tokens // 0] | add // 0' "$EXECUTION_FILE" 2>/dev/null || echo 0)
+            TURNS=$(jq '[.. | objects | select(has("type") and (.type == "assistant"))] | length' "$EXECUTION_FILE" 2>/dev/null || echo 0)
+          fi
+          TOTAL=$((INPUT + OUTPUT))
+          COST=$(echo "scale=4; ($INPUT * 3 + $OUTPUT * 15) / 1000000" | bc)
+
+          echo "## PR - Partial Code Review — Usage" >> $GITHUB_STEP_SUMMARY
+          echo "| | |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Model | claude-sonnet-4-6 |" >> $GITHUB_STEP_SUMMARY
+          echo "| Input tokens | $INPUT |" >> $GITHUB_STEP_SUMMARY
+          echo "| Output tokens | $OUTPUT |" >> $GITHUB_STEP_SUMMARY
+          echo "| Total tokens | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+          echo "| Estimated cost | \$$COST USD |" >> $GITHUB_STEP_SUMMARY
+          echo "| Turns used | $TURNS |" >> $GITHUB_STEP_SUMMARY
