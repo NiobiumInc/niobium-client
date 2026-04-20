@@ -130,58 +130,25 @@ jobs:
           make build-release
 
       # ------------------------------------------------------------
-      # Client-side tests (primary path only): simple_ops + mult.
-      # Bootstrap is excluded — it has a pre-existing primary-side
-      # numerical-precision issue tracked separately.
+      # Tests — single aggregate target.
+      #
+      # test-release runs every Release test known to succeed end-to-end,
+      # both client-level (simple_ops, mult, auto-ciphers) and the
+      # delegated niobium-fhetch submodule tests (simple_fhetch,
+      # fhetch_driver, simple_ops roundtrip). Bootstrap is deliberately
+      # excluded in the Makefile — its primary-side CKKS approximation
+      # error is tracked as a simulator-precision follow-up.
+      #
+      # The client's test-release target forwards OPENFHE_INSTALL_DIR so
+      # the submodule reuses the OpenFHE install we just built here
+      # instead of compiling OpenFHE a second time.
       # ------------------------------------------------------------
-      - name: Client tests — simple_ops (13 ops)
-        run: |
-          export LD_LIBRARY_PATH="$OPENFHE_ROOT/lib:$LD_LIBRARY_PATH"
-          make test-simple-ops-release
-
-      - name: Client tests — mult
-        run: |
-          export LD_LIBRARY_PATH="$OPENFHE_ROOT/lib:$LD_LIBRARY_PATH"
-          make test-mult-release
-
-      # ------------------------------------------------------------
-      # niobium-fhetch subsystem tests — run the roundtrip test from the
-      # submodule so the fhetch_driver binary exists and its Makefile
-      # orchestration is picked up verbatim. Override OPENFHE_INSTALL_DIR
-      # to reuse the client's already-compiled OpenFHE (no rebuild).
-      # ------------------------------------------------------------
-      - name: Configure niobium-fhetch (with tests)
+      - name: Run test-release (client + fhetch submodule)
         run: |
           export CC="ccache gcc"
           export CXX="ccache g++"
-          make -C vendor/niobium-fhetch \
-               OPENFHE_INSTALL_DIR="$OPENFHE_ROOT" \
-               config-fhetch-release
-
-      - name: Build niobium-fhetch (with tests)
-        run: |
-          export CC="ccache gcc"
-          export CXX="ccache g++"
-          make -C vendor/niobium-fhetch \
-               OPENFHE_INSTALL_DIR="$OPENFHE_ROOT" \
-               build-release
-
-      - name: Subsystem tests — simple_fhetch + fhetch_driver sanity
-        run: |
           export LD_LIBRARY_PATH="$OPENFHE_ROOT/lib:$LD_LIBRARY_PATH"
-          make -C vendor/niobium-fhetch \
-               OPENFHE_INSTALL_DIR="$OPENFHE_ROOT" \
-               test-simple-fhetch-release
-          make -C vendor/niobium-fhetch \
-               OPENFHE_INSTALL_DIR="$OPENFHE_ROOT" \
-               test-fhetch-driver-release
-
-      - name: Subsystem tests — simple_ops roundtrip (primary + secondary decrypt)
-        run: |
-          export LD_LIBRARY_PATH="$OPENFHE_ROOT/lib:$LD_LIBRARY_PATH"
-          make -C vendor/niobium-fhetch \
-               OPENFHE_INSTALL_DIR="$OPENFHE_ROOT" \
-               test-roundtrip-simple-ops-release
+          make test-release
 
       - name: ccache stats
         if: always()
