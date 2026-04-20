@@ -77,6 +77,16 @@ static uint64_t g_probe_counter{0};
 // and to let on_decrypt use the same name that on_serialize used.
 static std::unordered_map<const void*, std::string> g_probed_cts;
 
+// Thread-local re-entry flag set when the facade itself issues
+// OpenFHE deserializations (e.g. Compiler::result loading a
+// serialized_probes/<name>.ct). The on_deserialize_ciphertext hook
+// consults this to avoid tagging facade-internal I/O as user inputs.
+static thread_local bool g_in_facade_io = false;
+struct InFacadeIoGuard {
+  InFacadeIoGuard() { g_in_facade_io = true; }
+  ~InFacadeIoGuard() { g_in_facade_io = false; }
+};
+
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
@@ -233,6 +243,15 @@ static void atexit_handler() {
       if (real != g_cc->GetScheme())
         g_cc->SetScheme(real);
     }
+    // Now that user code has finished (and thus loaded keys via
+    // DeserializeEvalMultKey / DeserializeEvalAutomorphismKey), walk the
+    // CC's key maps and tag every DCRTPoly tower into captured_inputs.
+    // tag_keys needs to run *during* the active recording session — once
+    // stop() fires the session ends — so this has to be the last thing
+    // before stop() below.
+    if (g_cc) {
+      niobium::compiler().tag_keys(g_cc);
+    }
     niobium::compiler().stop();
     g_recording = false;
     // Note: do NOT call replay() here. Replay inside the destructor path
@@ -296,15 +315,10 @@ void lazy_init(const lbcrypto::CryptoContext<lbcrypto::DCRTPoly> &cc) {
     // Capture crypto context (use stored cc if available, fall back to parameter)
     const auto &ctx = g_cc ? g_cc : cc;
     niobium::compiler().capture_crypto_context(ctx);
-
-    // Tag evaluation keys (mult + automorphism) into captured_inputs so
-    // instructions that reference them via the FHETCH address space find
-    // populated data at replay time. The compiler-side version of this
-    // facade relied on a cached_key() codepath that niobium-fhetch doesn't
-    // expose; the niobium::compiler().tag_keys() helper walks the CC's
-    // EvalMult + EvalAutomorphism key maps and tags every DCRTPoly tower,
-    // which is what we need here.
-    niobium::compiler().tag_keys(ctx);
+    // Evaluation keys are tag_keys'd later (inside atexit_handler) — at
+    // this point in the flow the user hasn't yet called
+    // DeserializeEvalMultKey / DeserializeEvalAutomorphismKey, so
+    // cc->GetAllEvalMultKeys() returns empty and tag_keys would no-op.
 
     // Determine mode EARLY — this informs whether hollow_mode should be set
     bool cache_valid = niobium::compiler().is_cache_valid();
@@ -411,6 +425,14 @@ void on_deserialize_ciphertext(const std::string &filepath,
   if (g_mode == Mode::DORMANT)
     return;
 
+  // Guard against re-entrant deserializations the auto-facade itself
+  // issues (Compiler::result loads serialized_probes/<name>.ct via
+  // Serial::DeserializeFromFile → fires this hook). Tagging that file
+  // as an input pollutes captured_inputs with the template's stale
+  // placeholder polynomial values at the same addresses the simulator
+  // is about to write computed output to, which corrupts replay.
+  if (g_in_facade_io) return;
+
   // niobium-fhetch's Compiler doesn't expose cached_input()'s skip-if-present
   // fast path; tag the input unconditionally. The library-side dedup
   // protection in captured_inputs handles accidental double-registration.
@@ -431,6 +453,16 @@ static void ensure_replayed() {
   bool expected = false;
   if (g_replay_done.compare_exchange_strong(expected, true,
                                             std::memory_order_acq_rel)) {
+    // At this point the user's DeserializeEvalMultKey /
+    // DeserializeEvalAutomorphismKey have finished (they run before any
+    // Eval* call that would fire the hooks we arrive through). Tag the
+    // keys now so captured_inputs carries their polynomial values into
+    // Compiler::replay(). Without this, live-in addresses for relin +
+    // rotation key polys stay uninitialized at replay time and any
+    // relin-based op decrypts to noise.
+    if (g_cc) {
+      niobium::compiler().tag_keys(g_cc);
+    }
     niobium::compiler().replay();
   }
 }
@@ -452,6 +484,7 @@ bool on_serialize_ciphertext(const std::string &filepath,
     // Serial::SerializeToFile proceeds and actually produces the file.
     if (g_cc) {
       lbcrypto::Ciphertext<lbcrypto::DCRTPoly> hw_ct;
+      InFacadeIoGuard _facade_io;
       if (niobium::compiler().result(g_cc, stem, hw_ct) && hw_ct) {
         g_probed_cts[ct.get()] = stem; // let on_decrypt know this ct was handled
         std::ofstream file(filepath, std::ios::out | std::ios::binary);
@@ -509,6 +542,7 @@ bool on_decrypt(lbcrypto::Ciphertext<lbcrypto::DCRTPoly> &ct) {
     // Look up the HW-computed result by the same name used during recording
     if (g_cc) {
       lbcrypto::Ciphertext<lbcrypto::DCRTPoly> hw_ct;
+      InFacadeIoGuard _facade_io;
       if (niobium::compiler().result(g_cc, name, hw_ct) && hw_ct) {
         ct = hw_ct; // substitute the dummy with the real HW result
         return false; // proceed with normal decrypt on the HW result
