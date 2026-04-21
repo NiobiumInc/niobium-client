@@ -339,6 +339,30 @@ test-mult-target-release: build-release ## Run mult with --target=$(TARGET). Ove
 	@echo "=== [3/3] mult_decrypt ==="
 	$(BUILD_DIR)/examples/mult_decrypt mult_keys
 
+# ==============================================================================
+# test-mult-transport-release — client → nbcc_fhetch_replay_server → compiler
+#
+# End-to-end round trip through the HTTP transport. Starts the server daemon
+# in the background with --exec pointing at the compiler's nbcc_fhetch_replay,
+# puts the client-side forwarder first on PATH so libnbfhetch's replay()
+# dispatches to it, runs mult_client → mult_server --target=FUNC_SIM →
+# mult_decrypt, and tears the server down.
+#
+# Same override knobs as test-mult-target-release (TARGET is pinned to
+# FUNC_SIM here since any non-local target triggers the dispatch).
+# ==============================================================================
+
+test-mult-transport-release: build-release ## End-to-end transport round trip (server+client+compiler, FUNC_SIM)
+	$(call set-build-config,Release,build)
+	@if [ ! -x "$(NIOBIUM_COMPILER_ROOT)/build/nbcc_fhetch_replay" ]; then \
+		echo "ERROR: nbcc_fhetch_replay not found at $(NIOBIUM_COMPILER_ROOT)/build/nbcc_fhetch_replay"; \
+		echo "Build it with: (cd $(NIOBIUM_COMPILER_ROOT) && make release)"; \
+		exit 2; \
+	fi
+	@NIOBIUM_COMPILER_ROOT="$(NIOBIUM_COMPILER_ROOT)" \
+	 NIOBIUM_COMPILER_BUILD="$(NIOBIUM_COMPILER_ROOT)/build" \
+	 scripts/test_transport_mult.sh
+
 test-sim-mult: test-mult ## Record mult trace then simulate it (Debug)
 	$(call set-build-config,Debug,dbuild)
 	@echo ""
