@@ -1,0 +1,70 @@
+name: SCANOSS License Compliance
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+  actions: read
+
+concurrency:
+  group: scanoss-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scanoss-pr:
+    name: SCANOSS License Scan (PR)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: SCANOSS Delta Scan
+        uses: scanoss/gha-code-scan@v1
+        with:
+          api.key: ${{ secrets.SCANOSS_API_KEY }}
+          policies: copyleft
+          policies.halt_on_failure: false
+          scanMode: delta
+          dependencies.enabled: false
+          output.filepath: scanoss-results.json
+
+  scanoss-full:
+    name: SCANOSS Full Scan (post-merge)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Remove non-source files that crash SCANOSS
+        run: |
+          find . -type f \( \
+            -name '*.pcap' -o -name '*.pcapng' -o -name '*.tsv' -o -name '*.csv' \
+            -o -name '*.bin' -o -name '*.png' -o -name '*.jpg' -o -name '*.pdf' \
+            -o -name '*.gz' -o -name '*.tar' -o -name '*.zip' -o -name '*.whl' \
+            -o -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.dylib' \
+            -o -name '*.pyc' -o -name '*.pdi' -o -name '*.xsa' -o -name '*.elf' \
+            -o -name '*.hpu' -o -name '*.bcode' -o -name '*.cbor' \
+          \) -delete 2>/dev/null || true
+          rm -rf Datasets assets node_modules __pycache__ .venv bmenv 2>/dev/null || true
+
+      - name: SCANOSS Full Scan
+        uses: scanoss/gha-code-scan@v1
+        with:
+          api.key: ${{ secrets.SCANOSS_API_KEY }}
+          policies: copyleft
+          policies.halt_on_failure: false
+          scanMode: full
+          dependencies.enabled: false
+          output.filepath: scanoss-results.json
