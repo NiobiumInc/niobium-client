@@ -1,0 +1,138 @@
+name: SCANOSS License Compliance
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: write
+  actions: read
+  issues: write
+
+concurrency:
+  group: scanoss-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scanoss-pr:
+    name: SCANOSS License Scan (PR)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: SCANOSS Delta Scan
+        uses: scanoss/gha-code-scan@v1
+        with:
+          api.key: ${{ secrets.SCANOSS_API_KEY }}
+          github.token: ${{ steps.app-token.outputs.token }}
+          policies: copyleft
+          policies.halt_on_failure: false
+          scanMode: delta
+          dependencies.enabled: false
+          output.filepath: scanoss-results.json
+
+  scanoss-full:
+    name: SCANOSS Full Scan (post-merge)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      artifact-uploaded: ${{ steps.check-artifact.outputs.uploaded }}
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Remove non-source files that crash SCANOSS
+        run: |
+          find . -type f \( \
+            -name '*.pcap' -o -name '*.pcapng' -o -name '*.tsv' -o -name '*.csv' \
+            -o -name '*.bin' -o -name '*.png' -o -name '*.jpg' -o -name '*.pdf' \
+            -o -name '*.gz' -o -name '*.tar' -o -name '*.zip' -o -name '*.whl' \
+            -o -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.dylib' \
+            -o -name '*.pyc' -o -name '*.pdi' -o -name '*.xsa' -o -name '*.elf' \
+            -o -name '*.hpu' -o -name '*.bcode' -o -name '*.cbor' \
+          \) -delete 2>/dev/null || true
+          rm -rf Datasets assets node_modules __pycache__ .venv bmenv 2>/dev/null || true
+
+      - name: SCANOSS Full Scan
+        uses: scanoss/gha-code-scan@v1
+        with:
+          api.key: ${{ secrets.SCANOSS_API_KEY }}
+          github.token: ${{ steps.app-token.outputs.token }}
+          policies: copyleft
+          policies.halt_on_failure: false
+          scanMode: full
+          dependencies.enabled: false
+          output.filepath: scanoss-results.json
+
+      - name: Upload CycloneDX SBOM artifact
+        if: hashFiles('scanoss-cyclonedx.json') != ''
+        id: check-artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyclonedx-sbom
+          path: scanoss-cyclonedx.json
+          retention-days: 30
+
+  upload-to-dtrack:
+    name: Upload SBOM to Dependency Track
+    if: github.event_name == 'push'
+    needs: scanoss-full
+    runs-on: self-hosted
+    steps:
+      - name: Download SBOM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cyclonedx-sbom
+
+      - name: Upload to Dependency Track
+        run: |
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          SBOM_B64=$(base64 -w0 scanoss-cyclonedx.json)
+
+          HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" \
+            -X PUT "${{ vars.DEPENDENCY_TRACK_URL }}/api/v1/bom" \
+            -H "X-Api-Key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"projectName\": \"${REPO_NAME}\",
+              \"projectVersion\": \"main\",
+              \"autoCreate\": true,
+              \"bom\": \"${SBOM_B64}\"
+            }")
+
+          echo "HTTP ${HTTP_CODE}"
+          cat response.json
+          echo ""
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Failed to upload SBOM to Dependency Track"
+            exit 1
+          fi
+
+          echo "::notice::SBOM uploaded to Dependency Track: ${{ vars.DEPENDENCY_TRACK_URL }}"
