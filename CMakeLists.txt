@@ -33,6 +33,12 @@ option(BUILD_SHARED_LIBS "Build shared libraries instead of static ones" ON)
 option(NIOBIUM_CLIENT_WITH_AUTO_FACADE
     "Build libnbclient_autofacade (transparent record/replay for unmodified OpenFHE programs). Requires yaml-cpp."
     ON)
+option(NIOBIUM_CLIENT_WITH_FHETCH_TRANSPORT
+    "Build the HTTP-based FHETCH transport (client forwarder + server daemon). Requires pthreads."
+    ON)
+
+# Threads are a hard dep for the transport (cpp-httplib spawns worker threads).
+find_package(Threads)
 
 # ==============================================================================
 # Dependencies
@@ -60,6 +66,10 @@ add_subdirectory(vendor/niobium-fhetch)
 
 if(NIOBIUM_CLIENT_WITH_AUTO_FACADE)
     add_subdirectory(src/auto_facade)
+endif()
+
+if(NIOBIUM_CLIENT_WITH_FHETCH_TRANSPORT)
+    add_subdirectory(src/fhetch_transport)
 endif()
 
 # ==============================================================================
