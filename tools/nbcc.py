@@ -101,8 +101,14 @@ def parse_args():
     parser.add_argument("--keys-auto", default=None, help="Path to eval automorphism key")
 
     # Compiler flags
-    parser.add_argument("--target", default="FUNC_SIM",
-                        help="Target (default: FUNC_SIM)")
+    # "local" keeps recording + replay in-process via the FHETCH simulator.
+    # Any other value (e.g. "FUNC_SIM", "fpga5.2") tells libnbfhetch's
+    # Compiler::replay() to dispatch to the compiler-side nbcc_fhetch_replay
+    # executable — which is absent from client-only test environments, so the
+    # safe default has to be "local".
+    parser.add_argument("--target", default="local",
+                        help="Target (default: local — in-process FHETCH sim; "
+                             "non-local values dispatch to nbcc_fhetch_replay)")
     parser.add_argument("-O", "--optimization", default=None,
                         help="Optimization level")
     parser.add_argument("--registers", default=None, help="Number of registers")
