@@ -21,15 +21,24 @@ endif()
 # Compiler flags
 # -Wno-ignored-qualifiers and -Wno-missing-field-initializers are required for
 # OpenFHE headers which trigger these warnings under -Werror.
-set(CMAKE_CXX_FLAGS_DEBUG   "-Og -g -Wall -Wextra -Wno-unknown-pragmas -Wno-unused-parameter -Wno-ignored-qualifiers -Wno-missing-field-initializers -Werror"
+# -Wunused-but-set-variable is in clang's -Wall but not in GCC's, so add it
+# explicitly so both toolchains catch the same class of dead-code bugs locally
+# before CI (macOS runners use clang; Linux dev machines often use GCC).
+set(CMAKE_CXX_FLAGS_DEBUG   "-Og -g -Wall -Wextra -Wunused-but-set-variable -Wno-unknown-pragmas -Wno-unused-parameter -Wno-ignored-qualifiers -Wno-missing-field-initializers -Werror"
     CACHE STRING "C++ flags for Debug builds" FORCE)
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -Wextra -Wno-unknown-pragmas -Wno-unused-parameter -Wno-ignored-qualifiers -Wno-missing-field-initializers -Werror"
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -Wextra -Wunused-but-set-variable -Wno-unknown-pragmas -Wno-unused-parameter -Wno-ignored-qualifiers -Wno-missing-field-initializers -Werror"
     CACHE STRING "C++ flags for Release builds" FORCE)
 
 option(BUILD_SHARED_LIBS "Build shared libraries instead of static ones" ON)
 option(NIOBIUM_CLIENT_WITH_AUTO_FACADE
     "Build libnbclient_autofacade (transparent record/replay for unmodified OpenFHE programs). Requires yaml-cpp."
     ON)
+option(NIOBIUM_CLIENT_WITH_FHETCH_TRANSPORT
+    "Build the HTTP-based FHETCH transport (client forwarder + server daemon). Requires pthreads."
+    ON)
+
+# Threads are a hard dep for the transport (cpp-httplib spawns worker threads).
+find_package(Threads)
 
 # ==============================================================================
 # Dependencies
@@ -57,6 +66,10 @@ add_subdirectory(vendor/niobium-fhetch)
 
 if(NIOBIUM_CLIENT_WITH_AUTO_FACADE)
     add_subdirectory(src/auto_facade)
+endif()
+
+if(NIOBIUM_CLIENT_WITH_FHETCH_TRANSPORT)
+    add_subdirectory(src/fhetch_transport)
 endif()
 
 # ==============================================================================

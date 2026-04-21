@@ -259,7 +259,7 @@ test-auto-ciphers-release: build-release ## Auto-facade ciphers_ops: keygen → 
 		python3 $(CURDIR)/tools/nbcc.py \
 		--name auto_ops_$(AUTO_OP) --cache wl=TOY --cache op=$(AUTO_OP) \
 		--keys-mult io/toy/keys/mk.bin --keys-auto io/toy/keys/rk.bin \
-		--target FUNC_SIM -- \
+		-- \
 		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_server_auto 0 output_a.bin output_b.bin $(AUTO_EXPECTED) $(AUTO_OP) $(AUTO_IMM)
 	@echo ""
 	@echo "=== replay pass (cache hit) ==="
@@ -267,7 +267,7 @@ test-auto-ciphers-release: build-release ## Auto-facade ciphers_ops: keygen → 
 		python3 $(CURDIR)/tools/nbcc.py \
 		--name auto_ops_$(AUTO_OP) --cache wl=TOY --cache op=$(AUTO_OP) \
 		--keys-mult io/toy/keys/mk.bin --keys-auto io/toy/keys/rk.bin \
-		--target FUNC_SIM -- \
+		-- \
 		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_server_auto 0 output_a.bin output_b.bin $(AUTO_EXPECTED) $(AUTO_OP) $(AUTO_IMM)
 
 test-mult: build ## Run the multiply example: client → server → decrypt (Debug)
@@ -293,6 +293,75 @@ test-mult-release: build-release ## Run the multiply example: client → server 
 	@echo ""
 	@echo "=== Running mult decrypt ==="
 	$(BUILD_DIR)/examples/mult_decrypt mult_keys
+
+# ==============================================================================
+# test-mult-target — first client-server test exercising the --target= path.
+#
+# The client records the MUL trace in hollow mode (producing a fhetch project),
+# then the server passes --target=<TARGET> to niobium::compiler().replay().
+# The replay call skips the in-process FHETCH simulator and dispatches to the
+# compiler-side nbcc_fhetch_replay executable instead, which re-drives the
+# trace through the full Niobium optimization pipeline and writes ciphertext
+# probes into <program_dir>/serialized_probes/ for the server's result() call.
+#
+# Requires: niobium-compiler must have been built with `make release` so that
+# $(NIOBIUM_COMPILER_ROOT)/build/nbcc_fhetch_replay exists. Override the
+# compiler root with NIOBIUM_COMPILER_ROOT=... when invoking make.
+#
+# Known limitation (2026-04-20): the compiler and client each ship an
+# independent OpenFHE install under vendor/lib/openfhe/. They must be built
+# from the same sources with the same flags (ideally sharing one install)
+# for cereal-binary input/key files to deserialize across the boundary.
+# Symptom if they don't match:
+#   "Error loading cereal binary inputs: … serialized object version N is
+#    from a later version of the library"
+# ==============================================================================
+
+NIOBIUM_COMPILER_ROOT ?= $(realpath $(CURDIR)/../..)
+TARGET ?= FUNC_SIM
+
+test-mult-target-release: build-release ## Run mult with --target=$(TARGET). Overrides: TARGET=FUNC_SIM|fpga5.2|…  NIOBIUM_COMPILER_ROOT=/path
+	$(call set-build-config,Release,build)
+	@if [ ! -x "$(NIOBIUM_COMPILER_ROOT)/build/nbcc_fhetch_replay" ]; then \
+		echo "ERROR: nbcc_fhetch_replay not found at $(NIOBIUM_COMPILER_ROOT)/build/nbcc_fhetch_replay"; \
+		echo "Build it with: (cd $(NIOBIUM_COMPILER_ROOT) && make release)"; \
+		exit 2; \
+	fi
+	@rm -rf mult_keys mult_server_workload_* nbcc_fhetch_replay_source_*
+	@echo "=== [1/3] mult_client: keygen + encrypt ==="
+	$(BUILD_DIR)/examples/mult_client mult_keys 7 13
+	@echo ""
+	@echo "=== [2/3] mult_server --target=$(TARGET) (hollow record → dispatch to compiler) ==="
+	NBCC_FHETCH_REPLAY=$(NIOBIUM_COMPILER_ROOT)/build/nbcc_fhetch_replay \
+	LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib:$(NIOBIUM_COMPILER_ROOT)/build:$(NIOBIUM_COMPILER_ROOT)/deps/photovoltaic/build/ntl/lib:$(LD_LIBRARY_PATH) \
+		$(BUILD_DIR)/examples/mult_server mult_keys --target=$(TARGET)
+	@echo ""
+	@echo "=== [3/3] mult_decrypt ==="
+	$(BUILD_DIR)/examples/mult_decrypt mult_keys
+
+# ==============================================================================
+# test-mult-transport-release — client → nbcc_fhetch_replay_server → compiler
+#
+# End-to-end round trip through the HTTP transport. Starts the server daemon
+# in the background with --exec pointing at the compiler's nbcc_fhetch_replay,
+# puts the client-side forwarder first on PATH so libnbfhetch's replay()
+# dispatches to it, runs mult_client → mult_server --target=FUNC_SIM →
+# mult_decrypt, and tears the server down.
+#
+# Same override knobs as test-mult-target-release (TARGET is pinned to
+# FUNC_SIM here since any non-local target triggers the dispatch).
+# ==============================================================================
+
+test-mult-transport-release: build-release ## End-to-end transport round trip (server+client+compiler, FUNC_SIM)
+	$(call set-build-config,Release,build)
+	@if [ ! -x "$(NIOBIUM_COMPILER_ROOT)/build/nbcc_fhetch_replay" ]; then \
+		echo "ERROR: nbcc_fhetch_replay not found at $(NIOBIUM_COMPILER_ROOT)/build/nbcc_fhetch_replay"; \
+		echo "Build it with: (cd $(NIOBIUM_COMPILER_ROOT) && make release)"; \
+		exit 2; \
+	fi
+	@NIOBIUM_COMPILER_ROOT="$(NIOBIUM_COMPILER_ROOT)" \
+	 NIOBIUM_COMPILER_BUILD="$(NIOBIUM_COMPILER_ROOT)/build" \
+	 scripts/test_transport_mult.sh
 
 test-sim-mult: test-mult ## Record mult trace then simulate it (Debug)
 	$(call set-build-config,Debug,dbuild)
