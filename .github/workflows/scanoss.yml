@@ -71,13 +71,20 @@ jobs:
         run: |
           find . -type f \( \
             -name '*.pcap' -o -name '*.pcapng' -o -name '*.tsv' -o -name '*.csv' \
-            -o -name '*.bin' -o -name '*.png' -o -name '*.jpg' -o -name '*.pdf' \
+            -o -name '*.bin' -o -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' \
+            -o -name '*.gif' -o -name '*.webp' -o -name '*.avif' -o -name '*.svg' \
+            -o -name '*.ico' -o -name '*.pdf' \
+            -o -name '*.mp3' -o -name '*.mp4' -o -name '*.mov' -o -name '*.wav' \
+            -o -name '*.woff' -o -name '*.woff2' -o -name '*.ttf' -o -name '*.otf' \
+            -o -name '*.eot' \
             -o -name '*.gz' -o -name '*.tar' -o -name '*.zip' -o -name '*.whl' \
+            -o -name '*.7z' -o -name '*.rar' \
             -o -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.dylib' \
+            -o -name '*.dll' -o -name '*.exe' -o -name '*.class' -o -name '*.jar' \
             -o -name '*.pyc' -o -name '*.pdi' -o -name '*.xsa' -o -name '*.elf' \
             -o -name '*.hpu' -o -name '*.bcode' -o -name '*.cbor' \
           \) -delete 2>/dev/null || true
-          rm -rf Datasets assets node_modules __pycache__ .venv bmenv 2>/dev/null || true
+          rm -rf Datasets assets node_modules __pycache__ .venv bmenv .next dist build 2>/dev/null || true
 
       - name: SCANOSS Full Scan
         uses: scanoss/gha-code-scan@v1
@@ -113,18 +120,21 @@ jobs:
       - name: Upload to Dependency Track
         run: |
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
-          SBOM_B64=$(base64 -w0 scanoss-cyclonedx.json)
+
+          # Build JSON payload via Python (cross-platform, handles large SBOMs)
+          python3 -c "
+          import json, base64
+          with open('scanoss-cyclonedx.json', 'rb') as f:
+              b64 = base64.b64encode(f.read()).decode()
+          with open('dt-payload.json', 'w') as f:
+              json.dump({'projectName': '${REPO_NAME}', 'projectVersion': 'main', 'autoCreate': True, 'bom': b64}, f)
+          "
 
           HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" \
             -X PUT "${{ vars.DEPENDENCY_TRACK_URL }}/api/v1/bom" \
             -H "X-Api-Key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"projectName\": \"${REPO_NAME}\",
-              \"projectVersion\": \"main\",
-              \"autoCreate\": true,
-              \"bom\": \"${SBOM_B64}\"
-            }")
+            -d @dt-payload.json)
 
           echo "HTTP ${HTTP_CODE}"
           cat response.json
