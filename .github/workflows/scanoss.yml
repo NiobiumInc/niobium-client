@@ -7,11 +7,9 @@ on:
     branches: [main, master]
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
   checks: write
-  actions: read
-  issues: write
 
 concurrency:
   group: scanoss-${{ github.repository }}-${{ github.ref }}
@@ -51,8 +49,6 @@ jobs:
     name: SCANOSS Full Scan (post-merge)
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    outputs:
-      artifact-uploaded: ${{ steps.check-artifact.outputs.uploaded }}
     steps:
       - name: Generate GitHub App token
         id: app-token
@@ -97,52 +93,36 @@ jobs:
           dependencies.enabled: false
           output.filepath: scanoss-results.json
 
-      - name: Upload CycloneDX SBOM artifact
-        if: hashFiles('scanoss-cyclonedx.json') != ''
-        id: check-artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: cyclonedx-sbom
-          path: scanoss-cyclonedx.json
-          retention-days: 30
-
-  upload-to-dtrack:
-    name: Upload SBOM to Dependency Track
+  trigger-ort:
+    name: Trigger ORT Scan
     if: github.event_name == 'push'
-    needs: scanoss-full
     runs-on: self-hosted
     steps:
-      - name: Download SBOM artifact
-        uses: actions/download-artifact@v4
+      - name: Check if ORT scan needed
+        id: check
+        uses: actions/checkout@v6
         with:
-          name: cyclonedx-sbom
+          fetch-depth: 2
 
-      - name: Upload to Dependency Track
+      - name: Skip if only NOTICE changed
+        id: filter
         run: |
-          REPO_NAME="${GITHUB_REPOSITORY#*/}"
-
-          # Build JSON payload via Python (cross-platform, handles large SBOMs)
-          python3 -c "
-          import json, base64
-          with open('scanoss-cyclonedx.json', 'rb') as f:
-              b64 = base64.b64encode(f.read()).decode()
-          with open('dt-payload.json', 'w') as f:
-              json.dump({'projectName': '${REPO_NAME}', 'projectVersion': 'main', 'autoCreate': True, 'bom': b64}, f)
-          "
-
-          HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" \
-            -X PUT "${{ vars.DEPENDENCY_TRACK_URL }}/api/v1/bom" \
-            -H "X-Api-Key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d @dt-payload.json)
-
-          echo "HTTP ${HTTP_CODE}"
-          cat response.json
-          echo ""
-
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "::error::Failed to upload SBOM to Dependency Track"
-            exit 1
+          CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "FORCE_SCAN")
+          if [ "$(echo "$CHANGED" | grep -v '^NOTICE$' | grep -v '^$')" = "" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-          echo "::notice::SBOM uploaded to Dependency Track: ${{ vars.DEPENDENCY_TRACK_URL }}"
+      - name: Trigger ORT scan via webhook
+        if: steps.filter.outputs.skip != 'true'
+        run: |
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          HTTP_CODE=$(curl -s -o /tmp/ort-response.json -w "%{http_code}" -X POST "${{ vars.ORT_WEBHOOK_URL }}/scan" -H "Authorization: Bearer ${{ secrets.ORT_WEBHOOK_TOKEN }}" -H "Content-Type: application/json" -d "{\"repo\": \"${REPO_NAME}\"}")
+          echo "HTTP $HTTP_CODE"
+          cat /tmp/ort-response.json
+          if [ "$HTTP_CODE" = "202" ]; then
+            echo "::notice::ORT scan triggered for $REPO_NAME"
+          else
+            echo "::warning::ORT webhook returned $HTTP_CODE — scan may not have started"
+          fi
