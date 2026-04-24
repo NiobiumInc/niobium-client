@@ -58,6 +58,8 @@ jobs:
         run: |
           [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || { echo "Invalid PR_NUMBER: $PR_NUMBER"; exit 1; }
 
+          git fetch origin main --depth=1
+
           BRANCH="auto/fhetch-pr-${PR_NUMBER}"
 
           if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
