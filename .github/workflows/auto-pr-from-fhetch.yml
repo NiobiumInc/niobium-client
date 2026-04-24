@@ -36,12 +36,14 @@ jobs:
       - name: Create or update branch
         id: update
         env:
-          PR_NUMBER: ${{ github.event.client_payload.pr_number }}
-          FHETCH_SHA: ${{ github.event.client_payload.sha }}
-          FHETCH_BRANCH: ${{ github.event.client_payload.branch }}
+          PR_NUMBER: ${{ github.event.client_payload.pr_number || github.event.inputs.pr_number }}
+          FHETCH_SHA: ${{ github.event.client_payload.sha || github.event.inputs.sha }}
+          FHETCH_BRANCH: ${{ github.event.client_payload.branch || github.event.inputs.branch }}
           APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || { echo "Invalid PR_NUMBER: $PR_NUMBER"; exit 1; }
+
+          git fetch origin main --depth=1
 
           BRANCH="auto/fhetch-pr-${PR_NUMBER}"
 
@@ -51,9 +53,9 @@ jobs:
             git checkout -b "$BRANCH" origin/main
           fi
 
+          git config submodule.vendor/niobium-fhetch.url "https://x-access-token:${APP_TOKEN}@github.com/NiobiumInc/niobium-fhetch.git"
           git submodule update --init vendor/niobium-fhetch
           cd vendor/niobium-fhetch
-          git remote set-url origin "https://x-access-token:${APP_TOKEN}@github.com/NiobiumInc/niobium-fhetch.git"
           git fetch origin "$FHETCH_BRANCH"
           git checkout "$FHETCH_SHA"
           cd ../..
@@ -72,8 +74,8 @@ jobs:
         if: steps.update.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PR_NUMBER: ${{ github.event.client_payload.pr_number }}
-          PR_TITLE: ${{ github.event.client_payload.pr_title }}
+          PR_NUMBER: ${{ github.event.client_payload.pr_number || github.event.inputs.pr_number }}
+          PR_TITLE: ${{ github.event.client_payload.pr_title || github.event.inputs.pr_title }}
           REPO_OWNER: ${{ github.repository_owner }}
         run: |
           BRANCH="${{ steps.update.outputs.branch }}"
@@ -82,7 +84,7 @@ jobs:
             printf 'Automated submodule bump tracking [niobium-fhetch PR #%s](https://github.com/%s/niobium-fhetch/pull/%s): %s' \
               "$PR_NUMBER" "$REPO_OWNER" "$PR_NUMBER" "$PR_TITLE" > /tmp/pr-body.txt
             gh pr create \
-              --title "chore: bump niobium-fhetch (fhetch PR #${PR_NUMBER})" \
+              --title "Update niobium-fhetch submodule (PR #${PR_NUMBER})" \
               --body-file /tmp/pr-body.txt \
               --base main \
               --head "$BRANCH"
