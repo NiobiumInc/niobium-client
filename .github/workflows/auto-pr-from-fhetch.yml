@@ -51,9 +51,9 @@ jobs:
             git checkout -b "$BRANCH" origin/main
           fi
 
+          git config submodule.vendor/niobium-fhetch.url "https://x-access-token:${APP_TOKEN}@github.com/NiobiumInc/niobium-fhetch.git"
           git submodule update --init vendor/niobium-fhetch
           cd vendor/niobium-fhetch
-          git remote set-url origin "https://x-access-token:${APP_TOKEN}@github.com/NiobiumInc/niobium-fhetch.git"
           git fetch origin "$FHETCH_BRANCH"
           git checkout "$FHETCH_SHA"
           cd ../..
