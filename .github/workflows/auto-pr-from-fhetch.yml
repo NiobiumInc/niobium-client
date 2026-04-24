@@ -3,21 +3,6 @@ name: Auto PR — bump niobium-fhetch submodule
 on:
   repository_dispatch:
     types: [fhetch_pr]
-  workflow_dispatch:
-    inputs:
-      pr_number:
-        description: 'niobium-fhetch PR number'
-        required: true
-      sha:
-        description: 'Head commit SHA of the fhetch PR'
-        required: true
-      branch:
-        description: 'Head branch of the fhetch PR'
-        required: true
-      pr_title:
-        description: 'Title of the fhetch PR'
-        required: true
-        default: 'Test dispatch'
 
 permissions:
   contents: write
@@ -99,7 +84,7 @@ jobs:
             printf 'Automated submodule bump tracking [niobium-fhetch PR #%s](https://github.com/%s/niobium-fhetch/pull/%s): %s' \
               "$PR_NUMBER" "$REPO_OWNER" "$PR_NUMBER" "$PR_TITLE" > /tmp/pr-body.txt
             gh pr create \
-              --title "chore: bump niobium-fhetch (fhetch PR #${PR_NUMBER})" \
+              --title "Update niobium-fhetch submodule (PR #${PR_NUMBER})" \
               --body-file /tmp/pr-body.txt \
               --base main \
               --head "$BRANCH"
