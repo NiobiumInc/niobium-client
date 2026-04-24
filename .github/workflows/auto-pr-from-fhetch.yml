@@ -3,6 +3,21 @@ name: Auto PR — bump niobium-fhetch submodule
 on:
   repository_dispatch:
     types: [fhetch_pr]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'niobium-fhetch PR number'
+        required: true
+      sha:
+        description: 'Head commit SHA of the fhetch PR'
+        required: true
+      branch:
+        description: 'Head branch of the fhetch PR'
+        required: true
+      pr_title:
+        description: 'Title of the fhetch PR'
+        required: true
+        default: 'Test dispatch'
 
 permissions:
   contents: write
@@ -36,9 +51,9 @@ jobs:
       - name: Create or update branch
         id: update
         env:
-          PR_NUMBER: ${{ github.event.client_payload.pr_number }}
-          FHETCH_SHA: ${{ github.event.client_payload.sha }}
-          FHETCH_BRANCH: ${{ github.event.client_payload.branch }}
+          PR_NUMBER: ${{ github.event.client_payload.pr_number || github.event.inputs.pr_number }}
+          FHETCH_SHA: ${{ github.event.client_payload.sha || github.event.inputs.sha }}
+          FHETCH_BRANCH: ${{ github.event.client_payload.branch || github.event.inputs.branch }}
           APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || { echo "Invalid PR_NUMBER: $PR_NUMBER"; exit 1; }
@@ -72,8 +87,8 @@ jobs:
         if: steps.update.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PR_NUMBER: ${{ github.event.client_payload.pr_number }}
-          PR_TITLE: ${{ github.event.client_payload.pr_title }}
+          PR_NUMBER: ${{ github.event.client_payload.pr_number || github.event.inputs.pr_number }}
+          PR_TITLE: ${{ github.event.client_payload.pr_title || github.event.inputs.pr_title }}
           REPO_OWNER: ${{ github.repository_owner }}
         run: |
           BRANCH="${{ steps.update.outputs.branch }}"
