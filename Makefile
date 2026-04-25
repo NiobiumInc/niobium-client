@@ -462,7 +462,8 @@ test-fhetch-release: build-openfhe-release ## Run the fhetch submodule's test-re
 # Override AUTO_OP=MUL AUTO_EXPECTED=21 to exercise the known-failing
 # relin path inside the auto-facade test.
 
-test-release: test-simple-ops-release test-mult-release test-auto-ciphers-release test-fhetch-release ## Run all currently-passing Release tests (this repo + niobium-fhetch submodule)
+## Run all currently-passing Release tests (this repo + niobium-fhetch submodule)
+test-release: test-simple-ops-release test-mult-release test-auto-ciphers-release test-fhetch-release test-bootstrap-release  
 
 ##@ Cleanup
 
