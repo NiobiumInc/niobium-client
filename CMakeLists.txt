@@ -57,7 +57,22 @@ set(OPENFHE_LIBRARY_PATH "${OPENFHE_INSTALL_DIR}/lib")
 # Pull in the fhetch library — this defines the niobium_fhetch target and the
 # fhetch_sim CLI. We forward OPENFHE_INSTALL_DIR so its CMakeLists can find
 # OpenFHE headers/libs from the same install tree the client built.
-add_subdirectory(vendor/niobium-fhetch)
+#
+# When this project is built from a parent (e.g. niobium-compiler) that owns
+# its own niobium-fhetch checkout, set NIOBIUM_CLIENT_FHETCH_DIR to that path.
+# The parent's checkout is then used directly; our own vendor/niobium-fhetch
+# submodule does not need to be initialized. JSON_INCLUDE_DIR and
+# OPENFHE_INSTALL_DIR are honored by niobium-fhetch's CMakeLists, so injecting
+# them here covers the full transitive dep set.
+set(NIOBIUM_CLIENT_FHETCH_DIR "" CACHE PATH
+    "External niobium-fhetch source tree to use instead of vendor/niobium-fhetch (empty = use vendored submodule)")
+
+if(NIOBIUM_CLIENT_FHETCH_DIR)
+    add_subdirectory(${NIOBIUM_CLIENT_FHETCH_DIR}
+                     ${CMAKE_BINARY_DIR}/_deps/niobium-fhetch-build)
+else()
+    add_subdirectory(vendor/niobium-fhetch)
+endif()
 
 # ==============================================================================
 # Optional: auto-facade helper library (transparent record/replay for
