@@ -454,10 +454,7 @@ test-fhetch-release: build-openfhe-release ## Run the fhetch submodule's test-re
 #     - roundtrip-simple-ops         (13 ops × primary + secondary decrypt)
 #
 # Deliberately excluded:
-#   - test-bootstrap-release       (known primary-side CKKS approximation
-#                                   error; tracked as a simulator precision
-#                                   follow-up)
-#   - bootstrap roundtrip in fhetch (same precision issue)
+#   - bootstrap roundtrip in fhetch (broken)
 #
 # Override AUTO_OP=MUL AUTO_EXPECTED=21 to exercise the known-failing
 # relin path inside the auto-facade test.
