@@ -56,10 +56,35 @@ endef
 VENDOR_DIR       := $(CURDIR)/vendor
 VENDOR_LIB_DIR   := $(VENDOR_DIR)/lib
 
-FHETCH_DIR           := $(VENDOR_DIR)/niobium-fhetch
-OPENFHE_DIR          := $(FHETCH_DIR)/vendor/openfhe
-OPENFHE_INSTALL_DIR  := $(VENDOR_LIB_DIR)/openfhe
-CLIENT_INSTALL_DIR   := $(VENDOR_LIB_DIR)/niobium-client
+# Paths overridable by a parent build (e.g. niobium-compiler) so the same
+# source tree can be built either standalone (using vendored submodules) or
+# with deps supplied from outside. Use ?= so command-line / env overrides win.
+FHETCH_DIR          ?= $(VENDOR_DIR)/niobium-fhetch
+OPENFHE_DIR         ?= $(FHETCH_DIR)/vendor/openfhe
+OPENFHE_INSTALL_DIR ?= $(VENDOR_LIB_DIR)/openfhe
+JSON_INCLUDE_DIR    ?=
+CLIENT_INSTALL_DIR  := $(VENDOR_LIB_DIR)/niobium-client
+
+# When EXTERNAL_OPENFHE=1, the parent has already built+installed OpenFHE and
+# pointed OPENFHE_INSTALL_DIR at it; we skip our own openfhe config/build
+# steps and the matching submodule sync.
+EXTERNAL_OPENFHE ?= 0
+ifeq ($(EXTERNAL_OPENFHE),1)
+  OPENFHE_CONFIG_DEP_DEBUG   :=
+  OPENFHE_CONFIG_DEP_RELEASE :=
+  OPENFHE_BUILD_DEP_DEBUG    :=
+  OPENFHE_BUILD_DEP_RELEASE  :=
+else
+  OPENFHE_CONFIG_DEP_DEBUG   := config-openfhe
+  OPENFHE_CONFIG_DEP_RELEASE := config-openfhe-release
+  OPENFHE_BUILD_DEP_DEBUG    := build-openfhe
+  OPENFHE_BUILD_DEP_RELEASE  := build-openfhe-release
+endif
+
+# CMake -D flags that are only emitted when the corresponding override is set.
+# Quote the path so cmake receives a single argument even if it contains spaces.
+CMAKE_CLIENT_FHETCH_DIR_FLAG := $(if $(NIOBIUM_CLIENT_FHETCH_DIR),-DNIOBIUM_CLIENT_FHETCH_DIR="$(NIOBIUM_CLIENT_FHETCH_DIR)")
+CMAKE_JSON_INCLUDE_DIR_FLAG  := $(if $(JSON_INCLUDE_DIR),-DJSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)")
 
 # OpenMP toggle (OFF by default, override with: make config-openfhe OPENMP=ON)
 OPENMP ?= OFF
@@ -144,33 +169,49 @@ build-openfhe-release: ## Build and install OpenFHE (Release)
 
 ##@ Client Build
 
+# Records build-time deps for scripts/ that run after install (e.g. the
+# transport test scripts on Linux, where there's no rpath fallback). Sourced
+# by scripts/test_transport_mult.sh and scripts/fhetch_server.sh so they
+# point LD_LIBRARY_PATH at whatever OpenFHE the build was actually linked
+# against — the client's own vendored install in standalone builds, or a
+# parent-supplied install when a parent (niobium-compiler) drove the build.
+define write-build-env
+	printf 'OPENFHE_LIB=%s/lib\n' "$(OPENFHE_INSTALL_DIR)" > $(CURDIR)/$(1)/niobium_client.env
+endef
+
 config-client: ## Configure the client + fhetch library + examples (Debug)
 	$(call set-build-config,Debug,dbuild)
 	cmake -S $(CURDIR) -B $(CURDIR)/dbuild \
 		-DCMAKE_BUILD_TYPE=Debug \
 		-DOPENFHE_INSTALL_DIR=$(OPENFHE_INSTALL_DIR) \
+		$(CMAKE_CLIENT_FHETCH_DIR_FLAG) \
+		$(CMAKE_JSON_INCLUDE_DIR_FLAG) \
 		-DNIOBIUM_CLIENT_WITH_EXAMPLES=ON \
 		-DCMAKE_INSTALL_PREFIX=$(CLIENT_INSTALL_DIR)
+	@$(call write-build-env,dbuild)
 
 config-client-release: ## Configure the client + fhetch library + examples (Release)
 	$(call set-build-config,Release,build)
 	cmake -S $(CURDIR) -B $(CURDIR)/build \
 		-DCMAKE_BUILD_TYPE=Release \
 		-DOPENFHE_INSTALL_DIR=$(OPENFHE_INSTALL_DIR) \
+		$(CMAKE_CLIENT_FHETCH_DIR_FLAG) \
+		$(CMAKE_JSON_INCLUDE_DIR_FLAG) \
 		-DNIOBIUM_CLIENT_WITH_EXAMPLES=ON \
 		-DCMAKE_INSTALL_PREFIX=$(CLIENT_INSTALL_DIR)
+	@$(call write-build-env,build)
 
 ##@ Combined Targets
 
-config: config-openfhe config-client ## Configure everything (Debug)
+config: $(OPENFHE_CONFIG_DEP_DEBUG) config-client ## Configure everything (Debug)
 
-config-release: config-openfhe-release config-client-release ## Configure everything (Release)
+config-release: $(OPENFHE_CONFIG_DEP_RELEASE) config-client-release ## Configure everything (Release)
 
-build: build-openfhe ## Build everything (Debug)
+build: $(OPENFHE_BUILD_DEP_DEBUG) ## Build everything (Debug)
 	$(call set-build-config,Debug,dbuild)
 	cmake --build dbuild -j $(NUM_CPUS) --config Debug
 
-build-release: build-openfhe-release ## Build everything (Release)
+build-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Build everything (Release)
 	$(call set-build-config,Release,build)
 	cmake --build build -j $(NUM_CPUS) --config Release
 
@@ -433,9 +474,9 @@ test-op-release: build-release ## Run a single simple_ops test: make test-op-rel
 # test targets reference $(BUILD_DIR)/… paths relative to its own root).
 # ==============================================================================
 
-test-fhetch-release: build-openfhe-release ## Run the fhetch submodule's test-release (simple_fhetch + fhetch_driver + simple_ops roundtrip)
-	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR=$(OPENFHE_INSTALL_DIR) config-fhetch-release
-	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR=$(OPENFHE_INSTALL_DIR) test-release
+test-fhetch-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Run the fhetch submodule's test-release (simple_fhetch + fhetch_driver + simple_ops roundtrip)
+	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) config-fhetch-release
+	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) test-release
 
 # ==============================================================================
 # test-release — everything that currently passes

@@ -32,7 +32,13 @@ CLIENT_ROOT="$(cd "$HERE/.." && pwd)"
 
 SERVER_BIN="$CLIENT_ROOT/build/src/fhetch_transport/nbcc_fhetch_replay_server"
 COMPILER_BIN="$NIOBIUM_COMPILER_BUILD/nbcc_fhetch_replay"
-OPENFHE_LIB="$CLIENT_ROOT/vendor/lib/openfhe/lib"
+
+# niobium_client.env (written by `make config-client-release`) records the
+# OpenFHE install dir the build was linked against. See test_transport_mult.sh
+# for the full rationale.
+ENV_FILE="$CLIENT_ROOT/build/niobium_client.env"
+[[ -f "$ENV_FILE" ]] && . "$ENV_FILE"
+: "${OPENFHE_LIB:=$CLIENT_ROOT/vendor/lib/openfhe/lib}"
 NTL_LIB="$NIOBIUM_COMPILER_ROOT/deps/photovoltaic/build/ntl/lib"
 
 for path in "$SERVER_BIN" "$COMPILER_BIN"; do
