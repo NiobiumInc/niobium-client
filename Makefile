@@ -168,6 +168,16 @@ build-openfhe-release: ## Build and install OpenFHE (Release)
 
 ##@ Client Build
 
+# Records build-time deps for scripts/ that run after install (e.g. the
+# transport test scripts on Linux, where there's no rpath fallback). Sourced
+# by scripts/test_transport_mult.sh and scripts/fhetch_server.sh so they
+# point LD_LIBRARY_PATH at whatever OpenFHE the build was actually linked
+# against — the client's own vendored install in standalone builds, or a
+# parent-supplied install when a parent (niobium-compiler) drove the build.
+define write-build-env
+	printf 'OPENFHE_LIB=%s/lib\n' "$(OPENFHE_INSTALL_DIR)" > $(CURDIR)/$(1)/niobium_client.env
+endef
+
 config-client: ## Configure the client + fhetch library + examples (Debug)
 	$(call set-build-config,Debug,dbuild)
 	cmake -S $(CURDIR) -B $(CURDIR)/dbuild \
@@ -177,6 +187,7 @@ config-client: ## Configure the client + fhetch library + examples (Debug)
 		$(CMAKE_JSON_INCLUDE_DIR_FLAG) \
 		-DNIOBIUM_CLIENT_WITH_EXAMPLES=ON \
 		-DCMAKE_INSTALL_PREFIX=$(CLIENT_INSTALL_DIR)
+	@$(call write-build-env,dbuild)
 
 config-client-release: ## Configure the client + fhetch library + examples (Release)
 	$(call set-build-config,Release,build)
@@ -187,6 +198,7 @@ config-client-release: ## Configure the client + fhetch library + examples (Rele
 		$(CMAKE_JSON_INCLUDE_DIR_FLAG) \
 		-DNIOBIUM_CLIENT_WITH_EXAMPLES=ON \
 		-DCMAKE_INSTALL_PREFIX=$(CLIENT_INSTALL_DIR)
+	@$(call write-build-env,build)
 
 ##@ Combined Targets
 

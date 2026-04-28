@@ -28,7 +28,15 @@ CLIENT_ROOT="$(cd "$HERE/.." && pwd)"
 
 BUILD="$CLIENT_ROOT/build"
 TRANSPORT_DIR="$BUILD/src/fhetch_transport"
-OPENFHE_LIB="$CLIENT_ROOT/vendor/lib/openfhe/lib"
+
+# niobium_client.env is written by `make config-client-release` and records
+# the OpenFHE install dir the build was linked against. Source it so we point
+# LD_LIBRARY_PATH at the right place on Linux, where there's no rpath fallback.
+# In compiler-driven builds this picks up the parent's openfhe install; in
+# standalone builds it just records the client's own vendored install.
+ENV_FILE="$BUILD/niobium_client.env"
+[[ -f "$ENV_FILE" ]] && . "$ENV_FILE"
+: "${OPENFHE_LIB:=$CLIENT_ROOT/vendor/lib/openfhe/lib}"
 
 mult_client="$BUILD/examples/mult_client"
 mult_server="$BUILD/examples/mult_server"
