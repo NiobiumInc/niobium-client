@@ -82,8 +82,9 @@ else
 endif
 
 # CMake -D flags that are only emitted when the corresponding override is set.
-CMAKE_CLIENT_FHETCH_DIR_FLAG := $(if $(NIOBIUM_CLIENT_FHETCH_DIR),-DNIOBIUM_CLIENT_FHETCH_DIR=$(NIOBIUM_CLIENT_FHETCH_DIR))
-CMAKE_JSON_INCLUDE_DIR_FLAG  := $(if $(JSON_INCLUDE_DIR),-DJSON_INCLUDE_DIR=$(JSON_INCLUDE_DIR))
+# Quote the path so cmake receives a single argument even if it contains spaces.
+CMAKE_CLIENT_FHETCH_DIR_FLAG := $(if $(NIOBIUM_CLIENT_FHETCH_DIR),-DNIOBIUM_CLIENT_FHETCH_DIR="$(NIOBIUM_CLIENT_FHETCH_DIR)")
+CMAKE_JSON_INCLUDE_DIR_FLAG  := $(if $(JSON_INCLUDE_DIR),-DJSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)")
 
 # OpenMP toggle (OFF by default, override with: make config-openfhe OPENMP=ON)
 OPENMP ?= OFF
@@ -474,8 +475,8 @@ test-op-release: build-release ## Run a single simple_ops test: make test-op-rel
 # ==============================================================================
 
 test-fhetch-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Run the fhetch submodule's test-release (simple_fhetch + fhetch_driver + simple_ops roundtrip)
-	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR=$(OPENFHE_INSTALL_DIR) $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR=$(JSON_INCLUDE_DIR)) EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) config-fhetch-release
-	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR=$(OPENFHE_INSTALL_DIR) $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR=$(JSON_INCLUDE_DIR)) EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) test-release
+	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) config-fhetch-release
+	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) test-release
 
 # ==============================================================================
 # test-release — everything that currently passes
