@@ -5,6 +5,10 @@ on:
     branches: [main, master]
   push:
     branches: [main, master]
+  # Manual rescan from the Actions tab → "SCANOSS License Compliance" → "Run workflow".
+  # Behaves like a push (full scan + ORT trigger). Use this to re-run after
+  # adding/editing .scanoss-curations.json or scanoss.json without bumping a commit.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -47,7 +51,7 @@ jobs:
 
   scanoss-full:
     name: SCANOSS Full Scan (post-merge)
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Generate GitHub App token
@@ -95,7 +99,7 @@ jobs:
 
   trigger-ort:
     name: Trigger ORT Scan
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: self-hosted
     steps:
       - name: Check if ORT scan needed
