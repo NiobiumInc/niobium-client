@@ -93,8 +93,7 @@ int main(int argc, char* argv[]) {
     // but leaves intermediate polys uninitialized for the simulator.
     // NIOBIUM_BOOTSTRAP_HOLLOW=0 forces real-math recording so every derived
     // poly is populated before the simulator runs.
-    // FIXME: hollow mode is currently broken
-    bool hollow = false;
+    bool hollow = true;
     {
         const char* e = std::getenv("NIOBIUM_BOOTSTRAP_HOLLOW");
         if (e && std::string(e) == "0") hollow = false;
