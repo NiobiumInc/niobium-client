@@ -1,0 +1,46 @@
+{
+  "curations": {
+    "Fuzzer": {
+      "license": "UNKNOWN",
+      "reviewed": null,
+      "reviewer": null,
+      "note": "Not on GitHub or GitLab: https://gitee.com/local-grpc/Fuzzer"
+    },
+    "PaperFriend-desktop-app": {
+      "license": "UNKNOWN",
+      "reviewed": null,
+      "reviewer": null,
+      "note": "No license found at github.com/CSE201-project/PaperFriend-desktop-app"
+    },
+    "pkcs11_solid": {
+      "license": "UNKNOWN",
+      "reviewed": null,
+      "reviewer": null,
+      "note": "No license found at github.com/AndreanIvan/pkcs11_solid"
+    },
+    "slowfuzz": {
+      "license": "Apache-2.0",
+      "reviewed": "2026-05-01",
+      "reviewer": "auto-known-projects",
+      "note": "Well-known project: SlowFuzz"
+    },
+    "Snake": {
+      "license": "UNKNOWN",
+      "reviewed": null,
+      "reviewer": null,
+      "note": "No license found at github.com/ILTZ/Snake"
+    },
+    "startle": {
+      "license": "MIT",
+      "reviewed": "2026-05-01",
+      "reviewer": "auto-github-api",
+      "note": "License from github.com/raphael-group/startle"
+    },
+    "Task_2": {
+      "license": "UNKNOWN",
+      "reviewed": null,
+      "reviewer": null,
+      "note": "No license found at github.com/VishnenkoMaxim/Task_2"
+    }
+  }
+}
