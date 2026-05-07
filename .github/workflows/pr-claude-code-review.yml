@@ -41,6 +41,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.CLAUDE_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_bots: niobium-ci-bot
           claude_args: |
             --model claude-sonnet-4-6
             --max-turns 45
@@ -127,6 +128,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.CLAUDE_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_bots: niobium-ci-bot
           claude_args: |
             --model claude-sonnet-4-6
             --max-turns 25
