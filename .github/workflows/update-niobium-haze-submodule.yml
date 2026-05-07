@@ -1,0 +1,23 @@
+name: Update - niobium-haze Submodule
+
+on:
+  repository_dispatch:
+    types: [haze_main_push]
+  schedule:
+    # Run at midnight PST (8:00 AM UTC)
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-and-update:
+    uses: ./.github/workflows/reusable-submodule-update.yml
+    secrets: inherit
+    with:
+      submodule-path: vendor/niobium-haze
+      submodule-name: niobium-haze
+      submodule-org-repo: NiobiumInc/niobium-haze
+      target-branch: main

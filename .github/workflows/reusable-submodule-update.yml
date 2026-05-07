@@ -1,0 +1,150 @@
+name: Reusable - Submodule Update
+
+on:
+  workflow_call:
+    inputs:
+      submodule-path:
+        description: 'Path to the submodule (e.g. vendor/niobium-fhetch)'
+        required: true
+        type: string
+      submodule-name:
+        description: 'Short name of the submodule (e.g. niobium-fhetch, niobium-haze)'
+        required: true
+        type: string
+      submodule-org-repo:
+        description: 'GitHub org/repo slug (e.g. NiobiumInc/niobium-fhetch)'
+        required: true
+        type: string
+      target-branch:
+        description: 'Branch to track in the submodule repo (e.g. main)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-and-update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Generate token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: main
+          persist-credentials: false
+
+      - name: Configure git for HTTPS
+        run: |
+          git remote set-url origin "https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/${{ github.repository }}.git"
+          git config --global url."https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/".insteadOf "git@github.com:"
+          git config --global --add url."https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/".insteadOf "ssh://git@github.com/"
+          git config --global --add url."https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Sync submodule
+        run: git submodule update --init ${{ inputs.submodule-path }}
+
+      - name: Configure git user
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check for updates
+        id: check-update
+        run: |
+          cd ${{ inputs.submodule-path }}
+
+          git remote set-url origin "https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/${{ inputs.submodule-org-repo }}.git"
+          git fetch origin ${{ inputs.target-branch }}
+
+          CURRENT_COMMIT=$(git rev-parse HEAD)
+          CURRENT_SHORT=$(git rev-parse --short HEAD)
+          LATEST_COMMIT=$(git rev-parse origin/${{ inputs.target-branch }})
+          LATEST_SHORT=$(git rev-parse --short origin/${{ inputs.target-branch }})
+
+          echo "Current commit: $CURRENT_COMMIT ($CURRENT_SHORT)"
+          echo "Latest commit on ${{ inputs.target-branch }}: $LATEST_COMMIT ($LATEST_SHORT)"
+
+          if [ "$CURRENT_COMMIT" = "$LATEST_COMMIT" ]; then
+            echo "Already at latest commit on ${{ inputs.target-branch }}"
+            echo "update_needed=false" >> $GITHUB_OUTPUT
+          else
+            echo "Update available: $CURRENT_SHORT -> $LATEST_SHORT"
+            LATEST_MESSAGE=$(git log -1 --pretty=format:"%s" "$LATEST_COMMIT" | sed 's|#\([0-9]\+\)|${{ inputs.submodule-org-repo }}#\1|g')
+            echo "update_needed=true" >> $GITHUB_OUTPUT
+            echo "latest_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
+            echo "latest_short=$LATEST_SHORT" >> $GITHUB_OUTPUT
+            echo "current_commit=$CURRENT_COMMIT" >> $GITHUB_OUTPUT
+            echo "current_short=$CURRENT_SHORT" >> $GITHUB_OUTPUT
+            echo "latest_message=$LATEST_MESSAGE" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update submodule
+        if: steps.check-update.outputs.update_needed == 'true'
+        run: |
+          cd ${{ inputs.submodule-path }}
+          git checkout origin/${{ inputs.target-branch }}
+
+      - name: Create Pull Request
+        if: steps.check-update.outputs.update_needed == 'true'
+        id: create-pr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          labels: |
+            dependencies
+            automated
+            ${{ inputs.submodule-name }}
+          add-paths: |
+            ${{ inputs.submodule-path }}
+          commit-message: |
+            chore: bump ${{ inputs.submodule-name }} to ${{ steps.check-update.outputs.latest_short }}
+
+            Automated update from update-${{ inputs.submodule-name }}-submodule workflow.
+            Workflow run: ${{ github.run_id }} at ${{ github.run_attempt }}
+
+            Previous commit: ${{ steps.check-update.outputs.current_short }}
+            New commit: ${{ steps.check-update.outputs.latest_short }}
+            Latest change: ${{ steps.check-update.outputs.latest_message }}
+          branch: auto/bump-${{ inputs.submodule-name }}-${{ steps.check-update.outputs.latest_short }}
+          delete-branch: true
+          title: "chore: bump ${{ inputs.submodule-name }} to ${{ steps.check-update.outputs.latest_short }}"
+          body: |
+            ## Automated ${{ inputs.submodule-name }} Submodule Update
+
+            This PR updates the `${{ inputs.submodule-name }}` submodule to the latest commit on `${{ inputs.target-branch }}`.
+
+            **Changes:**
+            - Previous commit: [`${{ steps.check-update.outputs.current_short }}`](https://github.com/${{ inputs.submodule-org-repo }}/commit/${{ steps.check-update.outputs.current_commit }})
+            - New commit: [`${{ steps.check-update.outputs.latest_short }}`](https://github.com/${{ inputs.submodule-org-repo }}/commit/${{ steps.check-update.outputs.latest_commit }})
+            - Latest commit message: _"${{ steps.check-update.outputs.latest_message }}"_
+
+            **Full commit hash:** `${{ steps.check-update.outputs.latest_commit }}`
+
+            **Compare changes:**
+            See [commit diff](https://github.com/${{ inputs.submodule-org-repo }}/compare/${{ steps.check-update.outputs.current_short }}...${{ steps.check-update.outputs.latest_short }}) for details.
+
+            ---
+            This PR was automatically created by the `update-${{ inputs.submodule-name }}-submodule` workflow.
+            **Action Required:** Please review and merge if tests pass.
+
+      - name: Output PR URL
+        if: steps.check-update.outputs.update_needed == 'true' && steps.create-pr.outputs.pull-request-url
+        run: echo "Pull request created or updated: ${{ steps.create-pr.outputs.pull-request-url }}"
+
+      - name: No update needed
+        if: steps.check-update.outputs.update_needed == 'false'
+        run: |
+          echo "${{ inputs.submodule-name }} submodule is already at the latest commit on ${{ inputs.target-branch }}"
+          echo "No action needed."
