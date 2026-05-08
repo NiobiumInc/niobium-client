@@ -2,7 +2,7 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-05-04
+Generated: 2026-05-08
 Tool: SCANOSS (snippet detection with License dataset)
 Components: 83
 
@@ -42,7 +42,7 @@ LICENSE SUMMARY
   BSD-2-Clause AND LGPL-2.1-only: 1 component(s)
   BSD-2-Clause-Darwin: 1 component(s)
   BSD-2-Clause-Patent: 1 component(s)
-  BSD-3-Clause: 34 component(s)
+  BSD-3-Clause: 35 component(s)
   BSD-3-Clause AND GPL-2.0-only AND BSD-3-Clause OR GPL-2.0-or-later AND GPL-1.0-or-later: 1 component(s)
   BSD-3-Clause AND ISC AND ISC AND MIT AND MIT: 1 component(s)
   BSD-3-Clause-LBNL: 1 component(s)
@@ -505,7 +505,7 @@ COMPONENT ATTRIBUTIONS
   License: GPL-3.0-only
 
   Fall_Semester_programing
-  Version: 72
+  Version: 67
   Source: https://github.com/Kirya23/Fall_Semester_programing
   PURL: pkg:github/kirya23/fall_semester_programing
   Copyright:
@@ -519,7 +519,7 @@ COMPONENT ATTRIBUTIONS
     Copyright 2024 Google Inc
     Copyright 2007; Google Inc.
     Copyright 2024 Google Inc.
-  License: Apache-2.0
+  License: Apache-2.0, BSD-3-Clause
 
   FreeCAD-LibPack
   Version: 3.1.1
@@ -1085,21 +1085,9 @@ COMPONENT ATTRIBUTIONS
   Source: https://github.com/seoklab/nurikit
   PURL: pkg:github/seoklab/nurikit
   Copyright:
-    Copyright 1998 -2024
-    Copyright 1999-2024 ; The Biopython Contributors
-    Copyright 2001-2002 Enthought; Inc. 2003-2024; SciPy Developers.
-    Copyright 2003-2012 Egervary Jeno Kombinatorikus Optimalizalasi
-    Copyright 2008 ; Google Inc.
-    Copyright 2009-2016 Pu Liu and Douglas L. Theobald
-    Copyright 2009-present ; Homebrew contributors
-    Copyright 2011 Ciyou Zhu; Richard Byrd; Jorge Nocedal and Jose Luis Morales.
-    Copyright 2016 Wenzel Jakob <wenzel.jakob@epfl.ch>; All rights reserved.
     Copyright 2017 Google Inc
-    Copyright 2023 Lab of Computational Biology and Biomolecular Engineering SNU
-    Copyright 2023 Lab of Computational Biology and Biomolecular Engineering; SNU
     Copyright 2007; Google Inc.
     Copyright 2017 Google Inc.
-    Copyright 2020; Google Inc.
   License: Apache-2.0
 
   objektinis-prog-class
