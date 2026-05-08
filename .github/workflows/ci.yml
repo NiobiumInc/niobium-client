@@ -137,25 +137,20 @@ jobs:
           make build-release
 
       # ------------------------------------------------------------
-      # Tests — single aggregate target.
+      # Tests — client-level aggregate only.
       #
-      # test-release runs every Release test known to succeed end-to-end,
-      # both client-level (simple_ops, mult, auto-ciphers) and the
-      # delegated niobium-fhetch submodule tests (simple_fhetch,
-      # fhetch_driver, simple_ops roundtrip). Bootstrap is deliberately
-      # excluded in the Makefile — its primary-side CKKS approximation
-      # error is tracked as a simulator-precision follow-up.
-      #
-      # The client's test-release target forwards OPENFHE_INSTALL_DIR so
-      # the submodule reuses the OpenFHE install we just built here
-      # instead of compiling OpenFHE a second time.
+      # test-client-release covers all client-level Release tests
+      # (simple_ops, mult, auto-ciphers, bootstrap) without delegating
+      # to the niobium-fhetch submodule. The fhetch submodule tests
+      # (test-fhetch-release) are resource-intensive and run separately
+      # on the internal server via test-release.
       # ------------------------------------------------------------
-      - name: Run test-release (client + fhetch submodule)
+      - name: Run test-client-release (client tests — no fhetch submodule)
         run: |
           export CC="ccache gcc"
           export CXX="ccache g++"
           export LD_LIBRARY_PATH="$OPENFHE_ROOT/lib:$LD_LIBRARY_PATH"
-          make test-release
+          make test-client-release
 
       - name: ccache stats
         if: always()
@@ -185,6 +180,128 @@ jobs:
             mult_keys/
             simple_ops_server_workload_*/
             mult_server_workload_*/
+            vendor/niobium-fhetch/simple_ops_keys/
+            vendor/niobium-fhetch/simple_ops_server_workload_*/
+            vendor/niobium-fhetch/fhetch_driver_source_*/
+            vendor/niobium-fhetch/simple_fhetch_example_simple/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  fhetch-test:
+    name: fhetch tests (self-hosted, Release)
+    runs-on: self-hosted
+
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+      OPENMP: OFF
+      NATIVEOPT: OFF
+      OPENFHE_ROOT: ${{ github.workspace }}/vendor/lib/openfhe
+
+    steps:
+      - name: Generate token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: self-hosted-ccache-release-${{ hashFiles('**/CMakeLists.txt', '**/*.cpp', '**/*.h', 'Makefile', 'vendor/niobium-fhetch/Makefile') }}
+          restore-keys: |
+            self-hosted-ccache-release-
+
+      - name: Prime ccache
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          ccache --max-size=4G
+          ccache --zero-stats
+
+      - name: Capture OpenFHE submodule commit
+        id: openfhe_rev
+        run: |
+          cd vendor/niobium-fhetch/vendor/openfhe
+          rev=$(git rev-parse HEAD)
+          echo "rev=$rev" >> "$GITHUB_OUTPUT"
+
+      - name: Restore OpenFHE build
+        id: restore_openfhe
+        uses: actions/cache@v4
+        with:
+          path: |
+            vendor/lib/openfhe
+            vendor/niobium-fhetch/vendor/openfhe/build
+          key: self-hosted-openfhe-release-${{ steps.openfhe_rev.outputs.rev }}
+          restore-keys: |
+            self-hosted-openfhe-release-
+
+      - name: Build OpenFHE
+        run: |
+          export CC="ccache gcc"
+          export CXX="ccache g++"
+
+          TARGETS_FILE="vendor/lib/openfhe/lib/OpenFHE/OpenFHETargets.cmake"
+          if [ -f "$TARGETS_FILE" ] && grep -q "${{ github.workspace }}" "$TARGETS_FILE"; then
+            echo "✓ OpenFHE cache valid for this workspace"
+          else
+            if [ -f "$TARGETS_FILE" ]; then
+              echo "✗ OpenFHE cache has a stale workspace path — rebuilding"
+              rm -rf vendor/lib/openfhe vendor/niobium-fhetch/vendor/openfhe/build
+            fi
+            make config-openfhe-release NATIVEOPT=${NATIVEOPT} OPENMP=${OPENMP}
+            make build-openfhe-release
+          fi
+
+      - name: Configure client
+        run: |
+          export CC="ccache gcc"
+          export CXX="ccache g++"
+          make config-client-release
+
+      - name: Build client
+        run: |
+          export CC="ccache gcc"
+          export CXX="ccache g++"
+          make build-release
+
+      # ------------------------------------------------------------
+      # fhetch submodule tests — run on internal server only.
+      # These are excluded from the GitHub-hosted job (build-and-test)
+      # ------------------------------------------------------------
+      - name: Run test-fhetch-release (fhetch submodule tests)
+        run: |
+          export CC="ccache gcc"
+          export CXX="ccache g++"
+          export LD_LIBRARY_PATH="$OPENFHE_ROOT/lib:$LD_LIBRARY_PATH"
+          make test-fhetch-release
+
+      - name: ccache stats
+        if: always()
+        run: |
+          if command -v ccache >/dev/null 2>&1; then
+            ccache --show-stats
+          else
+            echo "[ccache-stats] ccache not installed — skipping."
+          fi
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fhetch-logs-${{ github.run_attempt }}
+          path: |
+            vendor/niobium-fhetch/build/CMakeFiles/CMakeOutput.log
+            vendor/niobium-fhetch/build/CMakeFiles/CMakeError.log
             vendor/niobium-fhetch/simple_ops_keys/
             vendor/niobium-fhetch/simple_ops_server_workload_*/
             vendor/niobium-fhetch/fhetch_driver_source_*/
