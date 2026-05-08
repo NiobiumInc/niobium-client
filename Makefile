@@ -474,9 +474,10 @@ test-op-release: build-release ## Run a single simple_ops test: make test-op-rel
 # test targets reference $(BUILD_DIR)/… paths relative to its own root).
 # ==============================================================================
 
-test-fhetch-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Run the fhetch submodule's test-release (simple_fhetch + fhetch_driver + simple_ops roundtrip)
+test-fhetch-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Run the fhetch submodule's test-release + bootstrap roundtrip (simple_fhetch + fhetch_driver + simple_ops roundtrip + bootstrap roundtrip)
 	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) config-fhetch-release
 	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) test-release
+	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) test-roundtrip-bootstrap-release
 
 # ==============================================================================
 # test-client-release / test-release — Release test aggregates
@@ -492,9 +493,7 @@ test-fhetch-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Run the fhetch submodule's 
 #   - simple_fhetch                (FHETCH-only example, no OpenFHE)
 #   - fhetch_driver                (re-drive a .fhetch through the API)
 #   - roundtrip-simple-ops         (13 ops × primary + secondary decrypt)
-#
-# Deliberately excluded:
-#   - bootstrap roundtrip in fhetch (broken)
+#   - roundtrip-bootstrap          (CKKS bootstrap × primary + secondary decrypt)
 #
 # Override AUTO_OP=MUL AUTO_EXPECTED=21 to exercise the known-failing
 # relin path inside the auto-facade test.
