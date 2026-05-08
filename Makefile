@@ -479,20 +479,19 @@ test-fhetch-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Run the fhetch submodule's 
 	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) test-release
 
 # ==============================================================================
-# test-release — everything that currently passes
+# test-client-release / test-release — Release test aggregates
 # ==============================================================================
-# Aggregates the Release test targets known to succeed end-to-end in
-# both this repo AND the niobium-fhetch submodule:
+# test-client-release — client-level tests only; safe for GitHub-hosted runners.
+#   - test-simple-ops-release      (13 simple_ops, primary decrypt)
+#   - test-mult-release            (CKKS EvalMult, primary decrypt)
+#   - test-auto-ciphers-release    (auto-facade, AUTO_OP defaults to ADD)
+#   - test-bootstrap-release       (client → server → decrypt)
 #
-#   Client-level:
-#     - test-simple-ops-release      (13 simple_ops, primary decrypt)
-#     - test-mult-release            (CKKS EvalMult, primary decrypt)
-#     - test-auto-ciphers-release    (auto-facade, AUTO_OP defaults to ADD)
-#
-#   Submodule-level (via test-fhetch-release):
-#     - simple_fhetch                (FHETCH-only example, no OpenFHE)
-#     - fhetch_driver                (re-drive a .fhetch through the API)
-#     - roundtrip-simple-ops         (13 ops × primary + secondary decrypt)
+# test-release — full suite (client + fhetch submodule); run on internal server only.
+#   Adds via test-fhetch-release:
+#   - simple_fhetch                (FHETCH-only example, no OpenFHE)
+#   - fhetch_driver                (re-drive a .fhetch through the API)
+#   - roundtrip-simple-ops         (13 ops × primary + secondary decrypt)
 #
 # Deliberately excluded:
 #   - bootstrap roundtrip in fhetch (broken)
@@ -500,8 +499,11 @@ test-fhetch-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Run the fhetch submodule's 
 # Override AUTO_OP=MUL AUTO_EXPECTED=21 to exercise the known-failing
 # relin path inside the auto-facade test.
 
-## Run all currently-passing Release tests (this repo + niobium-fhetch submodule)
-test-release: test-simple-ops-release test-mult-release test-auto-ciphers-release test-fhetch-release test-bootstrap-release  
+## Run all client-level Release tests (CI target — no fhetch submodule)
+test-client-release: test-simple-ops-release test-mult-release test-auto-ciphers-release test-bootstrap-release
+
+## Run all currently-passing Release tests (client + fhetch submodule) — internal server only, do not run in CI
+test-release: test-client-release test-fhetch-release
 
 ##@ Cleanup
 
