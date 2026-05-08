@@ -141,7 +141,8 @@ jobs:
 
       - name: Output PR URL
         if: steps.check-update.outputs.update_needed == 'true' && steps.create-pr.outputs.pull-request-url
-        run: echo "Pull request created or updated: ${{ steps.create-pr.outputs.pull-request-url }}"
+        run: |
+          echo "Pull request created or updated: ${{ steps.create-pr.outputs.pull-request-url }}"
 
       - name: No update needed
         if: steps.check-update.outputs.update_needed == 'false'
