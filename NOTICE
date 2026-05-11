@@ -2,9 +2,9 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-05-08
+Generated: 2026-05-11
 Tool: SCANOSS (snippet detection with License dataset)
-Components: 82
+Components: 79
 
 This file lists all third-party software components detected
 in this repository, along with their licenses and copyright
@@ -29,20 +29,20 @@ LICENSE SUMMARY
   AFL-2.1: 1 component(s)
   AFL-3.0 AND GPL-2.0-only AND AFL-2.1 AND GPL-2.0-or-later AND MIT AND GPL-1.0-or-later: 1 component(s)
   AGPL-3.0-only [COPYLEFT]: 1 component(s)
-  Apache-2.0: 17 component(s)
+  Apache-2.0: 16 component(s)
   Apache-2.0 AND Apache-2.0 AND OpenSSL: 1 component(s)
   Apache-2.0 WITH LLVM-exception: 3 component(s)
-  Apache-2.0 WITH LLVM-exception AND NCSA: 3 component(s)
+  Apache-2.0 WITH LLVM-exception AND NCSA: 2 component(s)
   Apache-2.0 WITH LLVM-exception AND NCSA AND NCSA OR MIT AND NCSA AND MIT: 1 component(s)
   Artistic-1.0-Perl: 1 component(s)
   Artistic-1.0-Perl OR GPL-1.0-or-later: 1 component(s)
   Artistic-2.0: 1 component(s)
-  BSD-2-Clause: 9 component(s)
+  BSD-2-Clause: 8 component(s)
   BSD-2-Clause AND BSD-3-Clause: 1 component(s)
   BSD-2-Clause AND LGPL-2.1-only: 1 component(s)
   BSD-2-Clause-Darwin: 1 component(s)
   BSD-2-Clause-Patent: 1 component(s)
-  BSD-3-Clause: 35 component(s)
+  BSD-3-Clause: 34 component(s)
   BSD-3-Clause AND GPL-2.0-only AND BSD-3-Clause OR GPL-2.0-or-later AND GPL-1.0-or-later: 1 component(s)
   BSD-3-Clause AND ISC AND ISC AND MIT AND MIT: 1 component(s)
   BSD-3-Clause-LBNL: 1 component(s)
@@ -106,7 +106,7 @@ LICENSE SUMMARY
   GPL-2.0-or-later [COPYLEFT]: 2 component(s)
   GPL-3.0-linking-exception: 1 component(s)
   GPL-3.0-linking-source-exception: 1 component(s)
-  GPL-3.0-only [COPYLEFT]: 4 component(s)
+  GPL-3.0-only [COPYLEFT]: 3 component(s)
   GPL-3.0-only AND BSD-3-Clause AND GPL-1.0-or-later AND GPL-2.0-only: 1 component(s)
   GPL-3.0-only AND GPL-1.0-or-later AND BSD-3-Clause: 1 component(s)
   GPL-3.0-or-later AND FSFAP: 1 component(s)
@@ -118,7 +118,7 @@ LICENSE SUMMARY
   HPND-sell-variant: 1 component(s)
   HPND-sell-variant AND MIT: 1 component(s)
   ICU: 1 component(s)
-  ISC: 3 component(s)
+  ISC: 2 component(s)
   ISC AND BSD-Source-Code AND BSD-3-Clause AND BSD-2-Clause AND Zlib: 1 component(s)
   Jam: 1 component(s)
   LGPL-2.0-only [COPYLEFT]: 1 component(s)
@@ -143,7 +143,7 @@ LICENSE SUMMARY
   LPPL-1.3c: 1 component(s)
   Libpng: 1 component(s)
   Linux-syscall-note: 1 component(s)
-  MIT: 20 component(s)
+  MIT: 19 component(s)
   MIT AND Apache-2.0: 1 component(s)
   MIT AND GPL-2.0-only AND GPL-1.0-or-later AND MIT AND GPL-1.0-or-later AND MIT AND Boehm-GC AND GPL-1.0-or-later: 1 component(s)
   MIT AND GPL-3.0-only: 1 component(s)
@@ -495,15 +495,6 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2016-2023 Viktor Kirilov
   License: MPL-2.0
 
-  emacs
-  Version: emacs-24.3.90
-  Source: https://github.com/emacs-mirror/emacs
-  PURL: pkg:github/emacs-mirror/emacs
-  Copyright:
-    Copyright (C) 2002-2014 Free Software Foundation; Inc.
-    Copyright (c) 2002-2014 Free Software Foundation; Inc.
-  License: GPL-3.0-only
-
   Fall_Semester_programing
   Version: 67
   Source: https://github.com/Kirya23/Fall_Semester_programing
@@ -617,7 +608,6 @@ COMPONENT ATTRIBUTIONS
   PURL: pkg:nuget/google-testmock
   Copyright:
     Copyright 2005; Google Inc.
-    Copyright 2007; Google Inc.
     Copyright 2008; Google Inc.
   License: BSD-3-Clause
 
@@ -771,7 +761,6 @@ COMPONENT ATTRIBUTIONS
   Copyright:
     Copyright 2007 Free Software Foundation Inc.  http:  fsf.org
     Copyright 2013-2019 Niels Lohmann  http:  nlohmann.me
-    Copyright 2013-2022 Niels Lohmann
     Copyright 2013-2022 Niels Lohmann  http:  nlohmann.me
     Copyright 2013-2023 Niels Lohmann
     Copyright 2013-2025 Niels Lohmann
@@ -782,7 +771,6 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2012; Erik Edlund <erik.edlund@32767.se>
     Copyright (c) 2013-2019 Niels Lohmann <http:  nlohmann.me>
     Copyright (c) 2013-2019 Niels Lohmann <http:  nlohmann.me>.
-    Copyright (c) 2013-2022 Niels Lohmann
     Copyright (c) 2013-2022 Niels Lohmann <http:  nlohmann.me>
     Copyright (c) 2013-2022 Niels Lohmann <http:  nlohmann.me>.
     Copyright (c) 2016-2021 Viktor Kirilov
@@ -895,36 +883,6 @@ COMPONENT ATTRIBUTIONS
     Copyright 2017 Roman Lebedev. All rights reserved.
     Copyright copyright owner or entity authorized by
   License: Apache-2.0
-
-  llvm-daily-fedora-rpms
-  Version: source-snapshot
-  Source: https://github.com/kwk/llvm-daily-fedora-rpms
-  PURL: pkg:github/kwk/llvm-daily-fedora-rpms
-  Copyright:
-    Copyright 2008 Google Inc
-    Copyright 2016 Ismael Jimenez Martinez. All rights reserved
-    Copyright 2017 Roman Lebedev. All rights reserved
-    Copyright 2021 Google Inc. All rights reserved
-    Copyright COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM; DAMAGES OR OTHER
-    Copyright (c) 2006 Kirill Simonov
-    Copyright (c) 2010-2015 Benjamin Peterson
-    Copyright (c) 2013-2014; Pexpect development team
-    Copyright (c) 2019 Intel Corporation. All rights reserved.
-    Copyright .. 2002-2009 Michael J. Fromberger
-    Copyright 2005; Google Inc.
-    Copyright 2006; Google Inc.
-    Copyright 2007; Google Inc.
-    Copyright 2008 Google Inc.
-    Copyright 2008; Google Inc.
-    Copyright 2013; Google Inc.
-    Copyright 2015; Google Inc.
-    Copyright 2016 Ismael Jimenez Martinez
-    Copyright 2016 Ismael Jimenez Martinez. All rights reserved.
-    Copyright 2017 Roman Lebedev. All rights reserved.
-    Copyright 2021 Google Inc.
-    Copyright 2021 Google Inc. All rights reserved.
-    Copyright copyright owner or entity authorized by
-  License: Apache-2.0, Apache-2.0 WITH LLVM-exception AND NCSA, BSD-3-Clause, ISC, MIT
 
   llvm-nightly
   Version: snapshot-20211216
@@ -1293,12 +1251,8 @@ COMPONENT ATTRIBUTIONS
   Source: https://github.com/upx/upx
   PURL: pkg:github/upx/upx
   Copyright:
-    Copyright 1996-2014 Free Software Foundation Inc
     Copyright 1999-2017 Free Software Foundation Inc
-    Copyright (C) 1994 X Consortium
-    Copyright (C) 1996-2014 Free Software Foundation; Inc.
     Copyright (C) 1999-2017 Free Software Foundation; Inc.
-    Copyright (c) 1996-2014 Free Software Foundation; Inc.
     Copyright (c) 1999-2017 Free Software Foundation; Inc.
   License: GPL-2.0-or-later
 
@@ -1341,15 +1295,6 @@ COMPONENT ATTRIBUTIONS
     Copyright 2018; Google Inc.
     Copyright 2019; Google LLC.
   License: Apache-2.0
-
-  xmlf90
-  Version: 1.5
-  Source: https://launchpad.net/xmlf90/trunk/1.5/+download/xmlf90-1.5.1.tar.gz
-  PURL: pkg:deb/xmlf90
-  Copyright:
-    Copyright (C) 2011-2017 Free Software Foundation; Inc.
-    Copyright (c) 2011-2017 Free Software Foundation; Inc.
-  License: BSD-2-Clause
 
 ------------------------------------------------------------
 
