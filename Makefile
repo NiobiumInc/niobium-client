@@ -253,6 +253,30 @@ test-bootstrap-release: build-release ## Run the bootstrap example: client → s
 	@echo "=== Running bootstrap decrypt ==="
 	$(BUILD_DIR)/examples/bootstrap_decrypt bootstrap_keys
 
+test-plaintext-add: build ## Run the plaintext-add example: client → server → decrypt (Debug)
+	$(call set-build-config,Debug,dbuild)
+	@rm -rf plaintext_add_keys plaintext_add_server_*
+	@echo "=== Running plaintext_add client ==="
+	$(BUILD_DIR)/examples/plaintext_add_client plaintext_add_keys
+	@echo ""
+	@echo "=== Running plaintext_add server ==="
+	$(BUILD_DIR)/examples/plaintext_add_server plaintext_add_keys
+	@echo ""
+	@echo "=== Running plaintext_add decrypt ==="
+	$(BUILD_DIR)/examples/plaintext_add_decrypt plaintext_add_keys
+
+test-plaintext-add-release: build-release ## Run the plaintext-add example: client → server → decrypt (Release)
+	$(call set-build-config,Release,build)
+	@rm -rf plaintext_add_keys plaintext_add_server_*
+	@echo "=== Running plaintext_add client ==="
+	$(BUILD_DIR)/examples/plaintext_add_client plaintext_add_keys
+	@echo ""
+	@echo "=== Running plaintext_add server ==="
+	$(BUILD_DIR)/examples/plaintext_add_server plaintext_add_keys
+	@echo ""
+	@echo "=== Running plaintext_add decrypt ==="
+	$(BUILD_DIR)/examples/plaintext_add_decrypt plaintext_add_keys
+
 # Default op exercised by the auto-facade test. ADD is the richest op
 # that currently PASSES both the recording decrypt and the replay
 # decrypt. MUL (and anything relin-heavy) records correctly but the
@@ -478,6 +502,7 @@ test-fhetch-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Run the fhetch submodule's 
 	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) config-fhetch-release
 	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) test-release
 	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) test-roundtrip-bootstrap-release
+	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) test-roundtrip-plaintext-add-release
 
 # ==============================================================================
 # test-client-release / test-release — Release test aggregates
@@ -499,7 +524,7 @@ test-fhetch-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Run the fhetch submodule's 
 # relin path inside the auto-facade test.
 
 ## Run all client-level Release tests (CI target — no fhetch submodule)
-test-client-release: test-simple-ops-release test-mult-release test-auto-ciphers-release test-bootstrap-release
+test-client-release: test-simple-ops-release test-mult-release test-auto-ciphers-release test-bootstrap-release test-plaintext-add-release
 
 ## Run all currently-passing Release tests (client + fhetch submodule) — internal server only, do not run in CI
 test-release: test-client-release test-fhetch-release
@@ -509,8 +534,8 @@ test-release: test-client-release test-fhetch-release
 clean: ## Remove all build artifacts
 	-rm -rf build dbuild
 	-rm -rf $(OPENFHE_DIR)/build $(OPENFHE_DIR)/dbuild
-	-rm -rf bootstrap_keys mult_keys simple_ops_keys
-	-rm -rf bootstrap_server_* mult_server_* simple_ops_server_*
+	-rm -rf bootstrap_keys mult_keys simple_ops_keys plaintext_add_keys
+	-rm -rf bootstrap_server_* mult_server_* simple_ops_server_* plaintext_add_server_*
 
 clean-all: clean ## Deep clean including vendor installations
 	-rm -rf $(VENDOR_LIB_DIR)
