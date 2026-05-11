@@ -60,6 +60,22 @@ set_openfhe_rpath(simple_ops_server)
 set_openfhe_rpath(simple_ops_decrypt)
 
 # ==============================================================================
+# Plaintext-add example — client / server / decrypt
+# ==============================================================================
+
+add_executable(plaintext_add_client  plaintext_add/client.cpp)
+add_executable(plaintext_add_server  plaintext_add/server.cpp)
+add_executable(plaintext_add_decrypt plaintext_add/decrypt.cpp)
+
+target_link_libraries(plaintext_add_client  PRIVATE niobium_fhetch)
+target_link_libraries(plaintext_add_server  PRIVATE niobium_fhetch)
+target_link_libraries(plaintext_add_decrypt PRIVATE niobium_fhetch)
+
+set_openfhe_rpath(plaintext_add_client)
+set_openfhe_rpath(plaintext_add_server)
+set_openfhe_rpath(plaintext_add_decrypt)
+
+# ==============================================================================
 # Auto-facade example — zero niobium:: boilerplate in user code
 # ==============================================================================
 # Built only when the auto-facade helper lib is built too (default ON).
