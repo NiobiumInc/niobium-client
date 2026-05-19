@@ -67,7 +67,22 @@ set(OPENFHE_LIBRARY_PATH "${OPENFHE_INSTALL_DIR}/lib")
 set(NIOBIUM_CLIENT_FHETCH_DIR "" CACHE PATH
     "External niobium-fhetch source tree to use instead of vendor/niobium-fhetch (empty = use vendored submodule)")
 
-if(NIOBIUM_CLIENT_FHETCH_DIR)
+set(NIOBIUM_FHETCH_INSTALL_DIR "" CACHE PATH
+    "Pre-built niobium-fhetch install prefix (lib/libnbfhetch.so + include/niobium/). When set, skips source build entirely. Used by SDK distribution builds.")
+
+if(NIOBIUM_FHETCH_INSTALL_DIR)
+    # Pre-built mode: import installed library directly.
+    # OPENFHE_INSTALL_DIR must point to the same OpenFHE the library was built against.
+    add_library(niobium_fhetch SHARED IMPORTED GLOBAL)
+    set_target_properties(niobium_fhetch PROPERTIES
+        IMPORTED_LOCATION             "${NIOBIUM_FHETCH_INSTALL_DIR}/lib/libnbfhetch.so"
+        INTERFACE_INCLUDE_DIRECTORIES "${NIOBIUM_FHETCH_INSTALL_DIR}/include"
+        INTERFACE_COMPILE_DEFINITIONS "OPENFHE_CPROBES"
+        INTERFACE_LINK_DIRECTORIES    "${OPENFHE_LIBRARY_PATH}"
+        INTERFACE_LINK_LIBRARIES      "OPENFHEpke;OPENFHEcore;OPENFHEbinfhe"
+    )
+    add_library(Niobium::fhetch ALIAS niobium_fhetch)
+elseif(NIOBIUM_CLIENT_FHETCH_DIR)
     add_subdirectory(${NIOBIUM_CLIENT_FHETCH_DIR}
                      ${CMAKE_BINARY_DIR}/_deps/niobium-fhetch-build)
 else()

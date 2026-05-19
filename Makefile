@@ -83,8 +83,12 @@ endif
 
 # CMake -D flags that are only emitted when the corresponding override is set.
 # Quote the path so cmake receives a single argument even if it contains spaces.
-CMAKE_CLIENT_FHETCH_DIR_FLAG := $(if $(NIOBIUM_CLIENT_FHETCH_DIR),-DNIOBIUM_CLIENT_FHETCH_DIR="$(NIOBIUM_CLIENT_FHETCH_DIR)")
-CMAKE_JSON_INCLUDE_DIR_FLAG  := $(if $(JSON_INCLUDE_DIR),-DJSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)")
+CMAKE_CLIENT_FHETCH_DIR_FLAG  := $(if $(NIOBIUM_CLIENT_FHETCH_DIR),-DNIOBIUM_CLIENT_FHETCH_DIR="$(NIOBIUM_CLIENT_FHETCH_DIR)")
+CMAKE_FHETCH_INSTALL_DIR_FLAG := $(if $(NIOBIUM_FHETCH_INSTALL_DIR),-DNIOBIUM_FHETCH_INSTALL_DIR="$(NIOBIUM_FHETCH_INSTALL_DIR)")
+CMAKE_JSON_INCLUDE_DIR_FLAG   := $(if $(JSON_INCLUDE_DIR),-DJSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)")
+
+# SDK distribution build: root of the extracted SDK tar (default: parent of this client/ dir).
+SDK_DIR ?= $(abspath $(CURDIR)/..)
 
 # OpenMP toggle (OFF by default, override with: make config-openfhe OPENMP=ON)
 OPENMP ?= OFF
@@ -100,6 +104,7 @@ NATIVEOPT ?= OFF
         config config-release build build-release release \
         config-openfhe config-openfhe-release build-openfhe build-openfhe-release \
         config-client config-client-release \
+        sdk-config-release sdk-release \
         install install-release clean clean-all
 
 ##@ Primary Targets
@@ -196,10 +201,28 @@ config-client-release: ## Configure the client + fhetch library + examples (Rele
 		-DCMAKE_BUILD_TYPE=Release \
 		-DOPENFHE_INSTALL_DIR=$(OPENFHE_INSTALL_DIR) \
 		$(CMAKE_CLIENT_FHETCH_DIR_FLAG) \
+		$(CMAKE_FHETCH_INSTALL_DIR_FLAG) \
 		$(CMAKE_JSON_INCLUDE_DIR_FLAG) \
 		-DNIOBIUM_CLIENT_WITH_EXAMPLES=ON \
 		-DCMAKE_INSTALL_PREFIX=$(CLIENT_INSTALL_DIR)
 	@$(call write-build-env,build)
+
+##@ SDK Distribution Build
+
+sdk-config-release: ## Configure against a pre-built Niobium SDK (Release). SDK_DIR defaults to parent directory.
+	$(call set-build-config,Release,build)
+	cmake -S $(CURDIR) -B $(CURDIR)/build \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DOPENFHE_INSTALL_DIR=$(SDK_DIR) \
+		-DNIOBIUM_FHETCH_INSTALL_DIR=$(SDK_DIR)/fhetch \
+		$(CMAKE_JSON_INCLUDE_DIR_FLAG) \
+		-DNIOBIUM_CLIENT_WITH_EXAMPLES=ON \
+		-DCMAKE_INSTALL_PREFIX=$(CLIENT_INSTALL_DIR)
+	@$(call write-build-env,build)
+
+sdk-release: sdk-config-release ## Configure + build against a pre-built Niobium SDK (Release). SDK_DIR defaults to parent directory.
+	$(call set-build-config,Release,build)
+	cmake --build build -j $(NUM_CPUS) --config Release
 
 ##@ Combined Targets
 
