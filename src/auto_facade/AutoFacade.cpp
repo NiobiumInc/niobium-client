@@ -41,6 +41,14 @@
 bool g_replay_mode = false;
 std::atomic<uint64_t> g_replay_noop_count{0};
 
+// Forward declaration for the loader exposed by libnbfhetch. Declared
+// at top-level (outside the niobium_auto namespace) so the symbol
+// resolves correctly at link time. Implemented in
+// vendor/niobium-fhetch/src/auto_facade.cpp.
+namespace niobium { namespace detail {
+bool load_plaintext_input_file(const std::string& name);
+}}
+
 namespace niobium_auto {
 
 // ---------------------------------------------------------------------------
@@ -83,6 +91,18 @@ static uint64_t g_probe_counter{0};
 // on_deserialize_ciphertext hook gives both runs an identical
 // allocator state (CC + keys loaded, ciphertexts about to be tagged).
 static std::atomic<bool> g_keys_tagged{false};
+
+// Auto-incrementing counter for plaintexts intercepted via on_make_plaintext.
+// The program is deterministic so the Nth Make*Plaintext call gets the same
+// "pt_<N>" name on record and replay — record's tag_input writes
+// <prog>.input_pt_<N>.bin/.ids, and replay's loader reads them back into
+// captured_inputs at the same FHETCH addresses.
+static uint64_t g_plaintext_counter{0};
+
+// Re-entrancy guard: niobium-fhetch's tag/bootstrap paths may transitively
+// trigger Make*Plaintext while we're already in the hook. Without this the
+// counter would race.
+static thread_local bool g_in_make_plaintext_hook = false;
 
 // Track probed ciphertext pointers -> probe name, to avoid double-probing
 // and to let on_decrypt use the same name that on_serialize used.
@@ -566,6 +586,42 @@ bool on_decrypt(lbcrypto::Ciphertext<lbcrypto::DCRTPoly> &ct) {
   }
 
   return false;
+}
+
+void on_make_plaintext(lbcrypto::Plaintext &pt) {
+  // Activate only when the auto-facade is actually driving the run.
+  if (!g_initialized.load(std::memory_order_acquire)) return;
+  if (g_mode == Mode::DORMANT || g_mode == Mode::UNINITIALIZED) return;
+  if (g_in_make_plaintext_hook) return;
+  g_in_make_plaintext_hook = true;
+  struct Guard { ~Guard() { g_in_make_plaintext_hook = false; } } guard;
+
+  // Deterministic name — counter advances in lock-step on record + replay
+  // (program is deterministic, hook fires at every Make*Plaintext site).
+  std::string name = "pt_" + std::to_string(g_plaintext_counter++);
+
+  if (g_mode == Mode::RECORD) {
+    // Real pt: tag it as an input — write .bin/.ids files + push entries
+    // into captured_inputs so the FHETCH simulator finds the plaintext
+    // polynomial values as live-in data.
+    if (pt) {
+      niobium::compiler().tag_input(name, pt);
+    }
+    return;
+  }
+
+  // g_mode == REPLAY: pt is null (cryptocontext.h's Make*Plaintext returns
+  // nullptr in replay as a shortcut). Rehydrate captured_inputs from the
+  // <prog>.input_pt_<N>.bin/.ids files the recording wrote. Addresses on
+  // disk are the record-time FHETCH addresses, which is what the trace
+  // expects.
+  if (::niobium::detail::load_plaintext_input_file(name)) {
+    std::cout << "[niobium_auto] Rehydrated plaintext '" << name
+              << "' from disk for replay\n";
+  } else {
+    std::cerr << "[niobium_auto] Warning: failed to load plaintext '"
+              << name << "' from disk on replay\n";
+  }
 }
 
 } // namespace niobium_auto
