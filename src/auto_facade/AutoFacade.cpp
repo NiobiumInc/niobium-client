@@ -73,6 +73,17 @@ static bool g_recording{false};
 // Auto-incrementing probe counter for Decrypt-time probing
 static uint64_t g_probe_counter{0};
 
+// One-shot flag: tag_keys() must fire at the SAME point in the program
+// on record and replay so the FHETCH compact-address allocator hands
+// key polynomials the same addresses on both runs. Calling it from
+// atexit (record) and ensure_replayed (replay) creates an asymmetry —
+// in record, Eval ops have already consumed many address slots for
+// intermediates by then; in replay, the proxy short-circuits Eval ops
+// so the allocator is still empty. Anchoring tag_keys to the first
+// on_deserialize_ciphertext hook gives both runs an identical
+// allocator state (CC + keys loaded, ciphertexts about to be tagged).
+static std::atomic<bool> g_keys_tagged{false};
+
 // Track probed ciphertext pointers -> probe name, to avoid double-probing
 // and to let on_decrypt use the same name that on_serialize used.
 static std::unordered_map<const void*, std::string> g_probed_cts;
@@ -243,15 +254,9 @@ static void atexit_handler() {
       if (real != g_cc->GetScheme())
         g_cc->SetScheme(real);
     }
-    // Now that user code has finished (and thus loaded keys via
-    // DeserializeEvalMultKey / DeserializeEvalAutomorphismKey), walk the
-    // CC's key maps and tag every DCRTPoly tower into captured_inputs.
-    // tag_keys needs to run *during* the active recording session — once
-    // stop() fires the session ends — so this has to be the last thing
-    // before stop() below.
-    if (g_cc) {
-      niobium::compiler().tag_keys(g_cc);
-    }
+    // tag_keys() already fired lazily in on_deserialize_ciphertext (so
+    // record + replay share an allocator state at key-tag time). Just
+    // close out the recording.
     niobium::compiler().stop();
     g_recording = false;
     // Note: do NOT call replay() here. Replay inside the destructor path
@@ -376,15 +381,14 @@ void on_deserialize_crypto_context(lbcrypto::CryptoContext<lbcrypto::DCRTPoly> &
   if (g_mode == Mode::DORMANT)
     return;
 
-  // Install the proxy scheme only on replay. During recording the real
-  // scheme + OPENFHE_CPROBES probes already capture every operation, and
-  // the proxy's extra ct-mutation path was observed to produce templates
-  // whose sim-reconstructed values decrypt past the CKKS approximation
-  // tolerance for relin-heavy ops like MUL. On replay we need the proxy
-  // so Eval* returns dummies cheaply.
-  if (g_mode == Mode::REPLAY) {
-    cc->SetScheme(std::make_shared<lbcrypto::NiobiumAutoScheme>(cc->GetScheme(), cc));
-  }
+  // Install the NiobiumAutoScheme proxy on both record and replay (matches
+  // the niobium-compiler auto-facade contract). In record the proxy is
+  // a pure passthrough (forwards to m_real); in replay it short-circuits
+  // compute ops to a dummy. A previous workaround installed only on
+  // replay to chase a MUL/relin precision bug — the actual cause was
+  // tag_keys() timing (see below), not the proxy install. Removing the
+  // asymmetry brings the client flow in line with the compiler reference.
+  cc->SetScheme(std::make_shared<lbcrypto::NiobiumAutoScheme>(cc->GetScheme(), cc));
 
   // If auto-facade determined recording mode, start now.
   // The running_p() guard prevents double-starting if Compiler::start() already ran.
@@ -433,6 +437,24 @@ void on_deserialize_ciphertext(const std::string &filepath,
   // is about to write computed output to, which corrupts replay.
   if (g_in_facade_io) return;
 
+  // Tag the eval keys lazily on first user-ciphertext deserialize. By this
+  // point user code has already loaded the CC and the eval keys (cc.bin
+  // and the eval-key files come before the first input ciphertext in every
+  // observed flow); the address allocator state is identical between
+  // record and replay (both have CC tags + key tags only, no intermediates).
+  // Calling tag_keys later (atexit on record / ensure_replayed on replay)
+  // produces asymmetric addresses because record's Eval ops have consumed
+  // many address slots while replay's proxied Eval ops have consumed
+  // zero — the trace then references record-time key addresses that the
+  // replay sim never populated.
+  bool expected = false;
+  if (g_keys_tagged.compare_exchange_strong(expected, true,
+                                            std::memory_order_acq_rel)) {
+    if (g_cc) {
+      niobium::compiler().tag_keys(g_cc);
+    }
+  }
+
   // niobium-fhetch's Compiler doesn't expose cached_input()'s skip-if-present
   // fast path; tag the input unconditionally. The library-side dedup
   // protection in captured_inputs handles accidental double-registration.
@@ -453,16 +475,9 @@ static void ensure_replayed() {
   bool expected = false;
   if (g_replay_done.compare_exchange_strong(expected, true,
                                             std::memory_order_acq_rel)) {
-    // At this point the user's DeserializeEvalMultKey /
-    // DeserializeEvalAutomorphismKey have finished (they run before any
-    // Eval* call that would fire the hooks we arrive through). Tag the
-    // keys now so captured_inputs carries their polynomial values into
-    // Compiler::replay(). Without this, live-in addresses for relin +
-    // rotation key polys stay uninitialized at replay time and any
-    // relin-based op decrypts to noise.
-    if (g_cc) {
-      niobium::compiler().tag_keys(g_cc);
-    }
+    // tag_keys() already fired lazily in on_deserialize_ciphertext so
+    // the FHETCH compact-address allocator handed keys the same
+    // addresses on record and replay. Just run the simulator.
     niobium::compiler().replay();
   }
 }
