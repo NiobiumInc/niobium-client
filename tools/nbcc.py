@@ -100,6 +100,24 @@ def parse_args():
     parser.add_argument("--keys-mult", default=None, help="Path to eval mult key")
     parser.add_argument("--keys-auto", default=None, help="Path to eval automorphism key")
 
+    # fhetch_driver mode — on cache-valid runs, replay the recorded trace via
+    # fhetch_driver (which loads inputs from the recorded .bin/.ids files at
+    # their record-time FHETCH addresses) instead of re-executing the target
+    # binary. Works around the auto-facade's cross-process allocator
+    # divergence: re-running the user code in autoscheme mode assigns inputs
+    # different addresses than the trace expects.
+    parser.add_argument("--fhetch-driver", default=None, metavar="PATH",
+                        help="Path to fhetch_driver binary. When set and the "
+                             "trace already exists, exec the driver instead of "
+                             "the target binary (cache-valid replay path).")
+    parser.add_argument("--driver-cc", default=None, metavar="PATH",
+                        help="Path to cc.bin (forwarded to fhetch_driver --cc)")
+    parser.add_argument("--driver-ring-dim", default=None, metavar="N",
+                        help="Ring dimension (forwarded to fhetch_driver --ring-dim)")
+    parser.add_argument("--driver-output", action="append", metavar="NAME:PATH",
+                        help="Output ciphertext to reconstruct (NAME:PATH, repeatable; "
+                             "forwarded to fhetch_driver --output-ct)")
+
     # Compiler flags
     # "local" keeps recording + replay in-process via the FHETCH simulator.
     # Any other value (e.g. "FUNC_SIM", "fpga5.2") tells libnbfhetch's
@@ -175,6 +193,35 @@ def main():
 
     # Set env and exec
     os.environ["NIOBIUM_CONFIG"] = yml_path
+
+    # If --fhetch-driver was supplied and the trace already exists for this
+    # program name, dispatch to the driver to replay the recorded workload
+    # instead of re-executing the target binary. The driver reads .bin/.ids
+    # files written during recording and uses those addresses directly,
+    # sidestepping the auto-facade's allocator divergence on cross-process
+    # replay.
+    if args.fhetch_driver:
+        program_dir = os.path.join(".", args.name)
+        trace_file = os.path.join(program_dir, f"{args.name}.fhetch")
+        if os.path.exists(trace_file):
+            if not args.driver_cc:
+                sys.stderr.write("nbcc.py: --fhetch-driver requires --driver-cc\n")
+                sys.exit(2)
+            if not args.driver_ring_dim:
+                sys.stderr.write("nbcc.py: --fhetch-driver requires --driver-ring-dim\n")
+                sys.exit(2)
+            driver_cmd = [
+                args.fhetch_driver,
+                trace_file,
+                "--ring-dim", args.driver_ring_dim,
+                "--source-dir", program_dir,
+                "--cc", args.driver_cc,
+            ]
+            for spec in args.driver_output or []:
+                driver_cmd += ["--output-ct", spec]
+            print(f"nbcc.py: cache hit, exec fhetch_driver: {' '.join(driver_cmd)}")
+            os.execvp(args.fhetch_driver, driver_cmd)
+
     executable = args.command[0]
     os.execvp(executable, args.command)
 
