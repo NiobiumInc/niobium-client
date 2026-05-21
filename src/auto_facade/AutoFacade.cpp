@@ -478,7 +478,31 @@ void on_deserialize_ciphertext(const std::string &filepath,
   // niobium-fhetch's Compiler doesn't expose cached_input()'s skip-if-present
   // fast path; tag the input unconditionally. The library-side dedup
   // protection in captured_inputs handles accidental double-registration.
-  const std::string name = path_stem(filepath);
+  //
+  // Use the full path with separators escaped (so the resulting name is a
+  // single filename-safe token), not just the stem: programs that load
+  // multiple ciphertexts with the same stem from different directories
+  // (e.g. fetch-by-similarity's mat_vec_mult reads batch<j>/row_<i>.bin —
+  // every batch has its own row_0000.bin) would otherwise collide on the
+  // shared name "row_0000", overwriting each other's .bin/.ids files on
+  // disk and losing earlier batches' addresses.
+  auto unique_name = [](const std::string& path) {
+    // Strip trailing .bin (if any) then replace path separators with '_'.
+    std::string s = path;
+    const std::string ext = ".bin";
+    if (s.size() >= ext.size() && s.compare(s.size() - ext.size(), ext.size(), ext) == 0)
+      s.resize(s.size() - ext.size());
+    for (auto& c : s)
+      if (c == '/' || c == '\\' || c == ':' || c == ' ')
+        c = '_';
+    // Drop any leading '_' from absolute paths so the .input_<name>.bin
+    // file doesn't end up named ".input__Users_...".
+    size_t first = s.find_first_not_of('_');
+    if (first != std::string::npos && first > 0)
+      s.erase(0, first);
+    return s;
+  };
+  const std::string name = unique_name(filepath);
   niobium::compiler().tag_input(name, ct, filepath);
 }
 
