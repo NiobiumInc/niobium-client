@@ -502,7 +502,19 @@ void on_deserialize_ciphertext(const std::string &filepath,
       s.erase(0, first);
     return s;
   };
-  const std::string name = unique_name(filepath);
+  // Append a per-filepath load counter so repeated deserializes of the
+  // SAME filepath each get their own `.input_<name>_<N>.bin/.ids` pair
+  // on disk. tag_input<Ciphertext> overwrites the on-disk files on
+  // every call, so without this counter only the LAST load's addr_ids
+  // survive on disk for a given path — even though in-memory
+  // captured_inputs accumulates them all. Cross-process replay reads
+  // disk, so it misses every load except the last. (Hit by FBS's
+  // mat_vec_mult outer-i loop, which reloads each
+  // batch<k>/payload_<j>.bin once per i ∈ [1, MaxNMatch].)
+  static std::unordered_map<std::string, size_t> g_load_counter;
+  const std::string base = unique_name(filepath);
+  size_t n = g_load_counter[base]++;
+  std::string name = base + "_load_" + std::to_string(n);
   niobium::compiler().tag_input(name, ct, filepath);
 }
 
