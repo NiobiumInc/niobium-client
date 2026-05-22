@@ -14,6 +14,7 @@
 # Overrides:
 #   A, B               Plaintext operands (default 7, 13).
 #   PORT               Server port (default 9443).
+#   TARGET             Replay target passed to mult_server (default FUNC_SIM).
 #   NIOBIUM_COMPILER_ROOT   Path to niobium-compiler checkout.
 # ============================================================================
 set -euo pipefail
@@ -23,6 +24,7 @@ CLIENT_ROOT="$(cd "$HERE/.." && pwd)"
 : "${NIOBIUM_COMPILER_ROOT:=$(cd "$CLIENT_ROOT/../.." && pwd)}"
 : "${NIOBIUM_COMPILER_BUILD:=$NIOBIUM_COMPILER_ROOT/build}"
 : "${PORT:=9443}"
+: "${TARGET:=FUNC_SIM}"
 : "${A:=7}"
 : "${B:=13}"
 
@@ -99,12 +101,12 @@ rm -rf mult_keys mult_server_workload_*
 LD_LIBRARY_PATH="$OPENFHE_LIB" "$mult_client" mult_keys "$A" "$B"
 
 echo
-echo "=== [3/4] mult_server --target=FUNC_SIM (through transport) ==="
+echo "=== [3/4] mult_server --target=$TARGET (through transport) ==="
 # Put the forwarder first on PATH so Compiler::replay()'s system() call
 # hits it — matches the production install layout.
 export PATH="$TRANSPORT_DIR:$PATH"
 export NBCC_FHETCH_SERVER="http://127.0.0.1:$PORT"
-LD_LIBRARY_PATH="$OPENFHE_LIB" "$mult_server" mult_keys --target=FUNC_SIM
+LD_LIBRARY_PATH="$OPENFHE_LIB" "$mult_server" mult_keys --target="$TARGET"
 
 echo
 echo "=== [4/4] mult_decrypt ==="
