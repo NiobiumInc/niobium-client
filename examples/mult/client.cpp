@@ -6,8 +6,8 @@
 // Generates a CKKS crypto context, keys, and encrypts two values.
 // All artifacts are serialized to a directory for the server to consume.
 //
-// Usage: ./mult_client [output_dir [a b]]
-//   Defaults: output_dir=mult_keys, a=7.0, b=13.0
+// Usage: ./mult_client [output_dir [a [b [ring_dim]]]]
+//   Defaults: output_dir=mult_keys, a=7.0, b=13.0, ring_dim=2048
 
 #include "openfhe.h"
 
@@ -23,10 +23,12 @@ using namespace lbcrypto;
 int main(int argc, char* argv[]) {
     std::string outputDir = "mult_keys";
     double a = 7.0, b = 13.0;
+    uint32_t ring_dim = 2048;
 
     if (argc > 1) outputDir = argv[1];
     if (argc > 2) a = std::stod(argv[2]);
     if (argc > 3) b = std::stod(argv[3]);
+    if (argc > 4) ring_dim = static_cast<uint32_t>(std::stoul(argv[4]));
 
     std::cout << "=== CKKS Multiply — Client (Key Generation) ===" << std::endl;
     std::cout << "Output directory: " << outputDir << std::endl;
@@ -34,10 +36,10 @@ int main(int argc, char* argv[]) {
 
     std::filesystem::create_directories(outputDir);
 
-    // ---- CKKS parameters (matching compiler's TOY defaults) ----
+    // ---- CKKS parameters ----
     CCParams<CryptoContextCKKSRNS> parameters;
     parameters.SetSecurityLevel(HEStd_NotSet);
-    parameters.SetRingDim(2048);
+    parameters.SetRingDim(ring_dim);
     parameters.SetMultiplicativeDepth(3);
     parameters.SetScalingModSize(42);
     parameters.SetFirstModSize(57);
