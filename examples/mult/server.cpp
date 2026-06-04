@@ -128,9 +128,11 @@ int main(int argc, char* argv[]) {
                         const auto& sv = sm_towers[t].GetValues();
                         const auto o_mod = ov.GetModulus();
                         const auto s_mod = sv.GetModulus();
-                        if (o_mod.ConvertToInt()  != s_mod.ConvertToInt() ){
-                            std::cout << "shit's fucked at " << t << " openfhe mod" << o_mod << " sim mod " << s_mod << "\n"; 
-                            exit(1);
+                        if (o_mod.ConvertToInt() != s_mod.ConvertToInt()) {
+                            throw std::runtime_error(
+                                "[DIFF] modulus mismatch at tower " + std::to_string(t) +
+                                ": openfhe=" + std::to_string(o_mod.ConvertToInt()) +
+                                " sim=" + std::to_string(s_mod.ConvertToInt()));
                         }
                         size_t diffs = 0;
                         uint64_t first_bad = 0;
@@ -160,7 +162,7 @@ int main(int argc, char* argv[]) {
             }
             std::cout << std::endl;
         };
-        compare_func(ct_openfhe, ct_result);
+        if (ct_openfhe) compare_func(ct_openfhe, ct_result);
 
         if (!Serial::SerializeToFile(keyDir + "/ct_result.bin", ct_result, SerType::BINARY)) {
             std::cerr << "Error: Failed to serialize result ciphertext" << std::endl;
@@ -179,13 +181,13 @@ int main(int argc, char* argv[]) {
             std::cout << "OpenFHE reference ciphertext written to " << keyDir << "/ct_result_openfhe.bin" << std::endl;
         }
 
-        // Deserialze the file we just wrote to see if it is still correct
-        std::cout << "\nRelaod Test \n";
+        // Deserialize the file we just wrote to see if it is still correct
+        std::cout << "\nReload Test\n";
         Ciphertext<DCRTPoly> temp;
         if (!Serial::DeserializeFromFile(keyDir + "/ct_result.bin", temp, SerType::BINARY))
-            throw std::runtime_error("Failed to load ciphertext a");
+            throw std::runtime_error("Failed to reload result ciphertext");
 
-        compare_func(ct_openfhe, temp);
+        if (ct_openfhe) compare_func(ct_openfhe, temp);
     } else {
         std::cerr << "[ERROR] Could not retrieve result" << std::endl;
         return 1;
