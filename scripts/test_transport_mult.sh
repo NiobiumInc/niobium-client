@@ -74,8 +74,7 @@ echo "=== [1/5] starting fhetch_server (port $PORT) ==="
 PORT="$PORT" BIND=127.0.0.1 \
 NIOBIUM_COMPILER_ROOT="$NIOBIUM_COMPILER_ROOT" \
 NIOBIUM_COMPILER_BUILD="$NIOBIUM_COMPILER_BUILD" \
-"$HERE/fhetch_server.sh" &
-# "$HERE/fhetch_server.sh" > "$SERVER_LOG" 2>&1 &
+"$HERE/fhetch_server.sh" > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 
 # Wait until /healthz answers or the server bails out.
@@ -111,22 +110,20 @@ LD_LIBRARY_PATH="$OPENFHE_LIB" "$mult_server" mult_keys --target="$TARGET"
 
 echo
 echo "=== [4/5] mult_decrypt ==="
-if LD_LIBRARY_PATH="$OPENFHE_LIB" "$mult_decrypt" mult_keys | tee /dev/stderr | grep -q '^\[PASS\]'; then
+if ! LD_LIBRARY_PATH="$OPENFHE_LIB" "$mult_decrypt" mult_keys | tee /dev/stderr | grep -q '^\[PASS\]'; then
   echo
-  echo "=== ✓ transport round-trip PASS ==="
-  # exit 0
-else
-  echo
-  echo "=== ✗ transport round-trip FAIL ==="
-  # exit 1
+  echo "=== ✗ transport round-trip FAIL (decrypt) ==="
+  exit 1
 fi
+echo
+echo "decrypt PASS — continuing to binary comparison"
 
 echo
 echo "=== [5/5] binary comparison ==="
 # Compute the hashes of the result openfhe computed, the result our pipeline writes to the final destination,
-# the ciphertext template the compiler uses, and the serialzied probe of the compiler
+# the ciphertext template the compiler uses, and the serialized probe of the compiler
 OPENFHE_RESULT_HASH=$(sha256sum mult_keys/ct_result_openfhe.bin | awk '{print $1}')
-echo "OpenFHE Gold Standart"
+echo "OpenFHE Gold Standard"
 echo $OPENFHE_RESULT_HASH
 
 FINAL_RESULT_HASH=$(sha256sum mult_keys/ct_result.bin | awk '{print $1}') 
