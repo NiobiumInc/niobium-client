@@ -10,6 +10,8 @@
 //
 // Usage: ./mult_server [key_dir]
 
+#include "ciphertext-fwd.h"
+#include "lattice/hal/lat-backend.h"
 #include "openfhe.h"
 #include "niobium/compiler.h"
 
@@ -109,10 +111,11 @@ int main(int argc, char* argv[]) {
     Ciphertext<DCRTPoly> ct_result;
     if (niobium::compiler().result(cc, "result", ct_result)) {
         // ---- Differential: compare simulator output vs OpenFHE's own EvalMult result ----
-        if (ct_openfhe) {
+        auto compare_func = [](Ciphertext<DCRTPoly>& ct_openfhe_, Ciphertext<DCRTPoly>& ct_result_){
+        
             std::cout << "\n--- Differential: simulator vs OpenFHE ---" << std::endl;
-            const auto& oe_elems = ct_openfhe->GetElements();
-            const auto& sm_elems = ct_result->GetElements();
+            const auto& oe_elems = ct_openfhe_->GetElements();
+            const auto& sm_elems = ct_result_->GetElements();
             if (oe_elems.size() != sm_elems.size()) {
                 std::cerr << "[DIFF] ciphertext size mismatch: openfhe=" << oe_elems.size()
                           << " simulator=" << sm_elems.size() << std::endl;
@@ -123,6 +126,12 @@ int main(int argc, char* argv[]) {
                     for (size_t t = 0; t < oe_towers.size(); ++t) {
                         const auto& ov = oe_towers[t].GetValues();
                         const auto& sv = sm_towers[t].GetValues();
+                        const auto o_mod = ov.GetModulus();
+                        const auto s_mod = sv.GetModulus();
+                        if (o_mod.ConvertToInt()  != s_mod.ConvertToInt() ){
+                            std::cout << "shit's fucked at " << t << " openfhe mod" << o_mod << " sim mod " << s_mod << "\n"; 
+                            exit(1);
+                        }
                         size_t diffs = 0;
                         uint64_t first_bad = 0;
                         uint64_t oe0 = 0, sm0 = 0;
@@ -150,13 +159,33 @@ int main(int argc, char* argv[]) {
                 }
             }
             std::cout << std::endl;
-        }
+        };
+        compare_func(ct_openfhe, ct_result);
 
         if (!Serial::SerializeToFile(keyDir + "/ct_result.bin", ct_result, SerType::BINARY)) {
             std::cerr << "Error: Failed to serialize result ciphertext" << std::endl;
             return 1;
         }
         std::cout << "Result ciphertext written to " << keyDir << "/ct_result.bin" << std::endl;
+
+        // Also serialize OpenFHE's own EvalMult result so external comparison
+        // (cmp against ct_result.bin) can confirm byte-equivalence with the
+        // simulator output on the working FUNC_SIM path.
+        if (ct_openfhe) {
+            if (!Serial::SerializeToFile(keyDir + "/ct_result_openfhe.bin", ct_openfhe, SerType::BINARY)) {
+                std::cerr << "Error: Failed to serialize OpenFHE reference ciphertext" << std::endl;
+                return 1;
+            }
+            std::cout << "OpenFHE reference ciphertext written to " << keyDir << "/ct_result_openfhe.bin" << std::endl;
+        }
+
+        // Deserialze the file we just wrote to see if it is still correct
+        std::cout << "\nRelaod Test \n";
+        Ciphertext<DCRTPoly> temp;
+        if (!Serial::DeserializeFromFile(keyDir + "/ct_result.bin", temp, SerType::BINARY))
+            throw std::runtime_error("Failed to load ciphertext a");
+
+        compare_func(ct_openfhe, temp);
     } else {
         std::cerr << "[ERROR] Could not retrieve result" << std::endl;
         return 1;

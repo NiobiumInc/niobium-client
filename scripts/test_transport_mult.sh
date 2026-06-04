@@ -70,11 +70,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "=== [1/4] starting fhetch_server (port $PORT) ==="
+echo "=== [1/5] starting fhetch_server (port $PORT) ==="
 PORT="$PORT" BIND=127.0.0.1 \
 NIOBIUM_COMPILER_ROOT="$NIOBIUM_COMPILER_ROOT" \
 NIOBIUM_COMPILER_BUILD="$NIOBIUM_COMPILER_BUILD" \
-"$HERE/fhetch_server.sh" > "$SERVER_LOG" 2>&1 &
+"$HERE/fhetch_server.sh" &
+# "$HERE/fhetch_server.sh" > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 
 # Wait until /healthz answers or the server bails out.
@@ -95,13 +96,13 @@ if ! curl -sf "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
 fi
 
 echo
-echo "=== [2/4] mult_client (keygen + encrypt a=$A b=$B) ==="
+echo "=== [2/5] mult_client (keygen + encrypt a=$A b=$B) ==="
 cd "$CLIENT_ROOT"
 rm -rf mult_keys mult_server_workload_*
 LD_LIBRARY_PATH="$OPENFHE_LIB" "$mult_client" mult_keys "$A" "$B"
 
 echo
-echo "=== [3/4] mult_server --target=$TARGET (through transport) ==="
+echo "=== [3/5] mult_server --target=$TARGET (through transport) ==="
 # Put the forwarder first on PATH so Compiler::replay()'s system() call
 # hits it — matches the production install layout.
 export PATH="$TRANSPORT_DIR:$PATH"
@@ -109,13 +110,45 @@ export NBCC_FHETCH_SERVER="http://127.0.0.1:$PORT"
 LD_LIBRARY_PATH="$OPENFHE_LIB" "$mult_server" mult_keys --target="$TARGET"
 
 echo
-echo "=== [4/4] mult_decrypt ==="
+echo "=== [4/5] mult_decrypt ==="
 if LD_LIBRARY_PATH="$OPENFHE_LIB" "$mult_decrypt" mult_keys | tee /dev/stderr | grep -q '^\[PASS\]'; then
   echo
   echo "=== ✓ transport round-trip PASS ==="
-  exit 0
+  # exit 0
 else
   echo
   echo "=== ✗ transport round-trip FAIL ==="
+  # exit 1
+fi
+
+echo
+echo "=== [5/5] binary comparison ==="
+# Compute the hashes of the result openfhe computed, the result our pipeline writes to the final destination,
+# the ciphertext template the compiler uses, and the serialzied probe of the compiler
+OPENFHE_RESULT_HASH=$(sha256sum mult_keys/ct_result_openfhe.bin | awk '{print $1}')
+echo "OpenFHE Gold Standart"
+echo $OPENFHE_RESULT_HASH
+
+FINAL_RESULT_HASH=$(sha256sum mult_keys/ct_result.bin | awk '{print $1}') 
+echo "Compiler Pipeline Result"
+echo $FINAL_RESULT_HASH
+
+CT_TEMPLATE_HASH=$(sha256sum mult_server_workload_ckks_mult/ciphertext_templates/result.template | awk '{print $1}')
+echo "Compiler Internal Ciphertext Template"
+echo $CT_TEMPLATE_HASH
+
+CT_PROBE_HASH=$(sha256sum mult_server_workload_ckks_mult/serialized_probes/result.ct | awk '{print $1}')
+echo "Compiler Internal Serialized Probe"
+echo $CT_PROBE_HASH
+
+if [ "$OPENFHE_RESULT_HASH" != "$FINAL_RESULT_HASH" ]; then
+  echo
+  echo "Results are not byte identical"
+  echo "=== ✗ transport round-trip FAIL ==="
   exit 1
+else
+  echo  
+  echo "Results are byte identical"
+  echo "=== ✓ transport round-trip PASS ==="
+  exit 0
 fi
