@@ -15,6 +15,7 @@
 #   A, B               Plaintext operands (default 7, 13).
 #   PORT               Server port (default 9443).
 #   TARGET             Replay target passed to mult_server (default FUNC_SIM).
+#   RING_DIM           Ring dimension passed to mult_client (default 2048).
 #   NIOBIUM_COMPILER_ROOT   Path to niobium-compiler checkout.
 # ============================================================================
 set -euo pipefail
@@ -27,6 +28,7 @@ CLIENT_ROOT="$(cd "$HERE/.." && pwd)"
 : "${TARGET:=FUNC_SIM}"
 : "${A:=7}"
 : "${B:=13}"
+: "${RING_DIM:=2048}"
 
 BUILD="$CLIENT_ROOT/build"
 TRANSPORT_DIR="$BUILD/src/fhetch_transport"
@@ -98,7 +100,7 @@ echo
 echo "=== [2/5] mult_client (keygen + encrypt a=$A b=$B) ==="
 cd "$CLIENT_ROOT"
 rm -rf mult_keys mult_server_workload_*
-LD_LIBRARY_PATH="$OPENFHE_LIB" "$mult_client" mult_keys "$A" "$B"
+LD_LIBRARY_PATH="$OPENFHE_LIB" "$mult_client" mult_keys "$A" "$B" "$RING_DIM"
 
 echo
 echo "=== [3/5] mult_server --target=$TARGET (through transport) ==="
