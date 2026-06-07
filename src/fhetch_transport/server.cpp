@@ -26,6 +26,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -233,6 +234,14 @@ int main(int argc, char** argv) {
         std::lock_guard<std::mutex> lock(g_server_mu);
         g_server_ptr = &srv;
     }
+
+    // fhetch projects can be very large (the .fhetch trace alone runs to
+    // hundreds of MB for real workloads), so lift cpp-httplib's 100MB default
+    // payload cap entirely and give the body read plenty of time — otherwise
+    // the server closes the socket mid-upload and the client just sees a
+    // "Failed to write connection" error.
+    srv.set_payload_max_length((std::numeric_limits<size_t>::max)());
+    srv.set_read_timeout(60 * 30, 0);   // 30 min, matches the client's read timeout
     std::signal(SIGINT,  shutdown_handler);
     std::signal(SIGTERM, shutdown_handler);
 
