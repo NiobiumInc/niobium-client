@@ -66,8 +66,17 @@ std::shared_ptr<lbcrypto::SchemeBase<lbcrypto::DCRTPoly>> unwrap_scheme(
 
 // Mode determined by lazy_init: controls what on_deserialize_crypto_context
 // does after lazy_init returns, and what Compiler::start() does.
-enum class Mode { UNINITIALIZED, DORMANT, RECORD, REPLAY };
+// COOPERATIVE: the host program drives the record/replay lifecycle explicitly
+// (init/cache_parameters/start/stop/probe/replay/result); the facade only
+// auto-tags inputs/keys via the deserialize hooks. Activated by the host
+// calling niobium::compiler().enable_auto_tagging() (sets g_cooperative)
+// before the crypto context is loaded; no YAML config is consulted.
+enum class Mode { UNINITIALIZED, DORMANT, RECORD, REPLAY, COOPERATIVE };
 static Mode g_mode{Mode::UNINITIALIZED};
+
+// Set by enable_auto_tagging() (strong override below). When true, lazy_init
+// enters COOPERATIVE instead of DORMANT even though no YAML config exists.
+static std::atomic<bool> g_cooperative{false};
 
 static std::atomic<bool> g_initialized{false};
 static std::once_flag g_init_once;
@@ -309,6 +318,22 @@ void lazy_init(const lbcrypto::CryptoContext<lbcrypto::DCRTPoly> &cc) {
     // activate auto-facade when no yml config is present)
     auto cfg_path = find_config();
     if (cfg_path.empty()) {
+      if (g_cooperative.load(std::memory_order_acquire)) {
+        // COOPERATIVE mode: no YAML. The host program already called
+        // init()/cache_parameters()/set_program_info() and owns the
+        // record/replay lifecycle (is_cache_valid/start/stop/probe/replay/
+        // result). The facade only auto-captures the CC and tags inputs/keys.
+        // Auto-capture now (writes cryptocontext.dat with the REAL scheme so
+        // the disk replay driver/compiler can reconstruct probes). Do NOT
+        // install the NiobiumAutoScheme proxy (the host runs zero Eval ops on
+        // replay, so there is nothing to short-circuit), do NOT auto-start,
+        // and do NOT register the atexit auto-stop — the host drives all that.
+        const auto &ctx = g_cc ? g_cc : cc;
+        niobium::compiler().capture_crypto_context(ctx);
+        g_mode = Mode::COOPERATIVE;
+        g_initialized.store(true, std::memory_order_release);
+        return;
+      }
       g_mode = Mode::DORMANT;
       g_initialized.store(true, std::memory_order_release);
       return;
@@ -384,6 +409,14 @@ bool is_replaying() {
   return g_replay_mode;
 }
 
+// Strong override of the weak niobium-fhetch stub. The host program calls
+// niobium::compiler().enable_auto_tagging() right after init() (before the
+// crypto context is loaded) to opt into cooperative mode: lazy_init() then
+// enters COOPERATIVE instead of DORMANT even with no YAML config present.
+void enable_auto_tagging() {
+  g_cooperative.store(true, std::memory_order_release);
+}
+
 void on_deserialize_crypto_context(lbcrypto::CryptoContext<lbcrypto::DCRTPoly> &cc) {
   if (!cc)
     return;
@@ -398,7 +431,12 @@ void on_deserialize_crypto_context(lbcrypto::CryptoContext<lbcrypto::DCRTPoly> &
   // proxy scheme.  NiobiumAutoScheme is not registered with cereal, so leaving
   // it in the CryptoContext causes key serialization to fail (only a .tmp file
   // is produced), which breaks QEMU/FPGA replay on the next run.
-  if (g_mode == Mode::DORMANT)
+  //
+  // In COOPERATIVE mode the host runs zero Eval ops on replay, so there is
+  // nothing for the proxy to short-circuit — skip it (and the auto-start)
+  // entirely. capture_crypto_context already ran in lazy_init with the real
+  // scheme, which keeps all CC/key serialization safe.
+  if (g_mode == Mode::DORMANT || g_mode == Mode::COOPERATIVE)
     return;
 
   // Install the NiobiumAutoScheme proxy on both record and replay (matches
@@ -583,6 +621,13 @@ bool on_serialize_ciphertext(const std::string &filepath,
 }
 
 bool is_recording() {
+  // In COOPERATIVE mode the host owns start()/stop(), so track the compiler's
+  // running state directly (g_recording is only set by the facade-driven
+  // RECORD path, which cooperative mode bypasses). Instrumented OpenFHE uses
+  // this to gate probe emission, so it must be true during the host's
+  // start()..stop() window for the trace to record.
+  if (g_mode == Mode::COOPERATIVE)
+    return niobium::compiler().running_p();
   return g_recording;
 }
 
@@ -636,10 +681,13 @@ void on_make_plaintext(lbcrypto::Plaintext &pt) {
   // (program is deterministic, hook fires at every Make*Plaintext site).
   std::string name = "pt_" + std::to_string(g_plaintext_counter++);
 
-  if (g_mode == Mode::RECORD) {
+  if (g_mode == Mode::RECORD || g_mode == Mode::COOPERATIVE) {
     // Real pt: tag it as an input — write .bin/.ids files + push entries
     // into captured_inputs so the FHETCH simulator finds the plaintext
-    // polynomial values as live-in data.
+    // polynomial values as live-in data. In COOPERATIVE mode this only fires
+    // on the record run (replay runs zero ops, so no Make*Plaintext); the
+    // recorded plaintext .bin is reused on replay (plaintexts like masks are
+    // key-independent, so they need no per-run refresh).
     if (pt) {
       niobium::compiler().tag_input(name, pt);
     }
