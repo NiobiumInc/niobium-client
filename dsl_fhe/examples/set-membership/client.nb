@@ -1,0 +1,102 @@
+// client.nb — Client-side stages for private set-membership
+//============================================================================
+// Runs on the CLIENT machine (owns the secret key).
+// Compiles to:
+//   key_generation  <profile>
+//   encrypt_query   <profile>
+//   decrypt_verify  <profile> [expected_score]
+//
+// Profiles: 0=Exact (toy ring), 1=Soundex (toy ring), 2=ExactFull
+//============================================================================
+
+use shared::*
+
+// ============================================================================
+// Scheme configuration
+//
+// CKKS, depth = 2 + K (one level each for the distance squaring and the
+// normalization scalar multiply, plus K iterated squarings). The per-profile
+// depth comes from the Instance via scheme.override below.
+// ============================================================================
+
+scheme CKKS {
+    security: 128-classic    // toy profiles override to not_set below
+    key_dist: uniform_ternary
+    scaling: flexible_auto
+    precision: 50
+    first_mod: 60
+    depth: 18
+}
+
+requires { add, mul }
+
+// ============================================================================
+// Stage 1: Key generation
+// ============================================================================
+
+@client @stage("key_generation")
+fn generate_keys(inst: Instance) -> writes(CryptoParams)
+{
+    scheme.override(depth: inst.depth)
+
+    if inst.profile == Exact {
+        scheme.override(security: not_set)    // toy ring for fast runs
+    }
+    if inst.profile == Soundex {
+        scheme.override(security: not_set)
+    }
+
+    let keys = keygen()
+    save_secret_key(keys.secret, keydir(inst) / "sk.bin")
+
+    return CryptoParams {
+        context: keys.context,
+        public_key: keys.public,
+        eval_mult_key: keys.eval_mult,
+    }
+}
+
+// ============================================================================
+// Stage 2: Encrypt the query name
+//
+// query.bin holds the encoded query replicated to n_slots rows (one column
+// per character position), so each column encrypts to a ciphertext with the
+// position's character code in every SIMD slot.
+// ============================================================================
+
+@client @stage("encrypt_query")
+fn encrypt_query(inst: Instance) -> reads(CryptoParams), writes(EncryptedName)
+{
+    let params = load(CryptoParams, from: keydir(inst))
+    let qmat = load_matrix<f64>(query_file(inst), inst.name_len)
+
+    return EncryptedName {
+        positions: for pos in 0..inst.name_len {
+            let column = qmat[0..inst.n_slots, pos]
+            encrypt(params.public_key, column)
+        }
+    }
+}
+
+// ============================================================================
+// Stage 3: Decrypt and verify the aggregate match score
+//
+// Each matching dataset name contributes ~1.0 to the score; each non-match
+// decays to ~0 after iterated squaring. expected is the number of matches
+// the harness computed in cleartext (0.0 or 1.0 for the test queries).
+// ============================================================================
+
+@client @stage("decrypt_verify")
+fn decrypt_verify(inst: Instance, expected: f64 = 1.0) -> reads(EncryptedResult)
+{
+    let sk = load_secret_key(keydir(inst) / "sk.bin")
+    let encrypted = load(EncryptedResult, from: encdir(inst))
+
+    let result = decrypt(sk, encrypted.score)
+    let value = result[0]
+
+    print(value)
+
+    let tolerance = 0.3
+    assert abs(value - expected) < tolerance
+}

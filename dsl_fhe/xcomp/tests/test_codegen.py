@@ -220,6 +220,23 @@ def test_encrypted_var_heuristic():
     assert enc("recon_loss")     # matches "recon"
 
 
+def test_ct_minus_column_slice():
+    # ct - <2D column slice> must wrap the vector in MakeCKKSPackedPlaintext
+    # AND materialize it as an lvalue (OpenFHE's EvalSub takes Plaintext&,
+    # which can't bind a freshly-created rvalue).
+    files = compile_str("""
+    fn f(eqry: vec<enc<vec<f64>>>, dataset: mat<f64>, n: u32) -> enc<vec<f64>> {
+        let column = dataset[0..n, 0]
+        let diff = eqry[0] - column
+        return diff * diff
+    }
+    """)
+    impl = files["nb_shared.cpp"]
+    assert "MakeCKKSPackedPlaintext(column)" in impl
+    assert "auto _pt = " in impl          # lvalue materialization for EvalSub
+    assert "EvalSub(eqry[0], _pt)" in impl
+
+
 def test_shared_fn_forward_decl():
     files = compile_str("""
     fn helper(x: f64) -> f64 {

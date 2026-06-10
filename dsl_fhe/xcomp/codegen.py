@@ -2230,6 +2230,12 @@ endforeach()
                     return f"NullSafeEvalAdd(cc, {l}, {r})"
                 return f"cc->EvalAdd({l}, {r})"
             if expr.op == "-":
+                # OpenFHE's EvalSub(ct, Plaintext&) takes a NON-const lvalue
+                # reference; a freshly wrapped MakeCKKSPackedPlaintext rvalue
+                # can't bind. Materialize the plaintext in an IIFE local.
+                if r != right and not right_enc:
+                    return (f"[&]() {{ auto _pt = {r}; "
+                            f"return cc->{FHE_SUB}({l}, _pt); }}()")
                 return f"cc->{FHE_SUB}({l}, {r})"
             if expr.op == "*":
                 return f"cc->{FHE_MUL}({l}, {r})"
@@ -3289,6 +3295,11 @@ endforeach()
             return None
         if isinstance(expr, ast.CastExpr) and expr.target_type:
             return self._type_to_cpp(expr.target_type)
+        # 2D column slice matrix[a..b, c] generates an IIFE returning a
+        # std::vector — record it so a let-bound column participates in
+        # ciphertext-vs-plaintext-vector operator wrapping.
+        if isinstance(expr, ast.IndexExpr) and isinstance(expr.obj, ast.SliceExpr):
+            return "std::vector<double>"
         if isinstance(expr, ast.CallExpr) and isinstance(expr.func, ast.Ident):
             if expr.func.name in self.VECTOR_RETURN_FNS:
                 return "std::vector<double>"

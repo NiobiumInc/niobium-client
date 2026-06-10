@@ -18,6 +18,7 @@ NIOBIUM_CLIENT_ROOT ?= $(realpath $(CURDIR)/..)
 SUBMISSION_REPO ?=
 
 .PHONY: test-compiler examples fetch-by-similarity simple fhe-network-monitor ml-inference \
+       set-membership test-set-membership \
        password-retrieval test-simple test-fetch test-nid test-ml test-password test-examples \
        clean help
 
@@ -59,6 +60,10 @@ test-compiler:
 	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/password-retrieval/client.nb  > /dev/null
 	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/password-retrieval/server.nb  > /dev/null
 	@echo "  PASS  parse password-retrieval/*.nb"
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/set-membership/shared.nb  > /dev/null
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/set-membership/client.nb  > /dev/null
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/set-membership/server.nb  > /dev/null
+	@echo "  PASS  parse set-membership/*.nb"
 	@echo ""
 	@echo "=== End-to-end: semantic check ==="
 	@cd $(XCOMP) && python3 nbc.py check \
@@ -81,6 +86,10 @@ test-compiler:
 		../$(EXAMPLES)/password-retrieval/shared.nb \
 		../$(EXAMPLES)/password-retrieval/client.nb \
 		../$(EXAMPLES)/password-retrieval/server.nb
+	@cd $(XCOMP) && python3 nbc.py check \
+		../$(EXAMPLES)/set-membership/shared.nb \
+		../$(EXAMPLES)/set-membership/client.nb \
+		../$(EXAMPLES)/set-membership/server.nb
 	@echo ""
 	@echo "All tests passed."
 
@@ -93,7 +102,7 @@ test-compiler:
 # but don't produce real results (real model/weights need the submission; see
 # each example's data/README.md). test-examples runs only the examples that
 # produce meaningful, verifiable output.
-examples: simple fetch-by-similarity ml-inference fhe-network-monitor password-retrieval test-examples
+examples: simple fetch-by-similarity ml-inference fhe-network-monitor password-retrieval set-membership test-examples
 
 # --- fetch-by-similarity ---
 
@@ -225,6 +234,27 @@ endif
 
 PWD_NB_OUT := $(EXAMPLES)/password-retrieval/nb_out
 
+# --- set-membership (private name matching) ---
+
+SETM_NB_OUT := $(EXAMPLES)/set-membership/nb_out
+
+set-membership:
+	@echo "=== Compiling set-membership (DSL → C++) ==="
+	@mkdir -p $(SETM_NB_OUT)
+	@cd $(XCOMP) && python3 nbc.py compile \
+		../$(EXAMPLES)/set-membership/shared.nb \
+		../$(EXAMPLES)/set-membership/client.nb \
+		../$(EXAMPLES)/set-membership/server.nb \
+		--outdir ../$(SETM_NB_OUT)
+	@echo ""
+	@echo "=== Building set-membership (C++ → binaries) ==="
+	@mkdir -p $(SETM_NB_OUT)/build
+	@cd $(SETM_NB_OUT)/build && \
+		cmake .. -DNIOBIUM_CLIENT_ROOT=$(NIOBIUM_CLIENT_ROOT) && \
+		$(MAKE) -j$(NPROC) 2>&1
+	@echo ""
+	@echo "Built binaries in $(SETM_NB_OUT)/build/"
+
 password-retrieval:
 	@echo "=== Compiling password-retrieval (DSL → C++) ==="
 	@mkdir -p $(PWD_NB_OUT)
@@ -339,7 +369,34 @@ test-password: password-retrieval
 		rm -rf io && \
 		echo "" && echo "All password-retrieval tests passed."
 
-test-examples: test-simple test-fetch test-password
+test-set-membership: set-membership
+	@echo ""
+	@echo "=== Testing set-membership (end-to-end) ==="
+	@cd $(EXAMPLES)/set-membership && \
+		export LD_LIBRARY_PATH=$(LD_LIB_PATH) && \
+		rm -rf io *_workload_* fhetch_driver_source_* && \
+		B=nb_out/build && \
+		echo "  exact: query 'James Smith' (in dataset)..." && \
+		python3 harness/encode_names.py 0 --query "James Smith" && \
+		$$B/key_generation 0 && $$B/encrypt_query 0 && $$B/compute 0 && \
+		$$B/decrypt_verify 0 1.0 && \
+		echo "  PASS  exact match → score ≈ 1" && \
+		echo "  exact: query 'Zelda Quixote' (not in dataset)..." && \
+		rm -rf *_workload_* fhetch_driver_source_* && \
+		python3 harness/encode_names.py 0 --query "Zelda Quixote" && \
+		$$B/encrypt_query 0 && $$B/compute 0 && \
+		$$B/decrypt_verify 0 0.0 && \
+		echo "  PASS  no match → score ≈ 0" && \
+		echo "  soundex: fuzzy query 'Robbrt Johnson' (10 'Robert *' collisions)..." && \
+		rm -rf *_workload_* fhetch_driver_source_* && \
+		python3 harness/encode_names.py 1 --query "Robbrt Johnson" && \
+		$$B/key_generation 1 && $$B/encrypt_query 1 && $$B/compute 1 && \
+		$$B/decrypt_verify 1 10.0 && \
+		echo "  PASS  soundex fuzzy match → score ≈ 10" && \
+		rm -rf io *_workload_* fhetch_driver_source_* && \
+		echo "" && echo "All set-membership tests passed."
+
+test-examples: test-simple test-fetch test-password test-set-membership
 	@echo ""
 	@echo "All example tests passed."
 
@@ -353,6 +410,7 @@ clean:
 	cd $(FETCH_NB_OUT) && \
 		find . -maxdepth 1 -type f ! -name utils.h ! -name .gitignore -delete 2>/dev/null; true
 	rm -rf $(SIMPLE_NB_OUT)
+	rm -rf $(SETM_NB_OUT) $(EXAMPLES)/set-membership/io
 	rm -rf $(NID_NB_OUT)/build
 	cd $(NID_NB_OUT) && \
 		find . -maxdepth 1 -type f ! -name .gitignore -delete 2>/dev/null; true

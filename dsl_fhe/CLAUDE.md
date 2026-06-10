@@ -10,6 +10,7 @@ make simple                 # Build just the simple example
 make fetch-by-similarity    # Build the fetch-by-similarity example
 make fhe-network-monitor    # Build the KitNET anomaly detection example
 make ml-inference           # Build the ML inference example
+make set-membership         # Build the private name-matching example
 ```
 
 ## Documentation Map
@@ -384,6 +385,10 @@ dsl_fhe/
       shared.nb, client.nb, server.nb
       nb_out/                        # Generated C++ + build
       README.md                      # Design rationale and usage guide
+    set-membership/                  # Private name matching (exact + Soundex fuzzy)
+      shared.nb, client.nb, server.nb
+      harness/encode_names.py        # Plaintext name encoding -> dataset.bin/query.bin
+      nb_out/                        # Generated C++ + build
 ```
 
 ## Adding a New Example
