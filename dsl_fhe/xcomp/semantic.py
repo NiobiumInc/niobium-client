@@ -93,9 +93,29 @@ class SemanticAnalyzer:
             "vec_zeros": NbType(TypeKind.FN, return_type=UNKNOWN),
             "mat_zeros": NbType(TypeKind.FN, return_type=UNKNOWN),
             "to_matrix_form": NbType(TypeKind.FN, return_type=UNKNOWN),
+            # FHE / cipher built-ins
+            "negate": NbType(TypeKind.FN, return_type=UNKNOWN),
+            "mul_monomial": NbType(TypeKind.FN, return_type=UNKNOWN),
+            "load_model": NbType(TypeKind.FN, return_type=UNKNOWN),
+            "extern_call": NbType(TypeKind.FN, return_type=UNKNOWN),
+            # Casts / scalar helpers
+            "int": NbType(TypeKind.FN, return_type=I64),
+            "str": NbType(TypeKind.FN, return_type=STRING),
+            "abs": NbType(TypeKind.FN, return_type=F64),
+            "tanh": NbType(TypeKind.FN, return_type=F64),
+            # I/O / debug
+            "save": NbType(TypeKind.FN, return_type=VOID),
+            "print": NbType(TypeKind.FN, return_type=VOID),
         }
         for name, ty in builtins.items():
             self.global_scope.define(Symbol(name, ty))
+
+        # Operator-as-value names (e.g. reduce(+, xs) parses the operator as
+        # `op_+`), and the special `scheme` config object plus the scheme-level
+        # literals usable in scheme.override(...). Registered so they don't
+        # surface as spurious "undefined name" warnings.
+        for name in ("op_+", "op_-", "op_*", "op_/", "scheme", "not_set"):
+            self.global_scope.define(Symbol(name, UNKNOWN))
 
     # ===== Entry point =====
 
@@ -205,8 +225,14 @@ class SemanticAnalyzer:
     def _check_stmt(self, stmt: ast.Node):
         if isinstance(stmt, ast.LetStmt):
             val_type = self._check_expr(stmt.value) if stmt.value else UNKNOWN
-            declared_type = self._resolve_type_expr(stmt.type_ann) if stmt.type_ann else val_type
-            self.current_scope.define(Symbol(stmt.name, declared_type))
+            if stmt.tuple_names and len(stmt.tuple_names) > 1:
+                # Destructured binding: let (a, b) = expr — define each name.
+                for n in stmt.tuple_names:
+                    if n != "_":
+                        self.current_scope.define(Symbol(n, UNKNOWN))
+            else:
+                declared_type = self._resolve_type_expr(stmt.type_ann) if stmt.type_ann else val_type
+                self.current_scope.define(Symbol(stmt.name, declared_type))
 
         elif isinstance(stmt, ast.AssignStmt):
             self._check_expr(stmt.target)
