@@ -210,17 +210,28 @@ The encrypt function generates different code depending on the data argument:
 
 ### How Wire Type Serialization Works
 
-The codegen has type-specific handlers for each wire type:
+One predictable layout for every wire, driven by **field types** — wire names
+carry no special meaning. Save (`_gen_serialize_wire`) and load (`_gen_load`)
+mirror each other exactly:
 
-| Wire Type | Serialization Strategy |
+| Field type | Layout |
 |---|---|
-| `CryptoParams` | 4 files: `cc.bin`, `pk.bin` (file-based), `mk.bin`, `rk.bin` (stream-based) |
-| Single-ciphertext wire | Direct `SerializeToFile` of the ciphertext field |
-| `vec<enc<T>>` wire field | Per-element files: `features_0.bin`, `features_1.bin`, ... |
-| `EncryptedDB` | Batch directories with `row_NNNN.bin` / `payload_NNNN.bin` |
-| Indexed wire `T[id]` | Per-index files in a subdirectory: `0.bin`, `1.bin`, ... |
+| `enc<T>` | `{field}.bin` |
+| `vec<enc<T>>` | `{field}_<i>.bin` per element |
+| `vec<vec<enc<T>>>` | `batchNNNN/{field}_NNNN.bin` batch directories |
+| plain | `{field}.bin` (Serial) |
 
-For `load()`, the codegen looks up the wire definition to find the ciphertext field name.
+Two structure-driven exceptions:
+- A wire **carrying a `CryptoContext` field** (any name) uses the canonical
+  key layout: `cc.bin`, `pk.bin` (file-based), `mk.bin`, `rk.bin`
+  (stream-based).
+- A `from:`/`to:` path naming a `.bin` **file** reads/writes a
+  single-enc-field wire at that exact path (used for explicit per-item files,
+  e.g. password-retrieval's `record_a1.bin`).
+- Indexed wires `T[id]` serialize per-index files in a subdirectory.
+
+`test_wire_layout_is_field_type_driven` and
+`test_crypto_params_wire_by_structure` pin this.
 For `save()`, it extracts the field from a struct literal.
 
 **Important**: `load_secret_key()` auto-loads the CryptoContext from the same directory

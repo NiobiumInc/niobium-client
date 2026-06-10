@@ -585,22 +585,6 @@ endforeach()
             self.wl("};")
             self.blank()
 
-        # EncryptedDB::Batch — flattened version for single-batch operations
-        # Each batch has rows[dim] and payloads[dim] (one level less nesting)
-        edb_wire = next((w for w in self.wires if w.name == "EncryptedDB"), None)
-        if edb_wire:
-            self.wl("struct EncryptedDBBatch {")
-            self.indent()
-            for f in edb_wire.fields:
-                # Flatten: vec<vec<enc<...>>> → vec<enc<...>>
-                cpp_type = self._type_to_cpp(f.type_ann)
-                # Remove one level of std::vector nesting
-                if cpp_type.startswith("std::vector<std::vector<"):
-                    cpp_type = "std::vector<" + cpp_type[len("std::vector<std::vector<"):-1]
-                self.wl(f"{cpp_type} {f.name};")
-            self.dedent()
-            self.wl("};")
-            self.blank()
 
         # Forward declarations for shared functions (with default parameter values)
         # Skip extern wrappers — they delegate to external C++ functions
@@ -1275,7 +1259,7 @@ endforeach()
                 type_name = io_type.type_name
                 # Find the wire type definition
                 wire = next((w for w in self.wires if w.name == type_name), None)
-                if type_name == "CryptoParams":
+                if self._is_crypto_params_wire(wire) or type_name == "CryptoParams":
                     self._gen_serialize_crypto_params(stage)
                 elif io_type.index is not None and wire:
                     # Indexed wire type: IntermediateResult[batch_id]
@@ -1323,71 +1307,66 @@ endforeach()
         self.wl("fs::create_directories(_out_path.parent_path());")
         self.wl("write2disk(result, _out_path);")
 
+    def _is_crypto_params_wire(self, wire) -> bool:
+        """A wire carrying the crypto context (and keys) — uses the canonical
+        cc/pk/mk/rk key-file layout regardless of what the wire is named."""
+        if wire is None:
+            return False
+        return any(isinstance(f.type_ann, ast.NamedType)
+                   and f.type_ann.name == "CryptoContext"
+                   for f in wire.fields)
+
+    def _field_kind(self, f) -> str:
+        """Serialization kind of a wire field: 'enc' | 'vec_enc' | 'mat_enc'
+        (vec<vec<enc>>, batch directories) | 'plain'."""
+        ann = f.type_ann
+        if isinstance(ann, ast.EncType):
+            return "enc"
+        if isinstance(ann, ast.VecType) and isinstance(ann.elem, ast.EncType):
+            return "vec_enc"
+        if (isinstance(ann, ast.VecType) and isinstance(ann.elem, ast.VecType)
+                and isinstance(ann.elem.elem, ast.EncType)):
+            return "mat_enc"
+        return "plain"
+
     def _gen_serialize_wire(self, stage: StageInfo, type_name: str,
                             wire: ast.WireDecl):
-        """Generate serialization for a generic wire type."""
+        """Serialize a wire by its FIELD TYPES — one predictable layout for
+        every wire (no name-based special cases):
+          enc<T>            -> {field}.bin
+          vec<enc<T>>       -> {field}_<i>.bin
+          vec<vec<enc<T>>>  -> batchNNNN/{field}_NNNN.bin
+          plain             -> {field}.bin (Serial)
+        _gen_load mirrors this exactly."""
         path_expr = self._find_output_dir(stage)
-
-        if type_name == "EncryptedDB":
-            self._gen_serialize_encrypted_db(path_expr)
-            return
-        if type_name == "EncryptedQuery":
-            self.wl(f"// Serialize {type_name}")
-            self.wl(f"auto _dir = {path_expr};")
-            self.wl("fs::create_directories(_dir);")
-            self.wl(f'Serial::SerializeToFile(_dir / "eqry.bin", result.query, SerType::BINARY);')
-            return
-        if type_name == "EncryptedResult":
-            # Determine the field name from the wire definition
-            ct_field = wire.fields[0].name if wire.fields else "result"
-            self.wl(f"// Serialize {type_name}")
-            self.wl(f"auto _dir = {path_expr};")
-            self.wl("fs::create_directories(_dir);")
-            self.wl(f'Serial::SerializeToFile(_dir / "eres.bin", result.{ct_field}, SerType::BINARY);')
-            return
-
-        # Generic wire type — field-by-field serialization
-        self.wl(f"// Serialize {type_name}")
+        self.wl(f"// Serialize {type_name} (field-type-driven layout)")
         self.wl(f"auto _dir = {path_expr};")
         self.wl("fs::create_directories(_dir);")
         for f in wire.fields:
-            # Check if the field is a vector of ciphertexts (vec<enc<T>>)
-            if (f.type_ann and isinstance(f.type_ann, ast.VecType)
-                    and f.type_ann.elem and isinstance(f.type_ann.elem, ast.EncType)):
-                # Serialize each ciphertext separately as field_N.bin
+            kind = self._field_kind(f)
+            if kind == "enc" or kind == "plain":
+                self.wl(f'Serial::SerializeToFile(_dir / "{f.name}.bin", result.{f.name}, SerType::BINARY);')
+            elif kind == "vec_enc":
                 self.wl(f"for (size_t _i = 0; _i < result.{f.name}.size(); _i++) {{")
                 self.indent()
                 self.wl(f'auto _fname = _dir / ("{f.name}_" + std::to_string(_i) + ".bin");')
                 self.wl(f"Serial::SerializeToFile(_fname, result.{f.name}[_i], SerType::BINARY);")
                 self.dedent()
                 self.wl("}")
-            else:
-                fname = f"{type_name.lower()}_{f.name}.bin"
-                self.wl(f'Serial::SerializeToFile(_dir / "{fname}", result.{f.name}, SerType::BINARY);')
-
-    def _gen_serialize_encrypted_db(self, path_expr: str):
-        """Generate serialization for EncryptedDB into batch directories."""
-        self.wl("// Serialize EncryptedDB to batch directories")
-        self.wl(f"auto _enc_dir = {path_expr};")
-        self.wl("for (size_t _b = 0; _b < result.rows.size(); _b++) {")
-        self.indent()
-        self.wl('std::stringstream _ss; _ss << std::setw(4) << std::setfill(\'0\') << _b;')
-        self.wl('auto _bdir = _enc_dir / ("batch" + _ss.str());')
-        self.wl("fs::create_directories(_bdir);")
-        self.wl("for (size_t _i = 0; _i < result.rows[_b].size(); _i++) {")
-        self.indent()
-        self.wl('std::stringstream ss; ss << std::setw(4) << std::setfill(\'0\') << _i;')
-        self.wl('Serial::SerializeToFile(_bdir / ("row_" + ss.str() + ".bin"), result.rows[_b][_i], SerType::BINARY);')
-        self.dedent()
-        self.wl("}")
-        self.wl("for (size_t _i = 0; _i < result.payloads[_b].size(); _i++) {")
-        self.indent()
-        self.wl('std::stringstream ss; ss << std::setw(4) << std::setfill(\'0\') << _i;')
-        self.wl('Serial::SerializeToFile(_bdir / ("payload_" + ss.str() + ".bin"), result.payloads[_b][_i], SerType::BINARY);')
-        self.dedent()
-        self.wl("}")
-        self.dedent()
-        self.wl("}")
+            elif kind == "mat_enc":
+                self.wl(f"for (size_t _b = 0; _b < result.{f.name}.size(); _b++) {{")
+                self.indent()
+                self.wl("std::stringstream _bs; _bs << std::setw(4) << std::setfill('0') << _b;")
+                self.wl('auto _bdir = _dir / ("batch" + _bs.str());')
+                self.wl("fs::create_directories(_bdir);")
+                self.wl(f"for (size_t _i = 0; _i < result.{f.name}[_b].size(); _i++) {{")
+                self.indent()
+                self.wl("std::stringstream _is; _is << std::setw(4) << std::setfill('0') << _i;")
+                self.wl(f'Serial::SerializeToFile(_bdir / ("{f.name}_" + _is.str() + ".bin"), result.{f.name}[_b][_i], SerType::BINARY);')
+                self.dedent()
+                self.wl("}")
+                self.dedent()
+                self.wl("}")
 
     def _find_output_dir(self, stage: StageInfo) -> str:
         """Find the output directory for a stage from writes io specs or shared functions."""
@@ -1457,7 +1436,9 @@ endforeach()
                     positional = [a for a in call.args if not a.name]
                     named = {a.name: a.value for a in call.args if a.name}
                     if positional and isinstance(positional[0].value, ast.Ident):
-                        if positional[0].value.name == "CryptoParams" and "from" in named:
+                        loaded = next((w for w in self.wires
+                                       if w.name == positional[0].value.name), None)
+                        if self._is_crypto_params_wire(loaded) and "from" in named:
                             return self._expr_to_cpp(named["from"])
         # Fallback: check which key directory function exists
         fn_names = {f.name for f in self.shared_fns}
@@ -3001,117 +2982,70 @@ endforeach()
             else:
                 type_name = self._expr_to_cpp(type_expr)
 
-        # Generate deserialization based on the wire type
-        if type_name == "CryptoParams":
-            # In server functions, cc and eval keys are already loaded by main()
+        # Wire lookup — layout is driven by FIELD TYPES, mirroring
+        # _gen_serialize_wire (no name-based special cases).
+        wire_def = next((w for w in self.wires if w.name == type_name), None)
+
+        # Crypto-parameter wires (any wire carrying a CryptoContext) use the
+        # canonical cc/pk/mk/rk key-file layout.
+        if self._is_crypto_params_wire(wire_def):
             if self._current_fn and any(
                 si.fn.name == self._current_fn.name and si.domain == Domain.SERVER
                 for si in self.stages
             ):
-                return "CryptoParams{}"  # no-op: keys already loaded in main()
-            return self._gen_load_crypto_params(from_path)
-        if type_name == "EncryptedDB":
-            # Load individual ciphertext files from batch directories
-            load_batch = (
-                f"[&](fs::path _bdir) {{ "
-                f"std::vector<Ciphertext<DCRTPoly>> _rows, _payloads; "
-                f"for (int _i = 0; ; _i++) {{ "
-                f"  std::stringstream ss; ss << std::setw(4) << std::setfill('0') << _i; "
-                f"  auto f = _bdir / (\"row_\" + ss.str() + \".bin\"); "
-                f"  if (!fs::exists(f)) break; "
-                f"  Ciphertext<DCRTPoly> ct; Serial::DeserializeFromFile(f, ct, SerType::BINARY); "
-                f"  _rows.push_back(ct); }} "
-                f"for (int _i = 0; ; _i++) {{ "
-                f"  std::stringstream ss; ss << std::setw(4) << std::setfill('0') << _i; "
-                f"  auto f = _bdir / (\"payload_\" + ss.str() + \".bin\"); "
-                f"  if (!fs::exists(f)) break; "
-                f"  Ciphertext<DCRTPoly> ct; Serial::DeserializeFromFile(f, ct, SerType::BINARY); "
-                f"  _payloads.push_back(ct); }} "
-                f"return std::make_pair(_rows, _payloads); }}"
-            )
-            if index_expr:
-                # Single batch load → EncryptedDBBatch (flattened)
-                return (f"[&]() {{ std::stringstream _ss; _ss << std::setw(4) << std::setfill('0') << {index_expr}; "
-                        f"auto [_rows, _payloads] = {load_batch}({from_path} / (\"batch\" + _ss.str())); "
-                        f"return EncryptedDBBatch{{_rows, _payloads}}; }}()")
-            # Full DB load — all batches
-            return (f"[&]() {{ EncryptedDB edb; "
-                    f"for (int _b = 0; ; _b++) {{ "
-                    f"  std::stringstream _ss; _ss << std::setw(4) << std::setfill('0') << _b; "
-                    f"  auto _bdir = {from_path} / (\"batch\" + _ss.str()); "
-                    f"  if (!fs::exists(_bdir)) break; "
-                    f"  auto [_rows, _payloads] = {load_batch}(_bdir); "
-                    f"  edb.rows.push_back(_rows); edb.payloads.push_back(_payloads); }} "
-                    f"return edb; }}()")
-        if type_name == "EncryptedQuery":
-            return (f"[&]() {{ EncryptedQuery eq; "
-                    f"Ciphertext<DCRTPoly> ct; "
-                    f'Serial::DeserializeFromFile({from_path} / "eqry.bin", ct, SerType::BINARY); '
-                    f"eq.query = ct; return eq; }}()")
-        if type_name == "EncryptedResult":
-            # Look up actual field name from wire definition
-            wire_def = next((w for w in self.wires if w.name == "EncryptedResult"), None)
-            field_name = "ciphertext"  # default
-            if wire_def:
-                ct_fields = [f for f in wire_def.fields
-                             if (f.type_ann and isinstance(f.type_ann, ast.EncType))
-                             or f.name in ("ciphertext", "score", "query", "result")]
-                if ct_fields:
-                    field_name = ct_fields[0].name
-            # If the from: path looks like a specific file (contains .bin in a
-            # string literal or concat), load from it directly. Otherwise
-            # append "eres.bin" as the default filename within a directory.
-            if '".bin"' in from_path or '.bin"' in from_path:
-                return (f"[&]() {{ EncryptedResult er; "
-                        f"Ciphertext<DCRTPoly> ct; "
-                        f'Serial::DeserializeFromFile(fs::path({from_path}), ct, SerType::BINARY); '
-                        f"er.{field_name} = ct; return er; }}()")
-            return (f"[&]() {{ EncryptedResult er; "
-                    f"Ciphertext<DCRTPoly> ct; "
-                    f'Serial::DeserializeFromFile(fs::path({from_path}) / "eres.bin", ct, SerType::BINARY); '
-                    f"er.{field_name} = ct; return er; }}()")
+                return f"{type_name}{{}}"  # no-op: keys already loaded in main()
+            return self._gen_load_crypto_params(type_name, from_path)
 
-        # Generic wire type — look up the wire definition
-        wire_def = next((w for w in self.wires if w.name == type_name), None)
         if wire_def and from_path:
-            # Check for vec<enc<T>> fields (vector of ciphertexts)
-            vec_ct_fields = [f for f in wire_def.fields
-                             if (f.type_ann and isinstance(f.type_ann, ast.VecType)
-                                 and f.type_ann.elem and isinstance(f.type_ann.elem, ast.EncType))]
-            if vec_ct_fields:
-                field = vec_ct_fields[0].name
-                return (f"[&]() {{ {type_name} _w; "
-                        f"for (int _i = 0; ; _i++) {{ "
-                        f'auto _f = fs::path({from_path}) / ("{field}_" + std::to_string(_i) + ".bin"); '
-                        f"if (!fs::exists(_f)) break; "
-                        f"Ciphertext<DCRTPoly> _ct; Serial::DeserializeFromFile(_f, _ct, SerType::BINARY); "
-                        f"_w.{field}.push_back(_ct); }} "
-                        f"return _w; }}()")
-            # Single ciphertext field — load directly from the given path
-            # (matches _gen_save which writes directly to the to: path)
-            ct_fields = [f for f in wire_def.fields
-                         if (f.type_ann and isinstance(f.type_ann, ast.EncType))
-                         or f.name in ("ciphertext", "score", "query", "result")]
-            if len(ct_fields) == 1:
-                field = ct_fields[0].name
-                return (f"[&]() {{ {type_name} _w; "
-                        f"Ciphertext<DCRTPoly> _ct; "
-                        f'Serial::DeserializeFromFile(fs::path({from_path}), _ct, SerType::BINARY); '
-                        f"_w.{field} = _ct; return _w; }}()")
-            if len(ct_fields) > 1:
-                # Multi-field enc wire type — load each field from {dir}/{field_name}.bin
-                parts = [f"[&]() {{ {type_name} _w; auto _dir = fs::path({from_path}); "]
-                for f in ct_fields:
+            enc_fields = [f for f in wire_def.fields
+                          if self._field_kind(f) == "enc"]
+            # Explicit-file shortcut: a from: path naming a .bin file loads a
+            # single-enc-field wire directly from that file (pairs with
+            # save(..., to: <file>)).
+            if (len(enc_fields) == 1 and len(wire_def.fields) == 1
+                    and ('".bin"' in from_path or '.bin"' in from_path)):
+                f0 = enc_fields[0]
+                return (f"[&]() {{ {type_name} _w; Ciphertext<DCRTPoly> _ct; "
+                        f"Serial::DeserializeFromFile(fs::path({from_path}), _ct, SerType::BINARY); "
+                        f"_w.{f0.name} = _ct; return _w; }}()")
+            # Generic layout: {field}.bin / {field}_<i>.bin /
+            # batchNNNN/{field}_NNNN.bin.
+            parts = [f"[&]() {{ {type_name} _w; fs::path _dir = fs::path({from_path}); "]
+            for f in wire_def.fields:
+                kind = self._field_kind(f)
+                if kind == "enc":
                     parts.append(
                         f"{{ Ciphertext<DCRTPoly> _ct; "
                         f'Serial::DeserializeFromFile(_dir / "{f.name}.bin", _ct, SerType::BINARY); '
                         f"_w.{f.name} = _ct; }} ")
-                parts.append("return _w; }()")
-                return "".join(parts)
+                elif kind == "vec_enc":
+                    parts.append(
+                        f"for (int _i = 0; ; _i++) {{ "
+                        f'auto _f = _dir / ("{f.name}_" + std::to_string(_i) + ".bin"); '
+                        f"if (!fs::exists(_f)) break; "
+                        f"Ciphertext<DCRTPoly> _ct; Serial::DeserializeFromFile(_f, _ct, SerType::BINARY); "
+                        f"_w.{f.name}.push_back(_ct); }} ")
+                elif kind == "mat_enc":
+                    parts.append(
+                        f"for (int _b = 0; ; _b++) {{ "
+                        f"std::stringstream _bs; _bs << std::setw(4) << std::setfill('0') << _b; "
+                        f'auto _bdir = _dir / ("batch" + _bs.str()); '
+                        f"if (!fs::exists(_bdir)) break; "
+                        f"std::remove_reference_t<decltype(_w.{f.name}[0])> _batch; "
+                        f"for (int _i = 0; ; _i++) {{ "
+                        f"std::stringstream _is; _is << std::setw(4) << std::setfill('0') << _i; "
+                        f'auto _f = _bdir / ("{f.name}_" + _is.str() + ".bin"); '
+                        f"if (!fs::exists(_f)) break; "
+                        f"Ciphertext<DCRTPoly> _ct; Serial::DeserializeFromFile(_f, _ct, SerType::BINARY); "
+                        f"_batch.push_back(_ct); }} "
+                        f"_w.{f.name}.push_back(_batch); }} ")
+                # plain fields: not round-tripped through wire files
+            parts.append("return _w; }()")
+            return "".join(parts)
         return f"/* load({type_name}) */"
 
-    def _gen_load_crypto_params(self, path: str) -> str:
-        return (f"[&]() {{ CryptoParams p; "
+    def _gen_load_crypto_params(self, type_name: str, path: str) -> str:
+        return (f"[&]() {{ {type_name} p; "
                 f'Serial::DeserializeFromFile({path} / "cc.bin", p.context, SerType::BINARY); '
                 f'Serial::DeserializeFromFile({path} / "pk.bin", p.public_key, SerType::BINARY); '
                 f"{{ std::ifstream mk({path} / \"mk.bin\", std::ios::binary); "
@@ -3591,7 +3525,6 @@ endforeach()
                 "EvalAutomorphismKeys": "std::shared_ptr<std::map<usint, EvalKey<DCRTPoly>>>",
                 "KeyBundle": "KeyPair<DCRTPoly>",
                 "Plaintext": "Plaintext",
-                "EncryptedDB::Batch": "EncryptedDBBatch",
             }
             return fhe_map.get(name, name)
 
