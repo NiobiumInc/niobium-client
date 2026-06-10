@@ -55,8 +55,10 @@ mult_server_workload_*/
 simple_ops_keys/
 simple_ops_server_workload_*/
 
-# Reference material
-references/
+# Reference material (scratch dirs at the repo root — NOT the vendored
+# Claude skill's references, which must be committed)
+/references/
+!.claude/skills/**
 
 # Ephemeral sandbox files
 .sandbox/
