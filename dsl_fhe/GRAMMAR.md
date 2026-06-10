@@ -462,8 +462,8 @@ RULE hardware-instrumentation:
   (libnbfhetch) record/replay instrumentation:
     1. init() + enable_auto_tagging() + cache parameters from the cache_key list
     2. is_cache_valid() check
-    3. Recording path: start() -> body -> probe() -> stop()
-    4. Replay path (always, local FHETCH simulator): replay() -> result()
+    3. Record path (no cached trace): start() -> body -> probe() -> stop()
+    4. Replay path (cache valid, zero FHE ops): replay() -> result()
   Inputs, evaluation keys, and the crypto context are tagged automatically by the
   instrumented-OpenFHE deserialize hooks (cooperative auto-tagging) — there are no
   generated tag_input() calls. probe() calls are generated from writes() parameters.

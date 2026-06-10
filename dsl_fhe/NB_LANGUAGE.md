@@ -252,9 +252,11 @@ fn compute(inst: Instance, op: Operation = 0) -> reads(CryptoParams), writes(Enc
 ```
 
 This generates Niobium *client* record/replay instrumentation (`libnbfhetch`):
-`init()` + `enable_auto_tagging()`, a recording path (`start()`/`probe()`/
-`stop()`), and an always-run replay path (`replay()`/`result()`). Inputs, eval
-keys, and the crypto context are tagged automatically by the
+`init()` + `enable_auto_tagging()`, then a gate on `is_cache_valid()` — a
+**record** run executes the computation (`start()`/`probe()`/`stop()`) and
+serializes OpenFHE's own result; a **cache-valid** run executes zero FHE ops and
+reconstructs the output from the cached trace (`replay()`/`result()`). Inputs,
+eval keys, and the crypto context are tagged automatically by the
 instrumented-OpenFHE deserialize hooks (cooperative auto-tagging) — no explicit
 `tag_input`/`tag_keys` calls are emitted.
 
