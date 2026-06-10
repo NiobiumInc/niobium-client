@@ -54,3 +54,9 @@ mult_keys/
 mult_server_workload_*/
 simple_ops_keys/
 simple_ops_server_workload_*/
+
+# Reference material
+references/
+
+# Ephemeral sandbox files
+.sandbox/
