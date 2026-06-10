@@ -237,6 +237,42 @@ def test_ct_minus_column_slice():
     assert "EvalSub(eqry[0], _pt)" in impl
 
 
+def test_enc_flow_beats_name_heuristic():
+    # A plainly-named local bound to an encrypted expression must still be
+    # classified encrypted (structural let-binding flow), and an
+    # encrypted-sounding name bound to plaintext must stay plain.
+    files = compile_str("""
+    fn f(ct: enc<vec<f64>>, n: u32) -> enc<vec<f64>> {
+        let total = slot_sum(ct, n)
+        return total * total
+    }
+    fn g(xs: vec<f64>) -> u32 {
+        let result_count = len(xs)
+        return result_count - 1
+    }
+    """)
+    impl = files["nb_shared.cpp"]
+    assert "EvalMult(total, total)" in impl          # flow: enc by structure
+    assert "(result_count - 1)" in impl              # flow: plain by structure
+    assert "EvalSub(result_count" not in impl
+
+
+def test_decrypt_output_is_plain():
+    # decrypt() yields a plaintext vector; locals derived from it must not be
+    # treated as ciphertexts even with encrypted-sounding names.
+    files = compile_str("""
+    fn f(expected: f64) -> f64 {
+        let sk = load_secret_key(root() / "sk.bin")
+        let result = decrypt(sk, ct)
+        let score = result[0]
+        return score - expected
+    }
+    """)
+    impl = files["nb_shared.cpp"]
+    assert "(score - expected)" in impl
+    assert "EvalSub(score" not in impl
+
+
 def test_shared_fn_forward_decl():
     files = compile_str("""
     fn helper(x: f64) -> f64 {

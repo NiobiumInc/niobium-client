@@ -119,6 +119,8 @@ PLAINTEXT_ONLY_FNS = {
     "len", "rows", "ceil_div", "log2", "round", "abs",
     "stride", "instance", "instance_name",
     "datadir", "iodir", "keydir", "encdir", "root",
+    "decrypt",          # decryption yields a plaintext vector
+    "load_matrix", "load_vec", "slot_mask", "tile",
 }
 
 # Functions that need cc as first argument (FHE shared functions)
@@ -162,6 +164,13 @@ class CodeGenerator:
         self._keygen_vars: set[str] = set()  # variables assigned from keygen()
         self._local_var_cpp_types: dict[str, str] = {}  # track local variable C++ types
         self._declared_vars: set[str] = set()  # track declared variable names for let-rebinding
+        # Structurally-known encrypted/plaintext locals (from annotations,
+        # builtin return kinds, and let-binding flow). Consulted by
+        # _is_encrypted_expr BEFORE the name heuristic, so a plainly-named
+        # ciphertext (or an encrypted-sounding plaintext) is still classified
+        # correctly. Cleared per generated function alongside _declared_vars.
+        self._enc_vars: set[str] = set()
+        self._plain_vars: set[str] = set()
         self._classify_items()
 
     def _classify_items(self):
@@ -832,6 +841,8 @@ endforeach()
             self._current_fn = fn
             self._local_var_cpp_types.clear()
             self._declared_vars.clear()
+            self._enc_vars.clear()
+            self._plain_vars.clear()
             self._gen_fn_impl(fn, with_cc=self._fn_uses_fhe(fn))
             self._current_fn = None
             self.blank()
@@ -964,6 +975,8 @@ endforeach()
         self._current_stage_hardware = bool(stage.hardware)
         self._local_var_cpp_types.clear()
         self._declared_vars.clear()
+        self._enc_vars.clear()
+        self._plain_vars.clear()
         self._gen_fn_impl(stage.fn, with_cc=(stage.domain == Domain.SERVER))
         self._current_stage_hardware = False
         self._current_fn = None
@@ -1701,6 +1714,9 @@ endforeach()
             self.wl(f"{val};")
 
     def _gen_let_stmt(self, stmt: ast.LetStmt):
+        # Track provable encrypted/plaintext state for this binding so later
+        # uses don't depend on the variable's name (see _is_encrypted_expr).
+        self._record_let_enc_state(stmt)
         if stmt.type_ann:
             cpp_type = self._type_to_cpp(stmt.type_ann)
         else:
@@ -3222,11 +3238,79 @@ endforeach()
             return any(self._has_enc_type(e) for e in type_ann.elements)
         return False
 
+    def _struct_enc_state(self, expr: ast.Expr | None):
+        """Structural-only encrypted-ness: True / False when provable from
+        annotations, builtin return kinds, or recorded let-binding flow;
+        None when unknown. Never consults the name heuristic — used to
+        POPULATE _enc_vars/_plain_vars without amplifying heuristic guesses."""
+        if expr is None:
+            return None
+        if isinstance(expr, (ast.IntLiteral, ast.FloatLiteral,
+                             ast.StringLiteral, ast.BoolLiteral)):
+            return False
+        if isinstance(expr, ast.Ident):
+            if expr.name in self._enc_vars:
+                return True
+            if expr.name in self._plain_vars:
+                return False
+            if self._current_fn:
+                for p in self._current_fn.params:
+                    if p.name == expr.name and p.type_ann is not None:
+                        return self._has_enc_type(p.type_ann)
+            return None
+        if isinstance(expr, ast.CallExpr) and isinstance(expr.func, ast.Ident):
+            if expr.func.name in ENCRYPTED_RETURN_FNS:
+                return True
+            if expr.func.name in PLAINTEXT_ONLY_FNS:
+                return False
+            return None
+        if isinstance(expr, (ast.IndexExpr, ast.MethodCall)):
+            return self._struct_enc_state(expr.obj)
+        if isinstance(expr, ast.UnaryExpr):
+            return self._struct_enc_state(expr.operand)
+        if isinstance(expr, ast.BinaryExpr):
+            l = self._struct_enc_state(expr.left)
+            r = self._struct_enc_state(expr.right)
+            if l or r:
+                return True
+            if l is False and r is False:
+                return False
+            return None
+        if isinstance(expr, ast.PipeExpr):
+            if (isinstance(expr.right, ast.CallExpr)
+                    and isinstance(expr.right.func, ast.Ident)
+                    and expr.right.func.name in ENCRYPTED_RETURN_FNS):
+                return True
+            return self._struct_enc_state(expr.left)
+        return None
+
+    def _record_let_enc_state(self, stmt: ast.LetStmt):
+        """Record a let-bound local as encrypted or plaintext when provable —
+        an explicit type annotation wins, otherwise structural flow from the
+        initializer. Makes later uses of the variable independent of its name."""
+        if stmt.tuple_names and len(stmt.tuple_names) > 1:
+            return  # destructured bindings: state unknown
+        if stmt.type_ann is not None:
+            state = self._has_enc_type(stmt.type_ann)
+        else:
+            state = self._struct_enc_state(stmt.value)
+        if state is True:
+            self._enc_vars.add(stmt.name)
+            self._plain_vars.discard(stmt.name)
+        elif state is False:
+            self._plain_vars.add(stmt.name)
+            self._enc_vars.discard(stmt.name)
+
     def _is_encrypted_expr(self, expr: ast.Expr | None) -> bool:
         """Heuristic: check if an expression is likely encrypted."""
         if expr is None:
             return False
         if isinstance(expr, ast.Ident):
+            # Structurally-known locals first — flow beats the name heuristic.
+            if expr.name in self._enc_vars:
+                return True
+            if expr.name in self._plain_vars:
+                return False
             sym = self.sa.global_scope.lookup(expr.name)
             if sym and hasattr(sym.type, 'is_encrypted') and sym.type.is_encrypted:
                 return True
