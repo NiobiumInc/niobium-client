@@ -132,6 +132,86 @@ def test_key_loading_for_server():
     assert "enable_auto_tagging" in cpp
 
 
+def _make_gen(source: str):
+    """Build a CodeGenerator over `source` (for testing internals directly)."""
+    import ast_nodes as ast
+    from codegen import CodeGenerator
+    program = parse(lex(source))
+    sa = analyze(program)
+    gen = CodeGenerator(program, sa)
+    fn = next((i for i in program.items
+               if isinstance(i, ast.FnDecl) and i.name == "generate_keys"), None)
+    return gen, fn
+
+
+KEYGEN_SRC = """
+enum Sz {{ Toy, Big }}
+struct Instance {{ size: Sz, ring_dim: u32 }}
+wire CryptoParams {{ context: CryptoContext, public_key: PublicKey,
+                     eval_mult_key: EvalMultKey, eval_rot_keys: EvalAutomorphismKeys }}
+scheme CKKS {{ security: 128-classic {ring} depth: 20 }}
+requires {{ add, mul, rotate }}
+fn generate_keys(inst: Instance, mult_depth: u32 = 3) -> writes(CryptoParams) {{
+    scheme.override(depth: mult_depth)
+    if inst.size == Toy {{ scheme.override(security: not_set) }}
+    let keys = keygen()
+}}
+"""
+
+
+def test_rotation_keygen_dynamic_ring_dim():
+    # ring_dim comes from the Instance struct (no literal in the scheme block):
+    # rotation indices must be built at runtime from inst.ring_dim.
+    gen, fn = _make_gen(KEYGEN_SRC.format(ring=""))
+    gen._current_fn = fn
+    code = gen._gen_keygen()
+    assert "EvalRotateKeyGen" in code
+    assert "inst.ring_dim / 2" in code      # runtime index range
+    assert "_rot_indices" in code
+
+
+def test_rotation_keygen_static_ring_dim():
+    # ring_dim is a literal in the scheme block: indices listed at compile time.
+    gen, fn = _make_gen(KEYGEN_SRC.format(ring="ring_dim: 2048"))
+    gen._current_fn = fn
+    code = gen._gen_keygen()
+    assert "EvalRotateKeyGen" in code
+    assert "_rot_indices = {1, 2," in code   # static literal vector
+
+
+def test_depth_override_is_runtime():
+    # scheme.override(depth: mult_depth) must wire the CLI param into the depth,
+    # not silently keep the static scheme value.
+    gen, fn = _make_gen(KEYGEN_SRC.format(ring=""))
+    gen._current_fn = fn
+    code = gen._gen_keygen()
+    assert "SetMultiplicativeDepth(_nb_depth)" in code
+    assert gen._fn_depth_override(fn) is not None
+
+
+def test_scheme_override_detected_when_nested():
+    # The security override lives inside an if-block; the detector must find it
+    # regardless of nesting (regression guard for the one-level-deep scan).
+    gen, fn = _make_gen(KEYGEN_SRC.format(ring=""))
+    assert gen._fn_has_scheme_override(fn) is True
+
+
+def test_encrypted_var_heuristic():
+    # The prefix/name heuristic is a *fallback* used only when no type info is
+    # available. Guard the known-good classifications, and pin the known
+    # false-positives so any future type-driven fix is an intentional change.
+    import ast_nodes as ast
+    gen, _ = _make_gen(KEYGEN_SRC.format(ring=""))
+    enc = lambda n: gen._is_encrypted_expr(ast.Ident(name=n))
+    assert enc("ct") and enc("acc") and enc("result")     # genuinely encrypted
+    assert not enc("THRESHOLD") and not enc("PAYLOAD_DIM")  # ALL_CAPS constants
+    # KNOWN false positives — these are plaintext but match an encrypted prefix.
+    # See CLAUDE.md "prefix-based encrypted detection". Update if types replace it.
+    assert enc("result_index")   # matches "result"
+    assert enc("hidden_dim")     # matches "hidden"
+    assert enc("recon_loss")     # matches "recon"
+
+
 def test_shared_fn_forward_decl():
     files = compile_str("""
     fn helper(x: f64) -> f64 {

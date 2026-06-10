@@ -5,7 +5,7 @@ Each @stage function produces a separate .cpp file with a main().
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, is_dataclass
 from typing import TextIO
 import io
 
@@ -1127,32 +1127,68 @@ endforeach()
         self.dedent()
         self.wl("}")
 
+    def _walk_ast(self, node):
+        """Yield every AST (dataclass) node in the subtree, recursing through
+        lists/tuples. Used to find constructs anywhere in a function body,
+        regardless of nesting (if/else, match arms, loops)."""
+        if is_dataclass(node):
+            yield node
+            for f in fields(node):
+                yield from self._walk_ast(getattr(node, f.name))
+        elif isinstance(node, (list, tuple)):
+            for item in node:
+                yield from self._walk_ast(item)
+
+    def _scheme_overrides(self, fn: ast.FnDecl | None):
+        """Return a list of named-arg dicts for every scheme.override(...) call
+        anywhere in fn's body (recursively)."""
+        out = []
+        if fn is None or not fn.body:
+            return out
+        for node in self._walk_ast(fn.body):
+            if isinstance(node, ast.MethodCall) and node.method == "override":
+                out.append({a.name: a.value for a in node.args if a.name})
+        return out
+
     def _fn_has_scheme_override(self, fn: ast.FnDecl | None = None) -> bool:
-        """Check if function body contains scheme.override(security: not_set)."""
-        if fn is None:
-            return False
-        if not fn.body:
-            return False
-        for stmt in fn.body.stmts:
-            if isinstance(stmt, ast.IfStmt) and stmt.then_block:
-                block = stmt.then_block
-                if isinstance(block, ast.Block):
-                    for s in block.stmts:
-                        if isinstance(s, ast.ExprStmt) and isinstance(s.expr, ast.MethodCall):
-                            if s.expr.method == "override":
-                                for a in s.expr.args:
-                                    if a.name == "security":
-                                        val = a.value
-                                        if isinstance(val, ast.Ident) and val.name == "not_set":
-                                            return True
-            if isinstance(stmt, ast.ExprStmt) and isinstance(stmt.expr, ast.MethodCall):
-                if stmt.expr.method == "override":
-                    for a in stmt.expr.args:
-                        if a.name == "security":
-                            val = a.value
-                            if isinstance(val, ast.Ident) and val.name == "not_set":
-                                return True
+        """True if fn contains a scheme.override(security: not_set) anywhere."""
+        for ov in self._scheme_overrides(fn):
+            v = ov.get("security")
+            if isinstance(v, ast.Ident) and v.name == "not_set":
+                return True
         return False
+
+    def _fn_depth_override(self, fn: ast.FnDecl | None = None):
+        """Return the AST expr for a scheme.override(depth: X) if present, else None."""
+        for ov in self._scheme_overrides(fn):
+            if "depth" in ov:
+                return ov["depth"]
+        return None
+
+    def _scheme_depth(self) -> int:
+        """Static multiplicative depth declared in the scheme block."""
+        if self.scheme:
+            for f in self.scheme.fields:
+                if f.key == "depth":
+                    return int(str(f.value).split()[0])
+        return 23
+
+    SEC_MAP = {
+        "not_set": "HEStd_NotSet",
+        "128-classic": "HEStd_128_classic",
+        "128_classic": "HEStd_128_classic",
+        "192-classic": "HEStd_192_classic",
+        "256-classic": "HEStd_256_classic",
+    }
+
+    def _scheme_security_cpp(self) -> str:
+        """The OpenFHE security-level enum for the scheme's declared security."""
+        sec_val = "128-classic"
+        if self.scheme:
+            for f in self.scheme.fields:
+                if f.key == "security":
+                    sec_val = str(f.value)
+        return self.SEC_MAP.get(sec_val, "HEStd_128_classic")
 
     def _fn_has_return(self, fn: ast.FnDecl) -> bool:
         """Check if a function has explicit return statements."""
@@ -1545,10 +1581,14 @@ endforeach()
         self._gen_fn_decl(fn, with_cc=with_cc)
         self.w(" {\n")
         self.indent()
-        # If this function has scheme.override with security: not_set,
-        # emit the _sec_level variable before the body
+        # Emit mutable scheme parameters that scheme.override(...) can change,
+        # initialized from the scheme declaration so it stays the source of
+        # truth (e.g. non-Toy instances keep the declared security level; a Toy
+        # branch may override it to not_set).
         if self._fn_has_scheme_override(fn):
-            self.wl("auto _sec_level = HEStd_128_classic;")
+            self.wl(f"auto _sec_level = {self._scheme_security_cpp()};")
+        if self._fn_depth_override(fn) is not None:
+            self.wl(f"auto _nb_depth = {self._scheme_depth()};")
         if fn.body:
             stmts = fn.body.stmts
             # Check for implicit return: if last statement is an ExprStmt
@@ -2511,14 +2551,21 @@ endforeach()
             # Usually handled in for-loop context
             return f"{obj}"
         if method == "override":
-            # scheme.override(security: not_set, ring_dim: N) —
-            # emit code to set the _sec_level variable
+            # scheme.override(security: not_set, depth: D, ring_dim: N) — assign
+            # the corresponding mutable scheme variables (declared in _gen_fn_impl).
+            # ring_dim override is intentionally a no-op: ring_dim is taken from
+            # the Instance struct, which is the single source of truth.
             named_args = {}
             for a in expr.args:
                 if a.name:
                     named_args[a.name] = self._expr_to_cpp(a.value)
-            if "security" in named_args and named_args["security"] == "not_set":
-                return "_sec_level = HEStd_NotSet"
+            assigns = []
+            if named_args.get("security") == "not_set":
+                assigns.append("_sec_level = HEStd_NotSet")
+            if "depth" in named_args:
+                assigns.append(f"_nb_depth = {named_args['depth']}")
+            if assigns:
+                return ", ".join(assigns)
             return f"/* scheme.override({', '.join(args)}) */"
         if method == "replicate":
             return f"{obj}.replicate({', '.join(args)})"
@@ -3038,19 +3085,12 @@ endforeach()
             for f in self.scheme.fields:
                 scheme_cfg[f.key] = f.value
 
-        # Security level
-        sec_val = scheme_cfg.get("security", "128-classic")
-        sec_map = {
-            "not_set": "HEStd_NotSet",
-            "128-classic": "HEStd_128_classic",
-            "128_classic": "HEStd_128_classic",
-            "192-classic": "HEStd_192_classic",
-            "256-classic": "HEStd_256_classic",
-        }
+        # Security level — _sec_level (mutable) when an override is present,
+        # otherwise the scheme's declared level.
         if has_security_override:
             sec_level = "_sec_level"
         else:
-            sec_level = sec_map.get(str(sec_val), "HEStd_128_classic")
+            sec_level = self._scheme_security_cpp()
 
         # Key distribution
         key_dist_val = scheme_cfg.get("key_dist", "uniform_ternary")
@@ -3070,8 +3110,12 @@ endforeach()
         }
         scaling = scaling_map.get(str(scaling_val), "FLEXIBLEAUTO")
 
-        # Numeric parameters from scheme config
-        depth = scheme_cfg.get("depth", 23)
+        # Numeric parameters from scheme config. A scheme.override(depth: X)
+        # makes the depth runtime-configurable via the mutable _nb_depth var.
+        if self._fn_depth_override(self._current_fn) is not None:
+            depth = "_nb_depth"
+        else:
+            depth = scheme_cfg.get("depth", 23)
         precision_raw = scheme_cfg.get("precision", 42)  # scaling_mod_size
         # Handle "54 bits" format
         precision = int(str(precision_raw).split()[0]) if precision_raw else 42
@@ -3089,13 +3133,15 @@ endforeach()
         if first_mod is not None:
             lines.append(f"    parameters.SetFirstModSize({first_mod});")
         ring_dim = scheme_cfg.get("ring_dim", None)
+        # Does the Instance struct carry a ring_dim field (dynamic ring size)?
+        inst_struct = next((s for s in self.structs if s.name == "Instance"), None)
+        has_ring_dim_field = bool(inst_struct and any(
+            f.name == "ring_dim" for f in inst_struct.fields))
         if ring_dim is not None:
             lines.append(f"    parameters.SetRingDim({ring_dim});")
         else:
             # Only emit SetRingDim if the Instance struct has a ring_dim field
-            inst_struct = next((s for s in self.structs if s.name == "Instance"), None)
-            has_ring_dim = inst_struct and any(f.name == "ring_dim" for f in inst_struct.fields)
-            if has_ring_dim:
+            if has_ring_dim_field:
                 lines.append("    parameters.SetRingDim(inst.ring_dim);")
         lines += [
             f"    parameters.SetScalingTechnique({scaling});",
@@ -3117,11 +3163,26 @@ endforeach()
             lines.append("    auto shifts_rs = RunningSums::get_shift_amounts("
                          "n_slots(inst), n_cols(inst), RUNNING_SUM_LEVELS);")
             rot_parts.append("shifts_rs")
-        if has_rotate and ring_dim is not None:
-            n_slots = int(ring_dim) // 2
-            rot_indices = ", ".join(str(i) for i in range(1, n_slots))
-            lines.append(f"    std::vector<int> _rot_indices = {{{rot_indices}}};")
-            rot_parts.append("_rot_indices")
+        # Generate keys for slot rotations requested via rotate(ct, k). When the
+        # program also uses replicate/running_sums, those contribute their own
+        # specific rotation indices (above) and we don't add the full range.
+        # Otherwise (e.g. the `simple` example: bare rotate with a runtime index)
+        # we generate the whole index set so any rotate(ct, k) has a key:
+        #  - static ring_dim literal -> list indices at compile time;
+        #  - ring_dim from the Instance struct -> build them at run time.
+        # Limitation: covers positive indices 1..n_slots-1 only; a very large
+        # ring makes this many keys, and negative indices aren't covered.
+        if has_rotate and not has_replicate and not has_running_sums:
+            if ring_dim is not None:
+                n_slots = int(ring_dim) // 2
+                rot_indices = ", ".join(str(i) for i in range(1, n_slots))
+                lines.append(f"    std::vector<int> _rot_indices = {{{rot_indices}}};")
+                rot_parts.append("_rot_indices")
+            elif has_ring_dim_field:
+                lines.append("    std::vector<int> _rot_indices;")
+                lines.append("    for (int _i = 1; _i < (int)(inst.ring_dim / 2); ++_i) "
+                             "_rot_indices.push_back(_i);")
+                rot_parts.append("_rot_indices")
         if rot_parts:
             # Use EvalRotateKeyGen when 'rotate' capability is present,
             # EvalAtIndexKeyGen for legacy replicate/running_sums

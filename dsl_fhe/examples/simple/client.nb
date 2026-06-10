@@ -17,7 +17,7 @@ use shared::*
 // ============================================================================
 
 scheme CKKS {
-    security: not_set
+    security: 128-classic    // Toy overrides to not_set below (small ring for speed)
     key_dist: uniform_ternary
     scaling: flexible_auto
     depth: 20
