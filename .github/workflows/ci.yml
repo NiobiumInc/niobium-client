@@ -152,6 +152,46 @@ jobs:
           export LD_LIBRARY_PATH="$OPENFHE_ROOT/lib:$LD_LIBRARY_PATH"
           make test-client-release
 
+      # ------------------------------------------------------------
+      # FHE DSL (dsl_fhe) — build the cross-compiler output and run its tests.
+      #
+      # The DSL's @hardware server stages replay through the cooperative
+      # fhetch_driver helper, which is a niobium-fhetch test binary (not built
+      # by the client's build-release). Build it here, at the path the dsl_fhe
+      # Makefile expects by default (NBCC_FHETCH_DRIVER). It reuses the OpenFHE
+      # already built above (OPENFHE_INSTALL_DIR), so this only compiles the
+      # small driver + its libnbfhetch dependency.
+      # ------------------------------------------------------------
+      - name: Build fhetch_driver (DSL cooperative-replay helper)
+        run: |
+          export CC="ccache gcc"
+          export CXX="ccache g++"
+          make -C vendor/niobium-fhetch config-fhetch-release \
+            OPENFHE_INSTALL_DIR="$OPENFHE_ROOT"
+          cmake --build vendor/niobium-fhetch/build -j"$(nproc)" --target fhetch_driver
+
+      # Compiler unit tests (lexer / parser / semantic / codegen), build every
+      # example (DSL -> C++ -> binaries), and run the end-to-end tests that
+      # produce verifiable or meaningful output. The dsl_fhe Makefile sets its
+      # own LD_LIBRARY_PATH and NBCC_FHETCH_DRIVER; libnbfhetch, the auto-facade,
+      # and yaml-cpp come from the client build tree above.
+      - name: DSL — unit tests, build all examples, run end-to-end
+        run: |
+          export CC="ccache gcc"
+          export CXX="ccache g++"
+          make -C dsl_fhe test-compiler
+          make -C dsl_fhe test-simple test-password test-ml test-nid
+          make -C dsl_fhe fetch-by-similarity   # build/link check (e2e runs below)
+
+      # fetch-by-similarity end-to-end. Its encrypted-replay numeric verify is a
+      # known work-in-progress, so this is non-blocking for now; it still
+      # exercises the full DSL -> generate -> build -> record/replay path.
+      - name: DSL — fetch-by-similarity end-to-end (known WIP, non-blocking)
+        continue-on-error: true
+        run: |
+          python3 -m pip install --user --quiet numpy
+          make -C dsl_fhe test-fetch
+
       - name: ccache stats
         if: always()
         run: |
@@ -184,6 +224,9 @@ jobs:
             vendor/niobium-fhetch/simple_ops_server_workload_*/
             vendor/niobium-fhetch/fhetch_driver_source_*/
             vendor/niobium-fhetch/simple_fhetch_example_simple/
+            dsl_fhe/examples/*/nb_out/build/CMakeFiles/CMakeError.log
+            dsl_fhe/examples/*/*_workload_*/
+            dsl_fhe/examples/*/fhetch_driver_source_*/
           if-no-files-found: ignore
           retention-days: 7
 
