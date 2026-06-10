@@ -1,0 +1,100 @@
+// shared.nb — Types and constants for private set-membership (name matching)
+//============================================================================
+// Privacy-preserving name matching: given a client's private name and a
+// server's private dataset of names, determine whether the name appears in
+// the dataset — without revealing the query to the server or the dataset
+// to the client.
+//
+// Names are encoded OUTSIDE the FHE circuit (harness/encode_names.py) as
+// fixed-length integer vectors (letters a-z -> 1..26, zero padding), either
+// raw (Exact mode, L=20 characters) or Soundex-hashed (fuzzy mode, L=4).
+//
+// CKKS comparison circuit (per SIMD slot j = one dataset name):
+//   1. diff_i = query[i] - dataset[j][i]      per character position
+//   2. S_j    = sum_i diff_i^2                squared distance      [1 level]
+//   3. s_j    = S_j / C                       normalize to [0,1]    [1 level]
+//   4. t_j    = 1 - s_j                       match ~= 1, non-match < 1
+//   5. t_j    = t_j ^ (2^K)                   iterated squaring     [K levels]
+//   6. score  = sum_j t_j                     aggregate across slots
+//
+// The client decrypts score: each matching name contributes ~1.0, each
+// non-match decays to ~0, so score > 0.5 means "at least one match".
+//
+// K is chosen so the worst non-match indicator (1 - 1/C)^(2^K) < 0.01,
+// with C = 26^2 * L the largest possible squared distance.
+// Total multiplicative depth: 2 + K.
+//============================================================================
+
+// ============================================================================
+// Instance profiles
+// ============================================================================
+
+enum Profile { Exact, Soundex, ExactFull }
+
+struct Instance {
+    profile: Profile,
+    ring_dim: u32,
+    n_slots: u32,       // CKKS SIMD slots = ring_dim / 2 (names per batch)
+    name_len: u32,      // L: encoded characters per name
+    k_squarings: u32,   // K: iterated-squaring rounds
+    depth: u32,         // multiplicative depth budget: 2 + K
+}
+
+fn instance(profile: Profile) -> Instance {
+    match profile {
+        Exact     => Instance { profile, ring_dim: 2048,  n_slots: 1024,
+                                name_len: 20, k_squarings: 16, depth: 18 },
+        Soundex   => Instance { profile, ring_dim: 2048,  n_slots: 1024,
+                                name_len: 4,  k_squarings: 14, depth: 16 },
+        ExactFull => Instance { profile, ring_dim: 65536, n_slots: 32768,
+                                name_len: 20, k_squarings: 16, depth: 18 },
+    }
+}
+
+fn instance_name(profile: Profile) -> string {
+    match profile {
+        Exact     => "exact",
+        Soundex   => "soundex",
+        ExactFull => "exact_full",
+    }
+}
+
+// C: the largest possible squared distance between two encoded names
+// (every position maximally different: 26^2 per position, L positions).
+fn norm_const(inst: Instance) -> f64 {
+    676.0 * inst.name_len
+}
+
+// ============================================================================
+// Directory layout
+// ============================================================================
+
+fn iodir(inst: Instance) -> path  { root() / "io" / instance_name(inst.profile) }
+fn keydir(inst: Instance) -> path { iodir(inst) / "keys" }
+fn encdir(inst: Instance) -> path { iodir(inst) / "encrypted" }
+
+// Written by harness/encode_names.py:
+//   dataset.bin — server's private names, row-major (padded_rows x name_len
+//                 doubles); rows zero-padded to a multiple of n_slots
+//   query.bin   — client's encoded query, replicated (n_slots x name_len)
+fn dataset_file(inst: Instance) -> path { iodir(inst) / "dataset.bin" }
+fn query_file(inst: Instance) -> path   { iodir(inst) / "query.bin" }
+
+// ============================================================================
+// Wire types
+// ============================================================================
+
+wire CryptoParams {
+    context: CryptoContext,
+    public_key: PublicKey,
+    eval_mult_key: EvalMultKey,
+}
+
+wire EncryptedName {
+    positions: vec<enc<vec<f64>>>,   // one ciphertext per character position,
+                                     // the query char replicated in all slots
+}
+
+wire EncryptedResult {
+    score: enc<vec<f64>>,            // slot 0 holds the aggregate match score
+}

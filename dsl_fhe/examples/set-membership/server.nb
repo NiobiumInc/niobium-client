@@ -1,0 +1,62 @@
+// server.nb — Server-side encrypted set-membership evaluation
+//============================================================================
+// Runs on the SERVER machine. NO access to secret key. The dataset is the
+// server's PRIVATE data — loaded as a plaintext matrix here and folded into
+// the homomorphic circuit; it never leaves the server, and the client's
+// query is never decrypted.
+// Compiles to:
+//   compute <profile>
+//============================================================================
+
+use shared::*
+
+// ============================================================================
+// Encrypted evaluation: squared distance + iterated-squaring indicator
+//
+// For each batch of n_slots dataset names (one name per SIMD slot):
+//   acc   = sum_pos (query[pos] - dataset_column[pos])^2        [1 level]
+//   ct_t  = 1 - acc/C                                            [1 level]
+//   ct_t  = ct_t^(2^K)        (K squarings amplify the gap)      [K levels]
+//   score += slot_sum(ct_t)   (matches contribute ~1 each)
+// ============================================================================
+
+@server @stage("compute")
+@hardware(cache_key: ["workload_size"])
+fn compute(inst: Instance)
+    -> reads(CryptoParams, EncryptedName),
+       writes(EncryptedResult)
+{
+    let params = load(CryptoParams, from: keydir(inst))
+    let eqry = load(EncryptedName, from: encdir(inst)).positions
+
+    // Server's private dataset, column-major packing prepared by the
+    // harness: (n_batches * n_slots) rows x name_len cols, zero-padded.
+    let dataset = load_matrix<f64>(dataset_file(inst), inst.name_len)
+    let n_batches = rows(dataset) / inst.n_slots
+
+    let acc_total: enc<vec<f64>> = zero()
+
+    for b in 0..n_batches {
+        // Squared Euclidean distance per slot
+        let acc: enc<vec<f64>> = zero()
+        for pos in 0..inst.name_len {
+            let column = dataset[b*inst.n_slots .. (b+1)*inst.n_slots, pos]
+            let diff = eqry[pos] - column
+            acc = acc + diff * diff
+        }
+
+        // Normalize to [0,1] and complement: match ~= 1, non-match < 1
+        let ct_t = negate(acc * (1.0 / norm_const(inst))) + 1.0
+
+        // Iterated squaring: non-matches decay exponentially toward 0
+        for r in 0..inst.k_squarings {
+            ct_t = ct_t * ct_t
+        }
+
+        // Aggregate this batch's indicators across all SIMD slots
+        let ct_batch = ct_t |> slot_sum(inst.n_slots)
+        acc_total = acc_total + ct_batch
+    }
+
+    return EncryptedResult { score: acc_total }
+}

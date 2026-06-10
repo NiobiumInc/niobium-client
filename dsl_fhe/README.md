@@ -157,6 +157,12 @@ dsl_fhe/
       server.nb                        # Per-question Chebyshev match + password gate (84 lines)
       README.md                        # Design rationale and usage guide
       nb_out/                          # Generated C++ + build
+    set-membership/                    # Private name matching (compilable, runnable)
+      shared.nb                        # Profiles (exact/soundex), wire types
+      client.nb                        # Keygen, per-position query encryption, decrypt+threshold
+      server.nb                        # Squared-distance + iterated-squaring indicator
+      harness/encode_names.py          # Plaintext name encoding (exact + Soundex)
+      nb_out/                          # Generated C++ + build
     simple/                            # Basic cipher operations (compilable, runnable)
       shared.nb                        # Operation enum (25 ops), instance sizes
       client.nb                        # Encrypt two scalars, decrypt+verify
@@ -195,11 +201,13 @@ make fetch-by-similarity    # Build fetch-by-similarity (8 binaries)
 make fhe-network-monitor    # Build KitNET anomaly detection (4 binaries)
 make ml-inference           # Build ML inference (4 binaries)
 make password-retrieval     # Build password retrieval (5 binaries)
+make set-membership         # Build private name matching (4 binaries)
 make test-simple            # End-to-end: 8 FHE operations verified
 make test-fetch             # End-to-end: toy fetch pipeline
 make test-nid               # End-to-end: toy KitNET (keygen+encrypt+inference)
 make test-ml                # End-to-end: keygen+encrypt+compute (single)
 make test-password          # End-to-end: correct + wrong answer verification
+make test-set-membership    # End-to-end: exact match, no-match, Soundex fuzzy
 make test-examples          # Run all end-to-end tests
 ```
 
@@ -438,6 +446,38 @@ together for exponentially better discrimination than a single aggregate compari
 cd dsl_fhe && make test-password
 # Runs: key_generation 0 && setup_record 0 && submit_query 0 && verify 0 && decrypt_result 0
 # Then: submit_query 0 7 3 9 1 8 (wrong) && verify 0 && decrypt_result 0 0.0
+```
+
+### `set-membership/` — Private Name Matching
+
+Privacy-preserving set membership (a port of the `openfhe-set-membership`
+workload): given a client's private name and a server's private dataset of
+names, determine whether the name appears in the dataset — without revealing
+the query to the server or the dataset to the client.
+
+Names are encoded outside the circuit (`harness/encode_names.py`) as
+fixed-length integer vectors (a–z → 1..26, zero-padded) — raw characters in
+**Exact** mode (L=20) or **Soundex** phonetic hashes in fuzzy mode (L=4, so
+"Robbrt" matches "Robert"). The CKKS circuit computes, per SIMD slot (one
+dataset name per slot):
+
+1. squared Euclidean distance to the query, per character position — 1 level
+2. normalize by C = 26²·L and complement: `t = 1 − S/C` — 1 level
+3. **iterated squaring** `t^(2^K)`: matches stay ≈ 1, non-matches decay to ≈ 0 — K levels
+4. slot-sum: the aggregate score ≈ the number of matching names
+
+The client decrypts the score and thresholds at 0.5. Depth = 2 + K (K=16
+exact, K=14 Soundex), chosen so the worst non-match indicator falls below 0.01.
+
+- One ciphertext per character position, the query character replicated in all slots
+- Dataset stays plaintext on the server (column-major packing), folded in via `ct − plaintext_vector`
+- Demonstrates: per-instance `scheme.override(depth:)`, ct−vector ops, `slot_sum`, multi-batch accumulation
+
+```bash
+cd dsl_fhe && make test-set-membership
+# exact:   'James Smith'   in dataset  → score ≈ 1
+# exact:   'Zelda Quixote' not present → score ≈ 0 (7e-15)
+# soundex: 'Robbrt Johnson' fuzzy      → score ≈ 10 (all 'Robert *' collide)
 ```
 
 ### `fhe-NetworkMonitor/` — KitNET Anomaly Detection

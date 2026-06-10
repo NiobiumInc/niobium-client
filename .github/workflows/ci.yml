@@ -180,7 +180,7 @@ jobs:
           export CC="ccache gcc"
           export CXX="ccache g++"
           make -C dsl_fhe test-compiler
-          make -C dsl_fhe test-simple test-password test-ml test-nid
+          make -C dsl_fhe test-simple test-password test-set-membership test-ml test-nid
 
       # fetch-by-similarity end-to-end (record run): generates the dataset,
       # records the trace, and verifies all 8 payload vectors decrypt correctly.
