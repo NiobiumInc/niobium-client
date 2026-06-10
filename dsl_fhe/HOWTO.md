@@ -235,7 +235,8 @@ extern weights from "vector_constants"
 ```
 
 This generates `#include "vector_constants.h"` in the shared header and adds the
-source to CMakeLists.txt (via `SUBMISSION_DIR`).
+source to CMakeLists.txt. Vendor the C++ source/header in the example directory
+and point `-DLOCAL_SRC_DIR=...` at it so the example stays self-contained.
 
 ---
 
@@ -379,8 +380,11 @@ Add to `dsl_fhe/Makefile`:
 
 ```makefile
 # Variables
-MY_SUBMISSION := $(NIOBIUM_COMPILER_ROOT)/examples/my-example/submission
 MY_NB_OUT     := $(EXAMPLES)/my-example/nb_out
+# Directory holding any vendored C++ helpers for this example (an extern_call
+# bridge, support libs, etc.). Keep them in the example directory so the example
+# stays self-contained — don't reference an external repo.
+MY_LOCAL_SRCS := $(realpath $(CURDIR)/$(EXAMPLES)/my-example)
 
 # Build target
 my-example:
@@ -396,7 +400,7 @@ my-example:
 	@mkdir -p $(MY_NB_OUT)/build
 	@cd $(MY_NB_OUT)/build && \
 		cmake .. -DNIOBIUM_CLIENT_ROOT=$(NIOBIUM_CLIENT_ROOT) \
-		         -DSUBMISSION_DIR=$(MY_SUBMISSION) && \
+		         -DLOCAL_SRC_DIR=$(MY_LOCAL_SRCS) && \
 		$(MAKE) -j$(NPROC) 2>&1
 	@echo ""
 	@echo "Built binaries in $(MY_NB_OUT)/build/"
@@ -418,7 +422,9 @@ test-my-example: my-example
 Add to `.PHONY`, `examples`, `test-examples`, `clean`, `help`, and `test-compiler`
 (for parse/check validation).
 
-Pass `-DSUBMISSION_DIR=...` only if you have external source files.
+Pass `-DLOCAL_SRC_DIR=...` only if the example has vendored C++ helpers (e.g. an
+`extern_call` bridge). Vendor those sources inside the example directory so the
+example builds from this repo alone, with no dependency on an external repo.
 
 ---
 

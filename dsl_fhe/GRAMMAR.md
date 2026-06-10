@@ -458,13 +458,15 @@ RULE stage-io:
 
 ```
 RULE hardware-instrumentation:
-  A function annotated with @hardware(cache_key: [...]) generates:
-    1. Cache parameter setup from the cache_key list
+  A function annotated with @hardware(cache_key: [...]) generates Niobium client
+  (libnbfhetch) record/replay instrumentation:
+    1. init() + enable_auto_tagging() + cache parameters from the cache_key list
     2. is_cache_valid() check
     3. Recording path: start() -> body -> probe() -> stop()
-    4. Replay path: replay(target) -> result()
-  All tag_input() calls are generated from reads() parameters.
-  All probe() calls are generated from writes() parameters.
+    4. Replay path (always, local FHETCH simulator): replay() -> result()
+  Inputs, evaluation keys, and the crypto context are tagged automatically by the
+  instrumented-OpenFHE deserialize hooks (cooperative auto-tagging) — there are no
+  generated tag_input() calls. probe() calls are generated from writes() parameters.
 
 RULE hardware-domain:
   @hardware may only appear on @server functions.

@@ -30,7 +30,9 @@ extern weights from "vector_constants"
 ```
 
 This generates `#include "vector_constants.h"` in the shared header and adds the
-module's source files to the CMakeLists.txt build (requires `-DSUBMISSION_DIR`).
+module's source files to the CMakeLists.txt build. Vendor the C++ sources in the
+example directory and pass `-DLOCAL_SRC_DIR=...` so the example builds from this
+repo alone (no external repo required).
 
 ---
 
@@ -720,12 +722,14 @@ let result = mlp(input.ciphertext)
 The codegen detects wrapper functions (body = single `extern_call`) and generates
 direct calls to the external function with `cc` prepended. The CMakeLists.txt
 auto-discovers source files matching the function name pattern (e.g., `mlp_openfhe.cpp`,
-`mlp_function_split_0.cpp`, `mlp_common.cpp`, `mlp_bridge.cpp`) in `SUBMISSION_DIR/src/`
-or `LOCAL_SRC_DIR/` (for local wrappers outside the submission directory).
+`mlp_function_split_0.cpp`, `mlp_common.cpp`, `mlp_bridge.cpp`) in `LOCAL_SRC_DIR/`
+— vendor those sources in the example directory so it builds from this repo alone.
+(An optional `SUBMISSION_DIR/src/` is also searched, and takes precedence, for
+swapping in a real/large model from a separate package; see ml-inference.)
 
 **Required files for `extern_call("X", ...)`** (by convention — missing headers cause build errors):
-- `X_openfhe.h` — model/library header declaring the underlying function; must be reachable via `SUBMISSION_DIR/include` or `LOCAL_SRC_DIR`
-- `X_bridge.h` — DSL bridge header declaring the `X(cc, ...)` wrapper; must be reachable via `LOCAL_SRC_DIR`
+- `X_openfhe.h` — model/library header declaring the underlying function; reachable via `LOCAL_SRC_DIR` (or, if used, `SUBMISSION_DIR/include`)
+- `X_bridge.h` — DSL bridge header declaring the `X(cc, ...)` wrapper; reachable via `LOCAL_SRC_DIR`
 
 See `dsl_fhe/examples/ml-inference-fhe/mlp_bridge.{h,cpp}` for a reference implementation.
 
