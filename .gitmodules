@@ -4,3 +4,7 @@
 [submodule "vendor/niobium-haze"]
 	path = vendor/niobium-haze
 	url = git@github.com:NiobiumInc/niobium-haze.git
+[submodule ".claude/skills/fhe-application-design"]
+	path = .claude/skills/fhe-application-design
+	url = git@github.com:NiobiumInc/fhe-application-design.git
+	branch = main
