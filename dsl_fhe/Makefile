@@ -286,6 +286,7 @@ test-fetch: fetch-by-similarity
 	@echo "=== Testing fetch-by-similarity (end-to-end, toy instance) ==="
 	@cd $(EXAMPLES)/fetch-by-similarity && \
 		export LD_LIBRARY_PATH=$(LD_LIB_PATH) && \
+		rm -rf *_workload_* fhetch_driver_source_* && \
 		python3 harness/run.py 0 --seed 42
 	@echo ""
 	@echo "All fetch-by-similarity tests passed."

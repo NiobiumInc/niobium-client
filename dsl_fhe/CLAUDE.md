@@ -231,11 +231,14 @@ Each `@stage("name")` function generates a `.cpp` with:
    `cache_parameters()`, `set_program_info()`/`set_build_info()`
 4. **Key loading** (server stages) — cc, pk, eval keys from disk (the
    deserialize hooks auto-capture the context and tag the keys)
-5. **Recording bracket** (`@hardware`) — inside the stage function, `start()` is
-   emitted *after* the leading input `load()`s (so the hooks tag inputs first),
-   then `probe()`/`stop()` in `main()`, then `replay()` + `result()` on every run
-6. **Result serialization** — always (the result is rehydrated from the
-   simulator by `result()`)
+5. **Record/replay gate** (`@hardware`) — `main()` branches on
+   `is_cache_valid()`: on a **record** run the stage function executes (with
+   `start()` emitted inside it, after the leading input `load()`s so the hooks
+   tag inputs first), then `probe()`/`stop()`; on a **cache-valid** run zero FHE
+   ops execute — `replay()` runs the cached trace and `result()` reconstructs
+   the output (mirrors the canonical fetch-by-similarity client integration)
+6. **Result serialization** — always: OpenFHE's own output on a record run,
+   the reconstructed ciphertext on a replay run
 
 ### How Match Expressions Compile
 

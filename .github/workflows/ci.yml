@@ -181,13 +181,10 @@ jobs:
           export CXX="ccache g++"
           make -C dsl_fhe test-compiler
           make -C dsl_fhe test-simple test-password test-ml test-nid
-          make -C dsl_fhe fetch-by-similarity   # build/link check (e2e runs below)
 
-      # fetch-by-similarity end-to-end. Its encrypted-replay numeric verify is a
-      # known work-in-progress, so this is non-blocking for now; it still
-      # exercises the full DSL -> generate -> build -> record/replay path.
-      - name: DSL — fetch-by-similarity end-to-end (known WIP, non-blocking)
-        continue-on-error: true
+      # fetch-by-similarity end-to-end (record run): generates the dataset,
+      # records the trace, and verifies all 8 payload vectors decrypt correctly.
+      - name: DSL — fetch-by-similarity end-to-end
         run: |
           python3 -m pip install --user --quiet numpy
           make -C dsl_fhe test-fetch

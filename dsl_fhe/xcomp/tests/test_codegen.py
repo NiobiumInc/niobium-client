@@ -96,6 +96,14 @@ def test_stage_with_hardware():
     assert "Target" not in cpp
     assert "global_key_cache" not in cpp
     assert "niobium_hw" not in cpp
+    # Record/replay gate: ALL FHE ops on the record pass only; replay()/result()
+    # exclusively in the cache-valid else-branch (zero FHE ops). The record run
+    # must serialize OpenFHE's own result — replay must NOT run after recording
+    # in the same pass (that overwrote correct results with sim output).
+    assert "const bool _nb_replaying = niobium::compiler().is_cache_valid();" in cpp
+    record_branch = cpp.split("if (!_nb_replaying) {")[1].split("} else {")[0]
+    assert "replay()" not in record_branch
+    assert "stop()" in record_branch
 
 
 def test_bool_param_flag():

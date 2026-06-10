@@ -1108,17 +1108,49 @@ endforeach()
         args_str = ", ".join(call_args)
 
         has_return = self._fn_has_return(stage.fn)
-        if has_return:
-            self.wl(f"auto result = {fn_name}({args_str});")
-        else:
-            self.wl(f"{fn_name}({args_str});")
-
-        # Niobium recording stop
         if stage.hardware:
-            self._gen_niobium_record_stop(stage, has_result=has_return)
+            # Record/replay gate — mirrors the canonical client integration
+            # (fetch-by-similarity NIOBIUM_INTEGRATION.md): ALL FHE ops run only
+            # on the record pass, which serializes OpenFHE's own result; a
+            # cache-valid run executes ZERO FHE ops and reconstructs the output
+            # from the cached trace via replay()/result().
+            self.wl("const bool _nb_replaying = niobium::compiler().is_cache_valid();")
+            if has_return:
+                wire = self._stage_result_wire(stage)
+                result_type = wire.name if wire else "Ciphertext<DCRTPoly>"
+                self.wl(f"{result_type} result;")
+            self.wl("if (!_nb_replaying) {")
+            self.indent()
+            if has_return:
+                self.wl(f"result = {fn_name}({args_str});")
+            else:
+                self.wl(f"{fn_name}({args_str});")
+            if has_return:
+                self._gen_result_io(stage, "probe")
+            self.wl("niobium::compiler().stop();")
+            self.wl("niobium::compiler().enable_hollow_mode(false);")
+            self.dedent()
+            self.wl("} else {")
+            self.indent()
+            self.wl('std::cout << "[nb] Cached trace found — replaying (no FHE ops)" << std::endl;')
+            self.wl("if (!niobium::compiler().replay()) {")
+            self.indent()
+            self.wl('std::cerr << "[ERROR] FHETCH replay failed!" << std::endl;')
+            self.wl("return 1;")
+            self.dedent()
+            self.wl("}")
+            if has_return:
+                self._gen_result_io(stage, "rehydrate")
+            self.dedent()
+            self.wl("}")
+        else:
+            if has_return:
+                self.wl(f"auto result = {fn_name}({args_str});")
+            else:
+                self.wl(f"{fn_name}({args_str});")
 
-        # Save result. For hardware stages the result was just rehydrated from
-        # the FHETCH simulator by result(); serialize it like any other.
+        # Save result — on a record run this is OpenFHE's own output; on a
+        # replay run it was reconstructed from the cached trace.
         if has_return:
             self._gen_result_serialization(stage)
 
@@ -1460,31 +1492,6 @@ endforeach()
         # hooks capture the context (on cc.bin load above), tag the eval keys,
         # and tag each input ciphertext as it is deserialized — at deterministic
         # points that keep record/replay addresses aligned.
-
-    def _gen_niobium_record_stop(self, stage: StageInfo, has_result: bool = True):
-        # On the recording run, probe the outputs and finalize the trace. Then,
-        # on every run, replay through the FHETCH simulator and rehydrate the
-        # result ciphertexts from their probes. `result` is declared at main
-        # scope by _gen_main, so it is visible both here and for serialization.
-        self.wl("if (!niobium::compiler().is_cache_valid()) {")
-        self.indent()
-        if has_result:
-            self._gen_result_io(stage, "probe")
-        self.wl("niobium::compiler().stop();")
-        self.wl("niobium::compiler().enable_hollow_mode(false);")
-        self.dedent()
-        self.wl("}")
-        self.blank()
-
-        self.wl('std::cout << "[nb] Replaying through FHETCH simulator" << std::endl;')
-        self.wl("if (!niobium::compiler().replay()) {")
-        self.indent()
-        self.wl('std::cerr << "[ERROR] FHETCH replay failed!" << std::endl;')
-        self.wl("return 1;")
-        self.dedent()
-        self.wl("}")
-        if has_result:
-            self._gen_result_io(stage, "rehydrate")
 
     def _stage_result_wire(self, stage: StageInfo):
         """Return the wire definition this stage writes (for probe/rehydrate)."""
