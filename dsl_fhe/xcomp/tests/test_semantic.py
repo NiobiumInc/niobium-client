@@ -168,6 +168,43 @@ def test_for_loop_binding():
     assert not sa.errors.has_errors()
 
 
+def test_depth_exceeded_error():
+    # A multiplication chain deeper than the scheme budget is a hard error
+    # (a static lower bound exceeding the budget guarantees noise overflow).
+    sa = check("""
+    scheme CKKS { security: not_set depth: 1 }
+    fn f(a: enc<f64>, b: enc<f64>, c: enc<f64>) -> enc<f64> {
+        return (a * b) * c
+    }
+    """)
+    assert any("depth" in str(e).lower() for e in sa.errors.errors), sa.errors.errors
+
+
+def test_depth_overprovision_warning():
+    # Straight-line program (no loops, no depth-opaque constructs): a budget
+    # far above the tracked chain warns about oversized ciphertexts.
+    sa = check("""
+    scheme CKKS { security: not_set depth: 20 }
+    fn f(a: enc<f64>, b: enc<f64>) -> enc<f64> {
+        return (a * b) * a
+    }
+    """)
+    assert any("greatly exceeds" in w for w in sa.errors.warnings), sa.errors.warnings
+
+
+def test_depth_overprovision_suppressed_when_opaque():
+    # chebyshev's internal depth is not modeled — the over-provision warning
+    # must stay silent rather than give a false economy recommendation.
+    sa = check("""
+    scheme CKKS { security: not_set depth: 20 }
+    fn f(a: enc<f64>, b: enc<f64>) -> enc<f64> {
+        let x = a * b
+        return chebyshev(|v| v, x, domain: [-1.0, 1.0], degree: 59)
+    }
+    """)
+    assert not any("greatly exceeds" in w for w in sa.errors.warnings), sa.errors.warnings
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_")]
     passed = 0

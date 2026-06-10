@@ -38,6 +38,14 @@ class SemanticAnalyzer:
         self.required_capabilities: list[str] = []
         self.domain_defs: dict[str, ast.DomainDecl] = {}
         self.max_depth: int = 23  # default from scheme
+        # Best-effort static depth accounting (loop bodies counted once):
+        # the deepest multiplication chain observed, and whether any encrypted
+        # multiply sits inside a loop (which makes the static count a lower
+        # bound only — suppresses the over-provision warning).
+        self.observed_max_depth: int = 0
+        self._loop_depth: int = 0
+        self._enc_mul_in_loop: bool = False
+        self._depth_opaque: bool = False
 
         # Register predefined type names
         self._register_builtins()
@@ -62,14 +70,18 @@ class SemanticAnalyzer:
             "load_matrix": NbType(TypeKind.FN, return_type=UNKNOWN),
             "load_vec": NbType(TypeKind.FN, return_type=UNKNOWN),
             "tile": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "clone": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "zero": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "relin": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "rotate": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "chebyshev": NbType(TypeKind.FN, return_type=UNKNOWN),
+            # Ciphertext-returning builtins: typed enc so depth tracking and
+            # encrypted-ness flow engage (depth restarts at 0 at each call —
+            # a best-effort lower bound; chebyshev's internal depth is not
+            # modeled here).
+            "clone": NbType(TypeKind.FN, return_type=enc_of(F64)),
+            "zero": NbType(TypeKind.FN, return_type=enc_of(F64)),
+            "relin": NbType(TypeKind.FN, return_type=enc_of(F64)),
+            "rotate": NbType(TypeKind.FN, return_type=enc_of(F64)),
+            "chebyshev": NbType(TypeKind.FN, return_type=enc_of(F64)),
             "running_sums": NbType(TypeKind.FN, return_type=VOID),
             "slot_replicator": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "slot_sum": NbType(TypeKind.FN, return_type=UNKNOWN),
+            "slot_sum": NbType(TypeKind.FN, return_type=enc_of(F64)),
             "slot_mask": NbType(TypeKind.FN, return_type=UNKNOWN),
             "reduce": NbType(TypeKind.FN, return_type=UNKNOWN),
             "map": NbType(TypeKind.FN, return_type=UNKNOWN),
@@ -89,13 +101,13 @@ class SemanticAnalyzer:
             "scale": NbType(TypeKind.FN, return_type=UNKNOWN),
             "prepend_column": NbType(TypeKind.FN, return_type=UNKNOWN),
             "root": NbType(TypeKind.FN, return_type=PATH),
-            "total_sums": NbType(TypeKind.FN, return_type=UNKNOWN),
+            "total_sums": NbType(TypeKind.FN, return_type=enc_of(F64)),
             "vec_zeros": NbType(TypeKind.FN, return_type=UNKNOWN),
             "mat_zeros": NbType(TypeKind.FN, return_type=UNKNOWN),
             "to_matrix_form": NbType(TypeKind.FN, return_type=UNKNOWN),
             # FHE / cipher built-ins
-            "negate": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "mul_monomial": NbType(TypeKind.FN, return_type=UNKNOWN),
+            "negate": NbType(TypeKind.FN, return_type=enc_of(F64)),
+            "mul_monomial": NbType(TypeKind.FN, return_type=enc_of(F64)),
             "load_model": NbType(TypeKind.FN, return_type=UNKNOWN),
             "extern_call": NbType(TypeKind.FN, return_type=UNKNOWN),
             # Casts / scalar helpers
@@ -129,6 +141,23 @@ class SemanticAnalyzer:
         self._pass_check_bodies(program)
         # Pass 4: verify wire type safety
         self._pass_verify_wire_types()
+        # Pass 5: depth-budget sanity. Over-provisioned depth makes every
+        # ciphertext linearly larger (size ~ depth+1) for no benefit. Only
+        # meaningful when the static count is exact: no encrypted multiplies
+        # inside loops (loop bodies are counted once, so the static depth is
+        # just a lower bound there).
+        if (self.observed_max_depth > 0
+                and not self._enc_mul_in_loop
+                and not self._depth_opaque
+                and self.max_depth > max(2 * self.observed_max_depth,
+                                         self.observed_max_depth + 8)):
+            self.errors.warn(
+                f"scheme depth {self.max_depth} greatly exceeds the deepest "
+                f"tracked multiplication chain ({self.observed_max_depth}); "
+                f"ciphertexts are ~{(self.max_depth + 1) / (self.observed_max_depth + 1):.1f}x "
+                f"larger than needed — consider lowering depth",
+                None,
+            )
 
     # ===== Pass 1: Collect types =====
 
@@ -260,7 +289,9 @@ class SemanticAnalyzer:
                 scope.define(Symbol(name, UNKNOWN))
             prev = self.current_scope
             self.current_scope = scope
+            self._loop_depth += 1
             self._check_block(stmt.body)
+            self._loop_depth -= 1
             self.current_scope = prev
 
         elif isinstance(stmt, ast.MatchStmt):
@@ -326,6 +357,7 @@ class SemanticAnalyzer:
                     ))
                 result = common_type(left_t, right_t)
                 result.needs_relin = True
+                self._depth_opaque = True  # deferred-relin depth not modeled
                 return result
             if expr.op in ("+", "-", "*", "/"):
                 result = common_type(left_t, right_t)
@@ -334,6 +366,10 @@ class SemanticAnalyzer:
                         getattr(left_t, 'depth', 0),
                         getattr(right_t, 'depth', 0),
                     ) + 1
+                    self.observed_max_depth = max(self.observed_max_depth,
+                                                  result.depth)
+                    if self._loop_depth > 0:
+                        self._enc_mul_in_loop = True
                     if result.depth > self.max_depth:
                         self.errors.error(DepthError(
                             f"multiplicative depth {result.depth} exceeds "
@@ -372,6 +408,14 @@ class SemanticAnalyzer:
             # Domain enforcement
             if isinstance(expr.func, ast.Ident):
                 self._check_domain_call(expr.func.name, expr.loc)
+                # Depth-opaque constructs: their internal multiplicative depth
+                # (chebyshev polynomial evaluation, external C++, closure
+                # bodies applied by combinators) is not statically modeled, so
+                # the over-provision check must stay silent for this program.
+                if expr.func.name in ("chebyshev", "extern_call",
+                                      "map", "zip_map", "reduce",
+                                      "running_sums"):
+                    self._depth_opaque = True
             if func_type.kind == TypeKind.FN and func_type.return_type:
                 return func_type.return_type
             return UNKNOWN
@@ -435,7 +479,9 @@ class SemanticAnalyzer:
                 scope.define(Symbol(name, UNKNOWN))
             prev = self.current_scope
             self.current_scope = scope
+            self._loop_depth += 1
             self._check_block(expr.body)
+            self._loop_depth -= 1
             self.current_scope = prev
             return UNKNOWN  # vec of body result
 

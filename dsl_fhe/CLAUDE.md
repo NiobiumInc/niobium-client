@@ -176,14 +176,21 @@ codegen handlers and don't need to be in `FHE_SHARED_FNS`.
 
 `_is_encrypted_expr()` decides whether an expression is a ciphertext — which
 drives critical codegen choices (`NullSafeEvalAdd` vs `cc->EvalAdd`, whether to
-`const_pointer_cast`, etc.). It **first** uses real type information (symbol
-table entries and the current function's `enc<T>` parameters); only when that is
-unavailable does it fall back to a **name heuristic**: `ENCRYPTED_PREFIXES` /
-`ENCRYPTED_EXACT_NAMES` (`codegen.py:80`).
+`const_pointer_cast`, etc.). It first uses **structural evidence**: recorded
+let-binding flow (`_enc_vars`/`_plain_vars`, populated by
+`_record_let_enc_state` from explicit `enc<T>` annotations, encrypted/plaintext
+builtin return kinds, and initializer flow), symbol-table types, and the
+current function's `enc<T>` parameters. Only when none of that resolves does it
+fall back to a **name heuristic**: `ENCRYPTED_PREFIXES` /
+`ENCRYPTED_EXACT_NAMES` (`codegen.py:80`). The flow tracking means a
+plainly-named local bound to an encrypted expression (`let total =
+slot_sum(...)`) and an encrypted-sounding local bound to plaintext (`let result
+= decrypt(...)`) are both classified correctly regardless of name.
 
-The fallback is fragile. A plaintext local whose name happens to start with an
-encrypted prefix — e.g. `result_index`, `hidden_dim`, `recon_loss` (matching
-`result`, `hidden`, `recon`) — is **misclassified as encrypted** and will
+The fallback is still fragile where structure can't reach: loop-pattern
+variables, combinator closure parameters, and wire-field accesses. There, a
+plaintext name matching an encrypted prefix — e.g. `result_index`,
+`hidden_dim`, `recon_loss` — is **misclassified as encrypted** and will
 generate C++ that compiles but produces garbage. ALL-CAPS names are exempted
 (treated as constants). When adding examples, avoid plaintext variable names
 that collide with these prefixes, or give them an explicit type so the
