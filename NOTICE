@@ -2,9 +2,9 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-05-22
+Generated: 2026-06-09
 Tool: SCANOSS (snippet detection with License dataset)
-Components: 81
+Components: 78
 
 This file lists all third-party software components detected
 in this repository, along with their licenses and copyright
@@ -42,7 +42,7 @@ LICENSE SUMMARY
   BSD-2-Clause AND LGPL-2.1-only: 1 component(s)
   BSD-2-Clause-Darwin: 1 component(s)
   BSD-2-Clause-Patent: 1 component(s)
-  BSD-3-Clause: 35 component(s)
+  BSD-3-Clause: 33 component(s)
   BSD-3-Clause AND GPL-2.0-only AND BSD-3-Clause OR GPL-2.0-or-later AND GPL-1.0-or-later: 1 component(s)
   BSD-3-Clause AND ISC AND ISC AND MIT AND MIT: 1 component(s)
   BSD-3-Clause-LBNL: 1 component(s)
@@ -143,7 +143,7 @@ LICENSE SUMMARY
   LPPL-1.3c: 1 component(s)
   Libpng: 1 component(s)
   Linux-syscall-note: 1 component(s)
-  MIT: 20 component(s)
+  MIT: 19 component(s)
   MIT AND Apache-2.0: 1 component(s)
   MIT AND GPL-2.0-only AND GPL-1.0-or-later AND MIT AND GPL-1.0-or-later AND MIT AND Boehm-GC AND GPL-1.0-or-later: 1 component(s)
   MIT AND GPL-3.0-only: 1 component(s)
@@ -192,15 +192,6 @@ LICENSE SUMMARY
 
 COMPONENT ATTRIBUTIONS
 
-  2023_Pair
-  Version: step2
-  Source: https://github.com/Enqurance/2023_Pair
-  PURL: pkg:github/enqurance/2023_pair
-  Copyright:
-    Copyright 2006; Google Inc.
-    Copyright 2009; Google Inc.
-  License: BSD-3-Clause
-
   AsersX-for-Termux
   Version: v1.0.0
   Source: https://github.com/TermuxnTR/AsersX-for-Termux
@@ -216,7 +207,6 @@ COMPONENT ATTRIBUTIONS
   PURL: pkg:github/eliainnocenti/astarsearch
   Copyright:
     Copyright 2007; Google Inc.
-    Copyright 2008; Google Inc.
   License: BSD-3-Clause
 
   aview
@@ -371,21 +361,6 @@ COMPONENT ATTRIBUTIONS
     Copyright 2008; Google Inc.
     Copyright copyright owner or entity authorized by
   License: Apache-2.0
-
-  Class-template-for-Images_LABPROG
-  Version: v1.0.0
-  Source: https://github.com/edorustichini/Class-template-for-Images_LABPROG
-  PURL: pkg:github/edorustichini/class-template-for-images_labprog
-  Copyright:
-    Copyright 2005 Google Inc. All Rights Reserved
-    Copyright 2017 Google Inc
-    Copyright 2005 Google Inc.
-    Copyright 2005 Google Inc. All Rights Reserved.
-    Copyright 2005; Google Inc.
-    Copyright 2008; Google Inc.
-    Copyright 2017 Google Inc.
-    Copyright 2025; Google Inc.
-  License: BSD-3-Clause
 
   codspeed-cpp
   Version: v1.0.0
@@ -594,14 +569,6 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2014; Randolph Voorhies; Shane Grant
   License: BSD-3-Clause
 
-  github.com/yhirose/cpp-httplib
-  Version: v0.41.1-0.20260404040226-ca82c93772c7
-  Source: https://proxy.golang.org/github.com/yhirose/cpp-httplib/@v/v0.41.1-0.20260404040226-ca82c93772c7.zip
-  PURL: pkg:golang/github.com/yhirose/cpp-httplib
-  Copyright:
-    Copyright 2026 Yuji Hirose. All rights reserved
-  License: MIT
-
   google-testmock
   Version: 1.14.0
   Source: https://www.nuget.org/packages/google-testmock
@@ -797,9 +764,7 @@ COMPONENT ATTRIBUTIONS
   Source: https://github.com/ianlancetaylor/libbacktrace
   PURL: pkg:github/ianlancetaylor/libbacktrace
   Copyright:
-    Copyright 2012-2016 Free Software Foundation Inc
     Copyright 2012-2024 Free Software Foundation Inc
-    Copyright (C) 2012-2016 Free Software Foundation; Inc.
     Copyright (C) 2012-2024 Free Software Foundation; Inc.
     Copyright (C) 2013-2024 Free Software Foundation; Inc.
     Copyright (C) 2015-2024 Free Software Foundation; Inc.
@@ -1042,7 +1007,6 @@ COMPONENT ATTRIBUTIONS
   Source: https://github.com/mykolassl/objektinis-prog-class
   PURL: pkg:github/mykolassl/objektinis-prog-class
   Copyright:
-    Copyright 2006; Google Inc.
     Copyright 2008; Google Inc.
   License: BSD-3-Clause
 
@@ -1266,8 +1230,6 @@ COMPONENT ATTRIBUTIONS
   PURL: pkg:github/eece3093c/under-the-c-desktop
   Copyright:
     Copyright 2008; Google Inc.
-    Copyright 2009; Google Inc.
-    Copyright 2010; Google Inc.
   License: BSD-3-Clause
 
   upx
@@ -1323,34 +1285,6 @@ COMPONENT ATTRIBUTIONS
 ------------------------------------------------------------
 
 FULL LICENSE TEXTS
-
---- BSD-3-Clause ---
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
-
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
-
-3. Neither the name of the copyright holder nor the names of its contributors
-   may be used to endorse or promote products derived from this software
-   without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 
 --- 0BSD ---
 
@@ -10102,6 +10036,34 @@ The copyright notices in the Software and this entire statement, including the a
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR ANYONE DISTRIBUTING THE SOFTWARE BE LIABLE FOR ANY DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+
+
+--- BSD-3-Clause ---
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 --- BSD-3-Clause AND GPL-2.0-only AND BSD-3-Clause OR GPL-2.0-or-later AND GPL-1.0-or-later ---
