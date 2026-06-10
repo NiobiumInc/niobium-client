@@ -172,31 +172,33 @@ without any `enc<T>` in their signature.
 Built-in FHE operations (`rotate`, `negate`, etc.) use `cc->` directly in their
 codegen handlers and don't need to be in `FHE_SHARED_FNS`.
 
-### ⚠️ Encrypted-Variable Detection Is a Fragile Heuristic
+### Encrypted-Variable Detection: Structural Flow with a Warned Fallback
 
 `_is_encrypted_expr()` decides whether an expression is a ciphertext — which
 drives critical codegen choices (`NullSafeEvalAdd` vs `cc->EvalAdd`, whether to
-`const_pointer_cast`, etc.). It first uses **structural evidence**: recorded
-let-binding flow (`_enc_vars`/`_plain_vars`, populated by
-`_record_let_enc_state` from explicit `enc<T>` annotations, encrypted/plaintext
-builtin return kinds, and initializer flow), symbol-table types, and the
-current function's `enc<T>` parameters. Only when none of that resolves does it
-fall back to a **name heuristic**: `ENCRYPTED_PREFIXES` /
-`ENCRYPTED_EXACT_NAMES` (`codegen.py:80`). The flow tracking means a
-plainly-named local bound to an encrypted expression (`let total =
-slot_sum(...)`) and an encrypted-sounding local bound to plaintext (`let result
-= decrypt(...)`) are both classified correctly regardless of name.
+`const_pointer_cast`, etc.). Classification is **structural first**:
 
-The fallback is still fragile where structure can't reach: loop-pattern
-variables, combinator closure parameters, and wire-field accesses. There, a
-plaintext name matching an encrypted prefix — e.g. `result_index`,
-`hidden_dim`, `recon_loss` — is **misclassified as encrypted** and will
-generate C++ that compiles but produces garbage. ALL-CAPS names are exempted
-(treated as constants). When adding examples, avoid plaintext variable names
-that collide with these prefixes, or give them an explicit type so the
-type-info path wins. `test_encrypted_var_heuristic` in `tests/test_codegen.py`
-pins both the good classifications and the known false positives; a proper fix
-would be full type-driven detection (update that test when doing so).
+- let-binding flow (`_enc_vars`/`_plain_vars` via `_record_let_enc_state`):
+  explicit `enc<T>` annotations, builtin return kinds from the unified
+  registry (`builtins_registry.py`), user-function declared return types
+  (`_fn_sigs`), and initializer flow;
+- loop elements take the iterable's element state (ranges → plain,
+  encrypted collections → encrypted, `replicate`/`enumerate` → (plain, elem));
+- combinator closure params (`map`/`zip_map`/`reduce`) take the collection's
+  element state; `chebyshev` closure params are plain doubles;
+- wire-field accesses (`w.field`) resolve from the wire declaration
+  (`_wire_vars` records `let w = load(Wire, ...)`);
+- destructured tuples from user fns with declared tuple returns record each
+  position.
+
+Only when none of that resolves does it fall back to the **name heuristic**
+(`ENCRYPTED_PREFIXES` / `ENCRYPTED_EXACT_NAMES`) — and every fallback is
+reported as a per-variable warning by `nbc compile`
+("encrypted-ness of 'x' ... decided by the variable-name heuristic"). All six
+shipped examples compile with **zero** fallbacks. When you see the warning,
+add an annotation (`let x: enc<...> = ...`) or rename a plaintext variable —
+don't rely on the heuristic for new code. `test_enc_flow_beats_name_heuristic`
+and friends in `tests/test_codegen.py` pin the behavior.
 
 ### How `encrypt()` Compiles
 
@@ -413,8 +415,12 @@ Quick summary:
 
 ## Adding a New Built-in Function
 
-1. Add the handler in `codegen.py:_gen_call_expr()` under the `fname == "..."` checks
-2. If it returns encrypted data, add to `ENCRYPTED_RETURN_FNS`
-3. If it's a shared function needing `cc` but has no `enc<T>` in its signature, add to `FHE_SHARED_FNS`
-4. Add to `PLAINTEXT_ONLY_FNS` if it never produces FHE operations
-5. Update `NB_LANGUAGE.md` built-in functions table
+1. Declare it once in `xcomp/builtins_registry.py` — return kind (`enc`,
+   `plain`, a concrete scalar, or `unknown`), plus `vector_return` /
+   `depth_opaque` flags. Both the semantic analyzer and codegen derive their
+   classification tables from this single registry.
+2. Add the codegen handler in `codegen.py:_gen_call_expr_impl()` under the
+   `fname == "..."` checks.
+3. If it's a shared function needing `cc` but has no `enc<T>` in its
+   signature, add to `FHE_SHARED_FNS`.
+4. Update `NB_LANGUAGE.md`'s built-in functions table.

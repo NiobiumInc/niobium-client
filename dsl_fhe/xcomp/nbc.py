@@ -91,10 +91,11 @@ def cmd_compile(args):
             print(sa.errors.report(), file=sys.stderr)
             return 1
 
+        files = generate(program, sa)
+
+        # Warnings from analysis AND code generation (heuristic fallbacks).
         for w in sa.errors.warnings:
             print(w, file=sys.stderr)
-
-        files = generate(program, sa)
 
         outdir = Path(args.outdir)
         outdir.mkdir(parents=True, exist_ok=True)
