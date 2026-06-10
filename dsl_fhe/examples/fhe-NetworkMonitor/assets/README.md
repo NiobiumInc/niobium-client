@@ -31,8 +31,8 @@ Obtain the trained model + Mirai dataset from the fhe-NetworkMonitor submission
 package and build against them:
 
 ```bash
-make fhe-network-monitor NIOBIUM_COMPILER_ROOT=/path/to/checkout
+make fhe-network-monitor SUBMISSION_REPO=/path/to/submission-repo
 ```
 
-When `NIOBIUM_COMPILER_ROOT` is set, the Makefile populates `assets/` from that
+When `SUBMISSION_REPO` is set, the Makefile populates `assets/` from that
 checkout's `examples/fhe-NetworkMonitor/assets` instead of the stubs.

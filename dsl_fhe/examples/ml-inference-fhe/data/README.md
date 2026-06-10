@@ -29,7 +29,7 @@ ml-inference submission package (the open-source ML inference repo / submission
 that ships `mlp_openfhe.cpp` + `data/*.bin`), then build against them:
 
 ```bash
-make ml-inference NIOBIUM_COMPILER_ROOT=/path/to/that/checkout
+make ml-inference SUBMISSION_REPO=/path/to/submission-repo
 ```
 
 When `SUBMISSION_DIR` resolves to a real submission, its `src/mlp_openfhe.cpp`

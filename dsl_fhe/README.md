@@ -175,8 +175,8 @@ dsl_fhe/
 - Python 3 with numpy (for dataset generation and verification)
 
 The generated binaries record an unoptimized `.fhetch` instruction trace and
-replay it locally through the FHETCH simulator (the open-source client flow);
-they do **not** require the proprietary compiler (`libnbcc`).
+replay it locally through the FHETCH simulator. The whole flow runs against the
+open-source niobium-client (`libnbfhetch`) — no proprietary components needed.
 
 ### Build
 
@@ -394,7 +394,7 @@ original hand-written C++ submission.
 
 ### `simple/` — Basic Cipher Operations
 
-A minimal test harness based on the Niobium compiler's `examples/fetch` benchmark.
+A minimal test harness of elementary CKKS cipher operations.
 Encrypts two scalar values, applies one of 25 operations, decrypts and verifies.
 
 Operations include cipher-cipher arithmetic (ADD, MUL, MUL_MUL, ADD_MUL, ...),
@@ -458,7 +458,7 @@ computes the final MSE score. Uses Chebyshev-approximated sigmoid and tanh activ
 > end-to-end (keygen → encrypt → encrypted inference) without any external repo,
 > but the anomaly scores are **not** meaningful. For real detection, obtain the
 > submission and build with
-> `make fhe-network-monitor NIOBIUM_COMPILER_ROOT=/path/to/checkout`. See
+> `make fhe-network-monitor SUBMISSION_REPO=/path/to/submission-repo`. See
 > `examples/fhe-NetworkMonitor/assets/README.md`.
 
 **Pipeline stages:**
@@ -490,7 +490,7 @@ loaded at runtime through a local DSL bridge (`mlp_bridge.cpp`).
 > **stub zero-weights** so it compiles and runs end-to-end without any external
 > repo — but the output is **not** real inference. For real results, obtain the
 > ml-inference submission and build with
-> `make ml-inference NIOBIUM_COMPILER_ROOT=/path/to/checkout`. See
+> `make ml-inference SUBMISSION_REPO=/path/to/submission-repo`. See
 > `examples/ml-inference-fhe/data/README.md`.
 
 - Client encrypts each image into one ciphertext, tiled to fill all 1024 slots

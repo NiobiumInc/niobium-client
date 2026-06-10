@@ -10,16 +10,16 @@ NIOBIUM_CLIENT_ROOT ?= $(realpath $(CURDIR)/..)
 # Self-contained examples (simple, fetch-by-similarity, password-retrieval) have
 # no external dependencies — they build and run from this repo alone.
 #
-# The optional ml-inference and fhe-NetworkMonitor examples additionally need
-# proprietary "submission" sources (HEIR model code, KitNET weights/assets) that
-# ship with the closed-source niobium-compiler repo. They are NOT part of the
-# default build. To build them, point NIOBIUM_COMPILER_ROOT at such a checkout:
-#   make ml-inference NIOBIUM_COMPILER_ROOT=/path/to/niobium-compiler
-NIOBIUM_COMPILER_ROOT ?=
+# By default the optional ml-inference and fhe-NetworkMonitor examples build
+# against vendored STUBS, so they too need no external sources. To build them
+# with the REAL model/weights — which ship as a separate submission package, not
+# vendored here — point SUBMISSION_REPO at a checkout that provides it:
+#   make ml-inference SUBMISSION_REPO=/path/to/submission-repo
+SUBMISSION_REPO ?=
 
 .PHONY: test-compiler examples fetch-by-similarity simple fhe-network-monitor ml-inference \
        password-retrieval test-simple test-fetch test-nid test-ml test-password test-examples \
-       require-compiler-root clean help
+       clean help
 
 # ---------------------------------------------------------------------------
 # Tests
@@ -88,7 +88,7 @@ test-compiler:
 # Examples
 # ---------------------------------------------------------------------------
 
-# Default build: all examples are self-contained (no niobium-compiler dependency).
+# Default build: all examples are self-contained (no external-repo dependency).
 # ml-inference and fhe-NetworkMonitor build against stub model/assets — they run
 # but don't produce real results (real model/weights need the submission; see
 # each example's data/README.md). test-examples runs only the examples that
@@ -151,21 +151,12 @@ simple:
 # Self-contained by default: the build needs no external sources, and STUB
 # model/dataset assets are generated so it runs end-to-end (not real detection;
 # see examples/fhe-NetworkMonitor/assets/README.md). For real detection, set
-# NIOBIUM_COMPILER_ROOT to a checkout shipping the trained KitNET model + Mirai
+# SUBMISSION_REPO to a checkout shipping the trained KitNET model + Mirai
 # dataset; its assets are then used instead of the stubs.
 
-NID_SUBMISSION := $(NIOBIUM_COMPILER_ROOT)/examples/fhe-NetworkMonitor
+NID_SUBMISSION := $(SUBMISSION_REPO)/examples/fhe-NetworkMonitor
 NID_NB_OUT     := $(EXAMPLES)/fhe-NetworkMonitor/nb_out
 NID_ASSETS     := $(CURDIR)/$(EXAMPLES)/fhe-NetworkMonitor/assets
-
-# Guard for examples that genuinely cannot be stubbed (require an external
-# niobium-compiler checkout). Currently unused by the default targets.
-require-compiler-root:
-	@if [ -z "$(NIOBIUM_COMPILER_ROOT)" ]; then \
-		echo "ERROR: this example needs proprietary sources from niobium-compiler."; \
-		echo "       Re-run with: make <target> NIOBIUM_COMPILER_ROOT=/path/to/niobium-compiler"; \
-		exit 1; \
-	fi
 
 fhe-network-monitor:
 	@echo "=== Compiling fhe-NetworkMonitor (DSL → C++) ==="
@@ -176,7 +167,7 @@ fhe-network-monitor:
 		../$(EXAMPLES)/fhe-NetworkMonitor/server.nb \
 		--outdir ../$(NID_NB_OUT)
 	@echo ""
-ifeq ($(NIOBIUM_COMPILER_ROOT),)
+ifeq ($(SUBMISSION_REPO),)
 	@echo "=== Generating stub KitNET model + dataset (self-contained build) ==="
 	@python3 $(EXAMPLES)/fhe-NetworkMonitor/assets/make_stub_assets.py TOY
 else
@@ -198,10 +189,10 @@ endif
 # Self-contained by default: builds against a STUB MLP model (mlp_openfhe.{h,cpp})
 # and stub zero-weights, so no external/private repo is needed. The output is not
 # real inference (see examples/ml-inference-fhe/data/README.md). For real results,
-# set NIOBIUM_COMPILER_ROOT to a checkout that ships the HEIR model + trained
+# set SUBMISSION_REPO to a checkout that ships the HEIR model + trained
 # weights; its submission sources/weights then take precedence over the stub.
 
-ML_SUBMISSION := $(NIOBIUM_COMPILER_ROOT)/examples/ml-inference-fhe/submission
+ML_SUBMISSION := $(SUBMISSION_REPO)/examples/ml-inference-fhe/submission
 ML_NB_OUT     := $(EXAMPLES)/ml-inference-fhe/nb_out
 ML_LOCAL_SRCS := $(realpath $(CURDIR)/$(EXAMPLES)/ml-inference-fhe)
 ML_DATA_DIR   := $(CURDIR)/$(EXAMPLES)/ml-inference-fhe/data
@@ -215,7 +206,7 @@ ml-inference:
 		../$(EXAMPLES)/ml-inference-fhe/server.nb \
 		--outdir ../$(ML_NB_OUT)
 	@echo ""
-ifeq ($(NIOBIUM_COMPILER_ROOT),)
+ifeq ($(SUBMISSION_REPO),)
 	@echo "=== Generating stub MLP weights (self-contained build) ==="
 	@python3 $(EXAMPLES)/ml-inference-fhe/data/make_stub_weights.py $(ML_DATA_DIR)
 endif
@@ -225,7 +216,7 @@ endif
 	@cd $(ML_NB_OUT)/build && \
 		cmake .. -DNIOBIUM_CLIENT_ROOT=$(NIOBIUM_CLIENT_ROOT) \
 		         -DLOCAL_SRC_DIR=$(ML_LOCAL_SRCS) \
-		         $(if $(NIOBIUM_COMPILER_ROOT),-DSUBMISSION_DIR=$(ML_SUBMISSION),) && \
+		         $(if $(SUBMISSION_REPO),-DSUBMISSION_DIR=$(ML_SUBMISSION),) && \
 		$(MAKE) -j$(NPROC) 2>&1
 	@echo ""
 	@echo "Built binaries in $(ML_NB_OUT)/build/"
@@ -317,7 +308,7 @@ test-ml: ml-inference
 	@echo "=== Testing ml-inference-fhe (build + keygen + encrypt + compute, single) ==="
 	@cd $(ML_NB_OUT)/build && \
 		export LD_LIBRARY_PATH=$(LD_LIB_PATH) && \
-		export ML_WEIGHT_DIR=$(if $(NIOBIUM_COMPILER_ROOT),$(ML_SUBMISSION)/data,$(ML_DATA_DIR)) && \
+		export ML_WEIGHT_DIR=$(if $(SUBMISSION_REPO),$(ML_SUBMISSION)/data,$(ML_DATA_DIR)) && \
 		mkdir -p datasets/single/intermediate && \
 		test -s datasets/single/intermediate/test_pixels.txt || \
 			python3 -c "print(' '.join(['0.000000']*784))" > datasets/single/intermediate/test_pixels.txt && \
