@@ -2,7 +2,7 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-06-09
+Generated: 2026-06-10
 Tool: SCANOSS (snippet detection with License dataset)
 Components: 78
 
@@ -556,7 +556,9 @@ COMPONENT ATTRIBUTIONS
   Source: https://proxy.golang.org/github.com/ianlancetaylor/libbacktrace/@v/v0.0.0-20200513181113-9b7f216e8679.zip
   PURL: pkg:golang/github.com/ianlancetaylor/libbacktrace
   Copyright:
+    Copyright 2012-2016 Free Software Foundation Inc
     Copyright 2012-2018 Free Software Foundation Inc
+    Copyright (C) 2012-2016 Free Software Foundation; Inc.
     Copyright (C) 2012-2018 Free Software Foundation; Inc.
     Copyright (c) 2012-2018 Free Software Foundation; Inc.
   License: BSD-2-Clause, BSD-3-Clause
