@@ -1,0 +1,125 @@
+// shared.nb — Types and constants visible to both client and server domains
+//============================================================================
+// This module defines the wire protocol between client and server.
+// Nothing in this file touches secret key material.
+//============================================================================
+
+const PAYLOAD_DIM: u32 = 8
+const MAX_PAYLOAD_VAL: u32 = 256
+const PAYLOAD_PRECISION: u32 = 16
+const THRESHOLD: f64 = 0.8
+const RUNNING_SUM_LEVELS: u32 = 3
+
+enum InstanceSize { Toy, Small, Medium, Large, ToyLargeRing }
+
+struct Instance {
+    size: InstanceSize,
+    record_dim: u32,
+    db_size: u32,
+    ring_dim: u32,
+    degrees: vec<u32>,
+}
+
+fn instance(size: InstanceSize) -> Instance {
+    match size {
+        Toy          => Instance { size, record_dim: 128, db_size: 1000,
+                                   ring_dim: 2048,  degrees: [8, 4, 4] },
+        Small        => Instance { size, record_dim: 128, db_size: 50000,
+                                   ring_dim: 65536, degrees: [8, 4, 4] },
+        Medium       => Instance { size, record_dim: 256, db_size: 500000,
+                                   ring_dim: 65536, degrees: [8, 8, 4] },
+        Large        => Instance { size, record_dim: 512, db_size: 20000000,
+                                   ring_dim: 65536, degrees: [16, 8, 4] },
+        ToyLargeRing => Instance { size, record_dim: 128, db_size: 1000,
+                                   ring_dim: 65536, degrees: [8, 4, 4] },
+    }
+}
+
+fn n_slots(inst: Instance) -> u32 { inst.ring_dim / 2 }
+fn n_ctxts(inst: Instance) -> u32 { ceil_div(inst.db_size, n_slots(inst)) }
+fn n_cols(inst: Instance) -> u32 { inst.ring_dim / 128 }
+fn max_n_match(inst: Instance) -> u32 { 64 / PAYLOAD_DIM }
+
+fn instance_name(size: InstanceSize) -> string {
+    match size {
+        Toy          => "toy",
+        Small        => "small",
+        Medium       => "medium",
+        Large        => "large",
+        ToyLargeRing => "toy_large_ring",
+    }
+}
+
+// Directory layout (matches the benchmark repository structure)
+fn datadir(inst: Instance) -> path { root() / "datasets" / instance_name(inst.size) }
+fn iodir(inst: Instance) -> path   { root() / "io" / instance_name(inst.size) }
+fn keydir(inst: Instance) -> path  { iodir(inst) / "keys" }
+fn encdir(inst: Instance) -> path  { iodir(inst) / "encrypted" }
+
+// ============================================================================
+// Wire types: the ONLY types that can cross the client <-> server boundary.
+// The compiler verifies that no SecretKey appears in any wire type.
+// ============================================================================
+
+wire CryptoParams {
+    context: CryptoContext,
+    public_key: PublicKey,
+    eval_mult_key: EvalMultKey,
+    eval_rot_keys: EvalAutomorphismKeys,
+}
+
+wire EncryptedDB {
+    rows: vec<vec<enc<vec<f64>>>>,       // [batch][row]
+    payloads: vec<vec<enc<vec<f64>>>>,   // [batch][payload_idx]
+}
+
+wire EncryptedQuery {
+    query: enc<vec<f64>>,
+}
+
+wire EncryptedResult {
+    result: enc<vec<f64>>,
+}
+
+// ============================================================================
+// Helper: decode payloads from decrypted slot layout (plaintext-only logic)
+// Used by client_decrypt_decode and client_postprocess
+// ============================================================================
+
+fn decode_payloads(matrix: mat<f64>, n_cols: u32) -> vec<vec<i16>> {
+    let results: vec<vec<i16>> = []
+
+    for col in 0..n_cols {
+        for i in stride(0, rows(matrix), PAYLOAD_DIM) {
+            let block = matrix[i..i+PAYLOAD_DIM, col]
+            let (marker_idx, max_val) = argmax(block)
+
+            if max_val > MAX_PAYLOAD_VAL {
+                assert max_val > MAX_PAYLOAD_VAL * 1.4,
+                    "marker not found in payload"
+
+                let scale = (2.0 * MAX_PAYLOAD_VAL * PAYLOAD_PRECISION)
+                            / max_val
+                let rec = for k in 1..PAYLOAD_DIM {
+                    round(scale * block[(marker_idx + k) % PAYLOAD_DIM])
+                    |> as i16
+                }
+                results.push(rec)
+            }
+        }
+    }
+    return sort(results)
+}
+
+// Helper: convert flat slot vector to matrix form (running-sums layout)
+fn to_matrix_form(slots: vec<f64>, n_cols: u32) -> mat<f64> {
+    let n_rows_per_vec = len(slots) / n_cols
+    let matrix = mat_zeros<f64>(n_rows_per_vec, n_cols)
+
+    for i in 0..n_rows_per_vec {
+        for j in 0..n_cols {
+            matrix[i][j] = slots[j + i * n_cols]
+        }
+    }
+    return matrix
+}

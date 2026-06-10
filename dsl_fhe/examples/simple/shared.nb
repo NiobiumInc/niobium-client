@@ -1,0 +1,111 @@
+// shared.nb — Types and constants for simple cipher operations
+//============================================================================
+// A minimal FHE test harness demonstrating basic CKKS arithmetic.
+// Encrypts two scalar values and applies one of ~25 operations (add, mul,
+// rotate, negate, immediate, combinations), then decrypts and verifies.
+//============================================================================
+
+// ============================================================================
+// Instance sizes
+// ============================================================================
+
+enum InstanceSize { Toy, Small, Medium, Large }
+
+struct Instance {
+    size: InstanceSize,
+    ring_dim: u32,
+}
+
+fn instance(size: InstanceSize) -> Instance {
+    match size {
+        Toy    => Instance { size, ring_dim: 2048 },
+        Small  => Instance { size, ring_dim: 65536 },
+        Medium => Instance { size, ring_dim: 65536 },
+        Large  => Instance { size, ring_dim: 65536 },
+    }
+}
+
+fn instance_name(size: InstanceSize) -> string {
+    match size {
+        Toy    => "toy",
+        Small  => "small",
+        Medium => "medium",
+        Large  => "large",
+    }
+}
+
+// ============================================================================
+// Operations
+//
+// Each variant maps to one of the server-side operation functions.
+// Operations fall into three categories:
+//   - Cipher-cipher:  two encrypted inputs (ADD, MUL, ...)
+//   - Immediate:      one encrypted input + a scalar constant (ADDI, MULI, ...)
+//   - Rotation:       one or two encrypted inputs + a rotation index
+// ============================================================================
+
+enum Operation {
+    // Cipher-cipher arithmetic
+    ADD,                        // ct1 + ct2
+    MUL,                        // ct1 * ct2
+    MUL_MUL,                    // (ct1 * ct2) * ct1
+    ADD_MUL,                    // (ct1 + ct2) * ct1
+    MUL_ADD,                    // (ct1 * ct2) + ct1
+    ADD_ADD,                    // (ct1 + ct2) + ct1
+    ADD_NEG,                    // (ct1 + ct2) + (-ct1)  => ct2
+    MUL_ADD_NEG,                // ((ct1 * ct2) + ct1) - ct2
+    NEG_MUL_ADD,                // ((-ct1) * ct2) + ct1 + ct2
+    ADD_NEG_MUL_ADD,            // ((ct1 + ct2) * (-ct1)) + ct2
+    MAT_PATTERN,                // (ct1 + ct2) * (ct1 - ct2)  => ct1^2 - ct2^2
+
+    // Rotation-based
+    ROTATE_ADD,                 // rotate(ct1, n) + ct2
+    ADD_ROTATE,                 // rotate(ct1 + ct2, n)
+    ROTATE_MUL,                 // rotate(ct1, n) * ct2
+    ROTATE_ROTATE,              // rotate(ct1, n) + rotate(ct2, -n)
+
+    // Immediate (cipher + scalar)
+    ADDI,                       // ct1 + imm
+    SUBI,                       // ct1 - imm
+    MULI,                       // ct1 * imm
+    MULI_ADDI,                  // (ct1 * imm) + imm
+    ADDI_MULI,                  // (ct1 + imm) * imm
+
+    // Mixed (cipher + cipher + immediate)
+    MULI_ADD,                   // (ct1 * imm) + ct2
+    ADD_ADDI_MULI_ADDI_MULI_NEG, // -((((ct1+ct2)+imm)*imm+imm)*imm)
+    MULI_ROT_ADD_MUL_SUBI,     // ((rotate(ct1*imm, imm) + ct2) * ct2) - imm
+
+    // Loop
+    LARGE_ADD_MUL,              // repeat N times: result = (result + ct2) * ct2
+
+    // Low-level
+    MUL_MONOMIAL,               // MultByMonomial(ct1, power)
+}
+
+// ============================================================================
+// Directory layout
+// ============================================================================
+
+fn iodir(inst: Instance) -> path    { root() / "io" / instance_name(inst.size) }
+fn keydir(inst: Instance) -> path   { iodir(inst) / "keys" }
+fn encdir(inst: Instance) -> path   { iodir(inst) / "encrypted" }
+
+// ============================================================================
+// Wire types
+// ============================================================================
+
+wire CryptoParams {
+    context: CryptoContext,
+    public_key: PublicKey,
+    eval_mult_key: EvalMultKey,
+    eval_rot_keys: EvalAutomorphismKeys,
+}
+
+wire EncryptedInput {
+    ciphertext: enc<f64>,
+}
+
+wire EncryptedResult {
+    ciphertext: enc<f64>,
+}

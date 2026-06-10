@@ -1,0 +1,72 @@
+// shared.nb — Types and constants for password retrieval
+//============================================================================
+// FHE-based password retrieval using security questions.
+//
+// Packing strategy: Single-slot packing (one value per ciphertext).
+// Each security question answer is a numeric code (e.g., hashed from text).
+// The server computes squared error between submitted and stored answers,
+// then applies a Chebyshev-approximated indicator function. If all 5
+// answers match, the indicator ≈ 1 and the password is revealed;
+// otherwise the indicator ≈ 0 and the result is near-zero.
+//============================================================================
+
+// ============================================================================
+// Instance sizes
+// ============================================================================
+
+enum InstanceSize { Toy, Small }
+
+struct Instance {
+    size: InstanceSize,
+    ring_dim: u32,
+}
+
+fn instance(size: InstanceSize) -> Instance {
+    match size {
+        Toy   => Instance { size, ring_dim: 2048 },
+        Small => Instance { size, ring_dim: 8192 },
+    }
+}
+
+fn instance_name(size: InstanceSize) -> string {
+    match size {
+        Toy   => "toy",
+        Small => "small",
+    }
+}
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const NUM_QUESTIONS: u32 = 5
+
+// ============================================================================
+// Directory layout
+// ============================================================================
+
+fn iodir(inst: Instance) -> path    { root() / "io" / instance_name(inst.size) }
+fn keydir(inst: Instance) -> path   { iodir(inst) / "keys" }
+fn encdir(inst: Instance) -> path   { iodir(inst) / "encrypted" }
+
+// ============================================================================
+// Wire types
+//
+// Single-ciphertext wire types work cleanly with the codegen's
+// auto-serialization. We reuse EncryptedValue for all encrypted scalars
+// (answers and password), saving each to a different file path.
+// ============================================================================
+
+wire CryptoParams {
+    context: CryptoContext,
+    public_key: PublicKey,
+    eval_mult_key: EvalMultKey,
+}
+
+wire EncryptedValue {
+    ciphertext: enc<f64>,
+}
+
+wire EncryptedResult {
+    result: enc<f64>,
+}

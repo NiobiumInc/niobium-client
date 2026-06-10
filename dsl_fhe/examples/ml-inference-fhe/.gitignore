@@ -1,0 +1,3 @@
+# Generated stub weights (created by data/make_stub_weights.py at build time).
+# Real weights come from the ml-inference submission — see data/README.md.
+data/*.bin

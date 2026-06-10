@@ -1,0 +1,101 @@
+// client.nb — Client-side operations for simple cipher ops
+//============================================================================
+// Runs on the CLIENT machine. Has access to the secret key.
+// Compiles to separate binaries:
+//   client_key_generation    <size> [mult_depth]
+//   client_encrypt           <size> <value_a> <value_b>
+//   client_decrypt_verify    <size> <expected>
+//============================================================================
+
+use shared::*
+
+// ============================================================================
+// Scheme configuration
+//
+// CKKS with configurable multiplicative depth (default 3).
+// Toy uses ring_dim 2048; all others use 65536.
+// ============================================================================
+
+scheme CKKS {
+    security: not_set
+    key_dist: uniform_ternary
+    scaling: flexible_auto
+    depth: 20
+}
+
+requires { add, mul, rotate }
+
+// ============================================================================
+// Stage 1: Key Generation
+// ============================================================================
+
+@client @stage("key_generation")
+fn generate_keys(inst: Instance, mult_depth: u32 = 3) -> writes(CryptoParams)
+{
+    scheme.override(depth: mult_depth)
+
+    if inst.size == Toy {
+        scheme.override(security: not_set, ring_dim: 2048)
+    }
+
+    let keys = keygen()
+
+    save_secret_key(keys.secret, keydir(inst) / "sk.bin")
+
+    return CryptoParams {
+        context: keys.context,
+        public_key: keys.public,
+        eval_mult_key: keys.eval_mult,
+        eval_rot_keys: keys.eval_rot,
+    }
+}
+
+// ============================================================================
+// Stage 2: Encrypt Two Scalars
+//
+// Encrypts value_a and value_b as single-slot CKKS ciphertexts.
+// Also encrypts a zero ciphertext (used as a virtual zero input by
+// the Niobium compiler for hardware replay).
+// ============================================================================
+
+@client @stage("encrypt")
+fn encrypt_inputs(inst: Instance, value_a: f64 = 3.0, value_b: f64 = 5.0)
+    -> reads(CryptoParams),
+       writes(EncryptedInput)
+{
+    let params = load(CryptoParams, from: keydir(inst))
+
+    let ct_a = encrypt(params.public_key, [value_a], slots: 1)
+    let ct_b = encrypt(params.public_key, [value_b], slots: 1)
+    let ct_zero = encrypt(params.public_key, [0.0], slots: 1)
+
+    save(EncryptedInput { ciphertext: ct_a },
+         to: iodir(inst) / "input_a.bin")
+    save(EncryptedInput { ciphertext: ct_b },
+         to: iodir(inst) / "input_b.bin")
+    save(EncryptedInput { ciphertext: ct_zero },
+         to: iodir(inst) / "zero.bin")
+}
+
+// ============================================================================
+// Stage 3: Decrypt and Verify
+//
+// Decrypts the server result and compares against expected value.
+// Passes if |result - expected| < 0.01 (FHE noise tolerance).
+// ============================================================================
+
+@client @stage("decrypt_verify")
+fn decrypt_verify(inst: Instance, expected: f64 = 8.0)
+    -> reads(EncryptedResult)
+{
+    let sk = load_secret_key(keydir(inst) / "sk.bin")
+    let encrypted = load(EncryptedResult, from: encdir(inst))
+
+    let result = decrypt(sk, encrypted.ciphertext)
+    let value = result[0]
+
+    let tolerance = 0.01
+    assert abs(value - expected) < tolerance
+
+    print(value)
+}

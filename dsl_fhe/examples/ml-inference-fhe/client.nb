@@ -1,0 +1,108 @@
+// client.nb — Client-side operations for ml-inference-fhe
+//============================================================================
+// Runs on the CLIENT machine. Has access to the secret key.
+// Compiles to separate binaries:
+//   client_key_generation          <size>
+//   client_encode_encrypt_input    <size>
+//   client_decrypt_decode          <size>
+//============================================================================
+
+use shared::*
+
+// ============================================================================
+// Scheme configuration
+//
+// Small ring (2048) with depth 8, sufficient for the 2-layer HEIR v2 MLP.
+// Security is not_set because the small ring is for development only.
+// ============================================================================
+
+scheme CKKS {
+    security: not_set
+    ring_dim: 2048
+    depth: 8
+}
+
+// Rotation indices 1..1023 needed for SIMD polynomial evaluation
+requires { add, mul, rotate }
+
+// ============================================================================
+// Stage 1: Key Generation
+// ============================================================================
+
+@client @stage("key_generation")
+fn generate_keys(inst: Instance) -> writes(CryptoParams)
+{
+    let keys = keygen()
+
+    save_secret_key(keys.secret, seckeydir(inst) / "sk.bin")
+
+    return CryptoParams {
+        context: keys.context,
+        public_key: keys.public,
+        eval_mult_key: keys.eval_mult,
+        eval_rot_keys: keys.eval_rot,
+    }
+}
+
+// ============================================================================
+// Stage 2: Encode and Encrypt Input
+//
+// Reads MNIST pixel data, pads to N_SLOTS by repeating, encrypts per batch.
+// Each batch is a single image encrypted into one ciphertext.
+// ============================================================================
+
+@client @stage("encode_encrypt_input")
+fn encrypt_input(inst: Instance)
+    -> reads(CryptoParams), writes(EncryptedInput[*])
+{
+    let params = load(CryptoParams, from: pubkeydir(inst))
+
+    // Load test dataset: batch_count images, each INPUT_DIM pixels (float32)
+    let dataset = load_matrix<f32>(
+        datadir(inst) / "intermediate" / "test_pixels.txt",
+        INPUT_DIM)
+
+    assert rows(dataset) == inst.batch_count
+
+    // Encrypt each image
+    for i in 0..inst.batch_count {
+        let pixels = dataset[i]
+
+        // Pad/tile to fill all N_SLOTS slots
+        let padded = tile(pixels, N_SLOTS)
+
+        let ct = encrypt(params.public_key, padded)
+        save(EncryptedInput { ciphertext: ct },
+             to: ctxtupdir(inst) / ("cipher_input_" + str(i) + ".bin"))
+    }
+}
+
+// ============================================================================
+// Stage 3: Decrypt and Decode
+//
+// Decrypts each result ciphertext, takes argmax over the first 10 slots
+// (logits for digits 0-9), and writes predicted labels.
+// ============================================================================
+
+@client @stage("decrypt_decode")
+fn decrypt_decode(inst: Instance)
+    -> reads(EncryptedResult[*]),
+       writes_plaintext(iodir(inst) / "encrypted_model_predictions.txt")
+{
+    let sk = load_secret_key(seckeydir(inst) / "sk.bin")
+
+    let predictions: vec<u32> = []
+
+    for i in 0..inst.batch_count {
+        let encrypted = load(EncryptedResult,
+                             from: ctxtdowndir(inst) / ("cipher_result_" + str(i) + ".bin"))
+
+        let logits = decrypt(sk, encrypted.ciphertext)
+
+        // Argmax over first NUM_CLASSES positions (10 digit classes)
+        let (predicted, _max_val) = argmax(logits[0..NUM_CLASSES])
+        predictions.push(predicted)
+    }
+
+    return predictions
+}

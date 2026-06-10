@@ -145,6 +145,35 @@ Run a specific op:
 make test-op-release OP=MORPH A=5 B=6
 ```
 
+## DSL for FHE (`dsl_fhe/`)
+
+`dsl_fhe/` contains an optional domain-specific language and cross-compiler
+(`nbc`) for writing FHE applications at a higher level. `.nb` source files
+compile to OpenFHE C++ that links against this client (`libnbfhetch`), producing
+the same record → replay → reconstruct pipeline the hand-written examples above
+use — but with trust boundaries (`@client` / `@server`), key/serialization
+plumbing, and Niobium record/replay instrumentation generated automatically.
+
+```bash
+cd dsl_fhe
+make test-compiler          # compiler unit tests
+make simple                 # compile a DSL example to C++ and build it
+make test-simple            # build + run the simple example end-to-end
+make examples               # build/run all self-contained examples
+```
+
+The DSL targets the open-source client (`niobium::compiler()` from
+`libnbfhetch`) via cooperative auto-tagging — no dependency on the proprietary
+compiler. See its own documentation:
+
+| File | Purpose |
+|---|---|
+| [`dsl_fhe/README.md`](dsl_fhe/README.md) | User-facing overview, build instructions, example walkthroughs |
+| [`dsl_fhe/CLAUDE.md`](dsl_fhe/CLAUDE.md) | Design rationale, codegen internals, client-API integration |
+| [`dsl_fhe/NB_LANGUAGE.md`](dsl_fhe/NB_LANGUAGE.md) | Language reference — types, syntax, built-in functions |
+| [`dsl_fhe/GRAMMAR.md`](dsl_fhe/GRAMMAR.md) | Formal EBNF grammar |
+| [`dsl_fhe/HOWTO.md`](dsl_fhe/HOWTO.md) | Step-by-step guide for adding a new example |
+
 ## Building
 
 ```bash
@@ -169,6 +198,9 @@ niobium-client/
     mult/                     # CKKS EvalMult (client / server / decrypt)
     simple_ops/               # 13 elementary ops for systematic testing
     CMakeLists.txt
+  dsl_fhe/                    # DSL + cross-compiler (nbc) for FHE apps (see its README.md)
+    xcomp/                    # the compiler: lexer, parser, semantic, codegen
+    examples/                 # .nb examples (simple, fetch, ml-inference, ...)
   vendor/
     niobium-fhetch/           # submodule: libnbfhetch + simulator + API headers
       vendor/openfhe/         # nested submodule: Niobium-instrumented OpenFHE

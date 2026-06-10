@@ -1,0 +1,131 @@
+// shared.nb — Types and constants for fhe-NetworkMonitor (KitNET anomaly detection)
+//============================================================================
+// Encrypted network intrusion detection using KitNET autoencoders.
+// Processes 32K network packets through an ensemble of autoencoders
+// followed by an anomaly detector, all under CKKS encryption.
+//============================================================================
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const BATCH_SIZE_FULL: u32 = 32768    // packets per batch (= n_slots for FULL)
+const BATCH_SIZE_TOY: u32 = 1024      // packets per batch (= n_slots for TOY)
+
+// Model header field count
+const HDRVALS: u32 = 7
+
+// Chebyshev approximation
+const CHEB_ORDER: u32 = 5
+const SIGMOID_LO: f64 = -5.0
+const SIGMOID_HI: f64 = 5.0
+const TANH_LO: f64 = -2.0
+const TANH_HI: f64 = 2.0
+
+// ============================================================================
+// Instance profiles
+// ============================================================================
+
+enum Profile { Toy, Mini, Full }
+
+struct Instance {
+    profile: Profile,
+    ring_dim: u32,
+    n_slots: u32,
+    n_features: u32,       // number of input features (2, 5, or 50)
+    depth: u32,
+    scaling_mod: u32,
+}
+
+fn instance(profile: Profile) -> Instance {
+    match profile {
+        Toy  => Instance { profile, ring_dim: 2048,  n_slots: 1024,
+                           n_features: 2,  depth: 22, scaling_mod: 54 },
+        Mini => Instance { profile, ring_dim: 65536, n_slots: 32768,
+                           n_features: 5,  depth: 22, scaling_mod: 54 },
+        Full => Instance { profile, ring_dim: 65536, n_slots: 32768,
+                           n_features: 50, depth: 22, scaling_mod: 54 },
+    }
+}
+
+fn profile_name(profile: Profile) -> string {
+    match profile {
+        Toy  => "TOY",
+        Mini => "MINI",
+        Full => "FULL",
+    }
+}
+
+// ============================================================================
+// Directory layout
+// ============================================================================
+
+fn datadir(inst: Instance) -> path   { root() / "assets" / "datasets" }
+fn modeldir(inst: Instance) -> path  { root() / "assets" / "models" }
+fn keydir(inst: Instance) -> path    { root() / "Mirai_Workload_Inputs" }
+fn encdir(inst: Instance) -> path    { root() / "Mirai_Workload_Inputs" }
+
+fn model_file(inst: Instance) -> path {
+    modeldir(inst) / ("Mirai_model_" + profile_name(inst.profile) + ".bin")
+}
+
+fn dataset_file(inst: Instance) -> path {
+    datadir(inst) / "Mirai_first_batch_32K.bin"
+}
+
+// ============================================================================
+// Model parameters (loaded from binary model file at runtime)
+// ============================================================================
+
+struct ModelHeader {
+    num_ae: u16,        // number of autoencoders in ensemble
+    num_feat: u16,      // total input features
+    vis_ae: u16,        // visible (input) dim per autoencoder
+    hid_ae: u16,        // hidden dim per autoencoder
+    vis_ad: u16,        // visible dim of anomaly detector
+    hid_ad: u16,        // hidden dim of anomaly detector
+    apx_ord: u16,       // Chebyshev approximation order
+}
+
+struct Autoencoder {
+    n_visible: u32,
+    n_hidden: u32,
+    W: mat<f64>,         // weight matrix [n_visible x n_hidden], column-major
+    hbias: vec<f64>,     // hidden bias [n_hidden]
+    rbias: vec<f64>,     // reconstruction bias [n_visible]
+}
+
+struct AnomalyDetector {
+    vis_dim: u32,
+    hid_dim: u32,
+    W: mat<f64>,         // weight matrix [vis_dim x hid_dim]
+    hbias: vec<f64>,     // hidden bias [hid_dim]
+    rbias: vec<f64>,     // reconstruction bias [vis_dim]
+}
+
+struct KitNETModel {
+    header: ModelHeader,
+    feature_map: vec<vec<u32>>,      // AE index -> list of feature indices
+    ensemble: vec<Autoencoder>,
+    detector: AnomalyDetector,
+    sig_coeffs: vec<f64>,            // Chebyshev sigmoid coefficients [order+1]
+    tanh_coeffs: vec<f64>,           // Chebyshev tanh coefficients [order+1]
+}
+
+// ============================================================================
+// Wire types
+// ============================================================================
+
+wire CryptoParams {
+    context: CryptoContext,
+    public_key: PublicKey,
+    eval_mult_key: EvalMultKey,
+}
+
+wire EncryptedFeatures {
+    features: vec<enc<vec<f64>>>,    // one ciphertext per feature column
+}
+
+wire EncryptedScore {
+    score: enc<vec<f64>>,            // MSE anomaly scores, one per slot (packet)
+}

@@ -1,0 +1,188 @@
+// server.nb — Server-side encrypted KitNET inference
+//============================================================================
+// Runs on the SERVER machine. NO access to secret key.
+// Compiles to:
+//   server_inference  <profile>
+//
+// Implements the KitNET anomaly detector:
+//   1. Ensemble of autoencoders compute reconstruction error per feature
+//   2. Anomaly detector computes MSE score from reconstruction errors
+//   3. Output: one MSE anomaly score per packet (in each slot)
+//============================================================================
+
+use shared::*
+
+// ============================================================================
+// Activation function approximations (Chebyshev)
+//
+// The plaintext functions are passed to EvalChebyshevFunction which
+// computes the polynomial approximation internally.
+// ============================================================================
+
+fn base_sigmoid(x: f64) -> f64 {
+    1.0 / (1.0 + exp(-x))
+}
+
+fn base_tanh(x: f64) -> f64 {
+    tanh(x)
+}
+
+// ============================================================================
+// Server: Encrypted KitNET Inference
+// ============================================================================
+
+@server @stage("inference")
+@hardware(cache_key: ["profile"])
+fn encrypted_inference(inst: Instance)
+    -> reads(CryptoParams, EncryptedFeatures),
+       writes(EncryptedScore)
+{
+    let params = load(CryptoParams, from: keydir(inst))
+    let ef = load(EncryptedFeatures, from: encdir(inst))
+    let model = load_model(model_file(inst))
+
+    let score = kitnet_ckks(inst, ef.features, model)
+
+    return EncryptedScore { score }
+}
+
+// ============================================================================
+// KitNET encrypted execution
+//
+// For each autoencoder in the ensemble:
+//   1. Gather encrypted features assigned to this AE
+//   2. Forward pass: hidden = sigmoid(W^T * input + hbias)
+//   3. Reconstruction: recon = sigmoid(W * hidden + rbias)
+//   4. Error: input - recon (reconstruction residual)
+//
+// Then pass concatenated residuals through anomaly detector:
+//   1. hidden = tanh(W^T * residual + hbias)
+//   2. recon = tanh(W * hidden + rbias)
+//   3. MSE = sum((residual - recon)^2) / vis_dim
+// ============================================================================
+
+fn kitnet_ckks(inst: Instance, ef: vec<enc<vec<f64>>>,
+               model: KitNETModel) -> enc<vec<f64>>
+{
+    // Phase 1: Ensemble layer — run each autoencoder
+    let residuals: vec<enc<vec<f64>>> = []
+
+    for ae_idx in 0..model.header.num_ae {
+        let ae = model.ensemble[ae_idx]
+        let feat_indices = model.feature_map[ae_idx]
+
+        // Gather encrypted features for this AE
+        let inputs: vec<enc<vec<f64>>> = for fi in feat_indices { ef[fi] }
+
+        // Forward pass through autoencoder
+        let (hidden, recon) = autoencoder_forward(inst, ae, inputs, model.sig_coeffs)
+
+        // Reconstruction error per feature
+        for i in 0..len(inputs) {
+            residuals.push(inputs[i] - recon[i])
+        }
+    }
+
+    // Phase 2: Anomaly detector on concatenated residuals
+    let ad = model.detector
+    let mse = anomaly_detector_forward(inst, ad, residuals, model.tanh_coeffs)
+
+    return mse
+}
+
+// ============================================================================
+// Autoencoder forward pass (encrypted)
+//
+// input: vector of encrypted feature ciphertexts [n_visible]
+// Returns: (hidden, reconstruction) both as vectors of ciphertexts
+//
+// Each ciphertext has n_slots values (one per packet).
+// The weight matrix multiplication is done element-wise across slots:
+//   hidden[j] = sigmoid(sum_i(W[i,j] * input[i]) + hbias[j])
+// ============================================================================
+
+fn autoencoder_forward(inst: Instance, ae: Autoencoder,
+                       inputs: vec<enc<vec<f64>>>,
+                       sig_coeffs: vec<f64>)
+    -> (vec<enc<vec<f64>>>, vec<enc<vec<f64>>>)
+{
+    let n_vis = ae.n_visible
+    let n_hid = ae.n_hidden
+
+    // Encode step: hidden = sigmoid(W^T * input + hbias)
+    let hidden: vec<enc<vec<f64>>> = for j in 0..n_hid {
+        let acc: enc<vec<f64>> = zero()
+        for i in 0..n_vis {
+            // W is column-major: W[i + j*n_vis]
+            acc = acc + inputs[i] * ae.W[i, j]
+        }
+        acc = acc + ae.hbias[j]
+        chebyshev(base_sigmoid, acc, domain: [SIGMOID_LO, SIGMOID_HI],
+                  degree: CHEB_ORDER)
+    }
+
+    // Decode step: recon = sigmoid(W * hidden + rbias)
+    let recon: vec<enc<vec<f64>>> = for i in 0..n_vis {
+        let acc: enc<vec<f64>> = zero()
+        for j in 0..n_hid {
+            acc = acc + hidden[j] * ae.W[i, j]
+        }
+        acc = acc + ae.rbias[i]
+        chebyshev(base_sigmoid, acc, domain: [SIGMOID_LO, SIGMOID_HI],
+                  degree: CHEB_ORDER)
+    }
+
+    return (hidden, recon)
+}
+
+// ============================================================================
+// Anomaly detector forward pass (encrypted)
+//
+// residuals: concatenated reconstruction errors from all AEs [vis_dim]
+// Returns: single ciphertext with MSE anomaly score per slot
+//
+// Architecture:
+//   hidden = tanh(W^T * residuals + hbias)
+//   recon  = tanh(W * hidden + rbias)
+//   mse    = sum((residuals - recon)^2) / vis_dim
+// ============================================================================
+
+fn anomaly_detector_forward(inst: Instance, ad: AnomalyDetector,
+                            residuals: vec<enc<vec<f64>>>,
+                            tanh_coeffs: vec<f64>) -> enc<vec<f64>>
+{
+    let n_vis = ad.vis_dim
+    let n_hid = ad.hid_dim
+
+    // Encode: hidden = tanh(W^T * residual + hbias)
+    let hidden: vec<enc<vec<f64>>> = for j in 0..n_hid {
+        let acc: enc<vec<f64>> = zero()
+        for i in 0..n_vis {
+            acc = acc + residuals[i] * ad.W[i, j]
+        }
+        acc = acc + ad.hbias[j]
+        chebyshev(base_tanh, acc, domain: [TANH_LO, TANH_HI],
+                  degree: CHEB_ORDER)
+    }
+
+    // Decode: recon = tanh(W * hidden + rbias)
+    let recon: vec<enc<vec<f64>>> = for i in 0..n_vis {
+        let acc: enc<vec<f64>> = zero()
+        for j in 0..n_hid {
+            acc = acc + hidden[j] * ad.W[i, j]
+        }
+        acc = acc + ad.rbias[i]
+        chebyshev(base_tanh, acc, domain: [TANH_LO, TANH_HI],
+                  degree: CHEB_ORDER)
+    }
+
+    // MSE: sum of squared reconstruction errors
+    let mse: enc<vec<f64>> = zero()
+    for i in 0..n_vis {
+        let diff = residuals[i] - recon[i]
+        mse = mse + diff * diff
+    }
+
+    // Normalize by visible dimension
+    return mse * (1.0 / n_vis)
+}

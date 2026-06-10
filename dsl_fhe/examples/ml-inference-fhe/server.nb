@@ -1,0 +1,50 @@
+// server.nb — Server-side encrypted MLP inference
+//============================================================================
+// Runs on the SERVER machine. NO access to secret key.
+// Compiles to:
+//   server_encrypted_compute  <size> [--batch_id=N]
+//
+// Performs encrypted 2-layer MLP inference on MNIST digits (HEIR v2 model):
+//   Layer 1: 784 -> 512, ReLU (Chebyshev)
+//   Layer 2: 512 -> 10, linear (raw logits)
+//
+// Weights are loaded at runtime from submission/data/*.bin via mlp_bridge.cpp.
+// Each input is a single encrypted image occupying all 1024 slots.
+// Slot rotations and multiplications implement the matrix operations.
+//============================================================================
+
+use shared::*
+
+// ============================================================================
+// Server: Encrypted MLP Inference
+//
+// Processes one batch at a time. The Niobium compiler records batch 0
+// and replays the trace for subsequent batches.
+// ============================================================================
+
+@server @stage("encrypted_compute")
+@hardware(cache_key: ["workload_size", "batch_id"])
+fn encrypted_compute(inst: Instance, batch_id: u32 = 0)
+    -> reads(CryptoParams, EncryptedInput[batch_id]),
+       writes(EncryptedResult[batch_id])
+{
+    let params = load(CryptoParams, from: pubkeydir(inst))
+    let input = load(EncryptedInput,
+                     from: ctxtupdir(inst) / ("cipher_input_" + str(batch_id) + ".bin"))
+
+    let result = mlp(input.ciphertext)
+
+    return EncryptedResult { ciphertext: result }
+}
+
+// ============================================================================
+// MLP inference
+//
+// Delegates to mlp_bridge.cpp (auto-discovered as mlp_bridge.cpp in LOCAL_SRC_DIR).
+// The bridge loads weights from submission/data/*.bin and calls mnist() from
+// mlp_openfhe.cpp (HEIR v2, ~28K lines of rotate-multiply-add operations).
+// ============================================================================
+
+fn mlp(ct: enc<vec<f64>>) -> enc<vec<f64>> {
+    extern_call("mlp", ct)
+}

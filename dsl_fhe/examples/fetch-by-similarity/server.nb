@@ -1,0 +1,210 @@
+// server.nb — Server-side encrypted computation for fetch-by-similarity
+//============================================================================
+// Runs on the SERVER machine. NO access to secret key.
+// Compiles to:
+//   server_encrypted_compute         <size> [--count_only]
+//
+// The compiler enforces that no function in this file can reference
+// SecretKey or call decrypt(). Attempting to do so is a compile error.
+//============================================================================
+
+use shared::*
+
+// ============================================================================
+// Approximation functions (plaintext semantics, used by Chebyshev evaluator)
+// ============================================================================
+
+// Sigmoid-like function. inscale=69.0 determined by experiments.
+fn sigmoid(x: f64, outscale: f64 = 1.0, inscale: f64 = 69.0) -> f64 {
+    outscale / (1.0 + exp(-(x * inscale)))
+}
+
+// Impulse-like function (Gaussian). sigma=0.04 determined by experiments.
+fn impulse(x: f64, sigma: f64 = 0.04) -> f64 {
+    exp(-((x / sigma)^2) / 2.0)
+}
+
+// ============================================================================
+// Monolithic server computation (all batches in memory)
+// Compiles to: server_encrypted_compute <size> [--count_only]
+// ============================================================================
+
+@server @stage("encrypted_compute")
+@hardware(cache_key: ["workload_size"])
+fn encrypted_compute(inst: Instance, count_only: bool = false)
+    -> reads(CryptoParams, EncryptedDB, EncryptedQuery),
+       writes(EncryptedResult)
+{
+    let params = load(CryptoParams, from: keydir(inst))
+    let db = load(EncryptedDB, from: encdir(inst))
+    let eqry = load(EncryptedQuery, from: encdir(inst)).query
+
+    // Step 1: Matrix-vector product via slot replication
+    let result = mat_vec_mult(inst, eqry, db)
+
+    // Step 2: Compare each slot to threshold using Chebyshev approximation.
+    // For count_only: higher degree (247) for accuracy on both matches and
+    // non-matches. Otherwise: lower degree (59), scaled to [0, 0.504] since
+    // we sum up to 8 matches then multiply, needing the result in [-1, 1].
+    let (degree, outscale) = if count_only { (247, 1.0) } else { (59, 0.504) }
+    result = for ct in result {
+        chebyshev(|x| sigmoid(x - THRESHOLD, outscale), ct,
+                  domain: [-1.0, 1.0], degree: degree)
+    }
+
+    // Step 3: Count-only path -- sum all slots across all ciphertexts
+    if count_only {
+        return EncryptedResult {
+            result: reduce(+, result) |> slot_sum(n_slots(inst))
+        }
+    }
+
+    // Step 4: Running sums + payload extraction
+    return EncryptedResult {
+        result: compact_and_extract(inst, db, result)
+    }
+}
+
+// ============================================================================
+// Matrix-vector multiplication (all batches)
+//
+// The query ciphertext contains the query vector repeated to fill all slots.
+// We replicate each query element into a full ciphertext, multiply by the
+// corresponding database row, and accumulate. Relinearization is deferred
+// to the end for efficiency.
+// ============================================================================
+
+fn mat_vec_mult(inst: Instance, eqry: enc<vec<f64>>, db: EncryptedDB)
+    -> vec<enc<vec<f64>>>
+{
+    let n_reps = n_slots(inst) / inst.record_dim
+    let replicator = slot_replicator(inst.degrees, input_reps: n_reps)
+    let n_batches = n_ctxts(inst)
+    let acc = vec_zeros<enc<vec<f64>>>(n_batches)
+
+    for (i, qry_slot) in replicator.replicate(eqry) {
+        // qry_slot has the i'th entry of the query vector in all its slots
+        for j in 0..n_batches {
+            // Multiply-without-relin: cheaper, we relin once at the end
+            acc[j] = acc[j] + db.rows[j][i] *_norelin qry_slot
+        }
+    }
+
+    // Relinearize all accumulators (one relin per batch)
+    return map(acc, relin)
+}
+
+// ============================================================================
+// Compaction and payload extraction
+//
+// After threshold comparison, each ciphertext has approximate 0/1 indicators.
+// We use running sums to number the matches (1st match = 1, 2nd = 2, etc.),
+// then extract payloads for each match position using indicator functions.
+//
+// The ciphertexts are viewed as matrices with n_cols columns. We expect
+// at most max_n_match (= 8) matches per column.
+// ============================================================================
+
+fn compact_and_extract(inst: Instance, db: EncryptedDB,
+                       result: vec<enc<vec<f64>>>) -> enc<vec<f64>>
+{
+    // Deep copy matches before running sums modifies them
+    let matches = clone(result)
+
+    // Running sums in each column: 1st match -> 1, 2nd -> 2, etc.
+    running_sums(result, stride: n_cols(inst), depth: RUNNING_SUM_LEVELS)
+
+    // Multiply by original matches to zero out non-matches
+    result = zip_map(result, matches, |r, m| r * m)
+
+    // Shift contents from [0, 2] to [-1, 1] for Chebyshev domain
+    result = map(result, |ct| ct - 1.0)
+
+    // Extract payloads for each match position (1 through max_n_match)
+    let accumulator: enc<vec<f64>> = zero()
+
+    for i in 1..=max_n_match(inst) {
+        // Map match number i to the [-1, 1] Chebyshev domain
+        let x_i = i / 4.0 - 1.0
+
+        // Compute "one-hot" indicator: 1 where running sum == i, 0 elsewhere
+        let indicator = for ct in result {
+            chebyshev(|x| impulse(x - x_i), ct,
+                      domain: [-1.0, 1.0], degree: 119)
+        }
+
+        // Extract and position payload data for this match
+        let payload_block = extract_payload(inst, db, indicator, i)
+        accumulator = accumulator + payload_block
+    }
+
+    return accumulator
+}
+
+// ============================================================================
+// Payload extraction for a single match position
+//
+// For the i'th match in each column:
+// 1. Multiply each payload row by the indicator to isolate the match
+// 2. Shift payload values to consecutive column positions
+// 3. Replicate across the column via total sums
+// 4. Mask to keep only the positions for this match
+// ============================================================================
+
+fn extract_payload(inst: Instance, db: EncryptedDB,
+                   indicator: vec<enc<vec<f64>>>,
+                   match_pos: u32) -> enc<vec<f64>>
+{
+    let to_replicate: enc<vec<f64>> = zero()
+
+    for j in 0..PAYLOAD_DIM {
+        for k in 0..len(indicator) {
+            // Step 1: Multiply j'th payload of batch k by indicator
+            let part = db.payloads[k][j] * indicator[k]
+
+            // Step 2: Shift by j positions within the column to pack
+            // PAYLOAD_DIM values consecutively
+            if j != 0 {
+                part = rotate(part, -j * n_cols(inst))
+            }
+
+            // Accumulate: at most one term per slot is non-zero (since
+            // the indicator has a single 1 per column), so we can safely
+            // add across all batches and payload indices
+            to_replicate = to_replicate + part
+        }
+    }
+
+    // Step 3: Replicate values across the entire column
+    let replicated = total_sums(to_replicate, inst)
+
+    // Step 4: Apply mask to keep only positions for this match
+    // Positions (match_pos-1)*PAYLOAD_DIM .. match_pos*PAYLOAD_DIM in each column
+    let mask = slot_mask(n_slots(inst), n_cols(inst),
+                         row_range: (match_pos - 1) * PAYLOAD_DIM
+                                    .. match_pos * PAYLOAD_DIM)
+
+    return replicated * mask
+}
+
+// ============================================================================
+// Total sums: column-wise reduction
+//
+// Views the ciphertext slots as a matrix with n_cols * PAYLOAD_DIM columns.
+// Computes total sums within each column using shift-and-add, so every
+// slot in a column contains the sum of all entries in that column.
+// ============================================================================
+
+fn total_sums(ct: enc<vec<f64>>, inst: Instance) -> enc<vec<f64>> {
+    let period = n_cols(inst) * PAYLOAD_DIM
+    let s = log2(n_slots(inst) / period)
+    let r = log2(period)
+    assert n_slots(inst) == 1 << (s + r)  // must be power of two
+
+    let result = ct
+    for i in (0..s).rev() {
+        let rot_amount = 1 << (i + r)
+        result = result + rotate(result, rot_amount)
+    }
+    return result
+}

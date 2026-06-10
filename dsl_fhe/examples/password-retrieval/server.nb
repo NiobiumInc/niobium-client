@@ -1,0 +1,82 @@
+// server.nb — Server-side encrypted password verification
+//============================================================================
+// Runs on the SERVER machine. NO access to secret key.
+// Compiles to:
+//   server_verify  <size>
+//
+// The server never sees the answers or the password in plaintext.
+// It computes a per-question match indicator using Chebyshev-approximated
+// Gaussians, then multiplies all 5 indicators together with the encrypted
+// password. Only when ALL questions match does the password emerge.
+//============================================================================
+
+use shared::*
+
+// ============================================================================
+// Match function (plaintext, used by Chebyshev evaluator)
+//
+// Gaussian indicator: ≈ 1 when x ≈ 0, ≈ 0 when |x| ≥ 1.
+// sigma=0.3 gives good discrimination for integer-valued answers:
+//   x = 0.0  → 1.0      (exact match)
+//   x = 0.01 → ~1.0     (CKKS noise)
+//   x = 1.0  → 0.004    (off by one digit)
+//   x = 2.0  → ~0       (off by two)
+//
+// Multiplying 5 such indicators ensures:
+//   all correct  → ~1.0
+//   one off by 1 → ~0.004  (password hidden)
+// ============================================================================
+
+fn match_fn(x: f64) -> f64 {
+    exp(-((x / 0.3)^2) / 2.0)
+}
+
+// ============================================================================
+// Server: Verify Answers and Retrieve Password
+//
+// For each question:
+//   1. Compute difference d_i = query_i - record_i
+//   2. Apply Gaussian indicator via Chebyshev: m_i ≈ 1 if d_i ≈ 0
+// Then:
+//   3. overall = m_1 * m_2 * m_3 * m_4 * m_5
+//   4. result = overall * encrypted_password
+// ============================================================================
+
+@server @stage("verify")
+fn verify_and_retrieve(inst: Instance)
+    -> reads(CryptoParams, EncryptedValue),
+       writes(EncryptedResult)
+{
+    let params = load(CryptoParams, from: keydir(inst))
+
+    // Load stored record (5 answers + password)
+    let ra1 = load(EncryptedValue, from: encdir(inst) / "record_a1.bin").ciphertext
+    let ra2 = load(EncryptedValue, from: encdir(inst) / "record_a2.bin").ciphertext
+    let ra3 = load(EncryptedValue, from: encdir(inst) / "record_a3.bin").ciphertext
+    let ra4 = load(EncryptedValue, from: encdir(inst) / "record_a4.bin").ciphertext
+    let ra5 = load(EncryptedValue, from: encdir(inst) / "record_a5.bin").ciphertext
+    let pw  = load(EncryptedValue, from: encdir(inst) / "record_pw.bin").ciphertext
+
+    // Load submitted query (5 answers)
+    let qa1 = load(EncryptedValue, from: encdir(inst) / "query_a1.bin").ciphertext
+    let qa2 = load(EncryptedValue, from: encdir(inst) / "query_a2.bin").ciphertext
+    let qa3 = load(EncryptedValue, from: encdir(inst) / "query_a3.bin").ciphertext
+    let qa4 = load(EncryptedValue, from: encdir(inst) / "query_a4.bin").ciphertext
+    let qa5 = load(EncryptedValue, from: encdir(inst) / "query_a5.bin").ciphertext
+
+    // Per-question Gaussian match indicator via Chebyshev
+    // Domain [-5, 5] covers answer differences (answers are small integers)
+    let m1 = chebyshev(|x| match_fn(x), qa1 - ra1, domain: [-5.0, 5.0], degree: 59)
+    let m2 = chebyshev(|x| match_fn(x), qa2 - ra2, domain: [-5.0, 5.0], degree: 59)
+    let m3 = chebyshev(|x| match_fn(x), qa3 - ra3, domain: [-5.0, 5.0], degree: 59)
+    let m4 = chebyshev(|x| match_fn(x), qa4 - ra4, domain: [-5.0, 5.0], degree: 59)
+    let m5 = chebyshev(|x| match_fn(x), qa5 - ra5, domain: [-5.0, 5.0], degree: 59)
+
+    // All 5 must match — multiply indicators together
+    let overall = m1 * m2 * m3 * m4 * m5
+
+    // Password revealed only when overall ≈ 1
+    let result = overall * pw
+
+    return EncryptedResult { result: result }
+}
