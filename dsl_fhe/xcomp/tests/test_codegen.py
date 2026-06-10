@@ -358,6 +358,56 @@ def test_heuristic_fallback_warns():
         sa.errors.warnings
 
 
+def test_wire_layout_is_field_type_driven():
+    # One predictable serialization layout for every wire, driven by field
+    # TYPES (not wire names): enc -> {field}.bin, vec<enc> -> {field}_<i>.bin,
+    # vec<vec<enc>> -> batchNNNN/{field}_NNNN.bin — identical on save and load.
+    files = compile_str("""
+    struct Instance { ring_dim: u32 }
+    fn encdir(inst: Instance) -> path { root() / "enc" }
+    wire Bundle {
+        single: enc<vec<f64>>,
+        many: vec<enc<vec<f64>>>,
+        grid: vec<vec<enc<vec<f64>>>>,
+    }
+    @server @stage(name: "produce")
+    fn produce(inst: Instance) -> writes(Bundle) {
+        let out = load(Bundle, from: encdir(inst))
+        return out
+    }
+    """)
+    cpp = files["produce.cpp"]
+    # save side
+    assert '"single.bin"' in cpp
+    assert '"single_" ' not in cpp
+    assert '"many_" + std::to_string' in cpp
+    assert '"grid_" + _is.str()' in cpp and '"batch" + _bs.str()' in cpp
+    # load side mirrors the same names
+    assert cpp.count('"single.bin"') >= 2
+    assert cpp.count('"many_" + std::to_string') >= 2
+
+
+def test_crypto_params_wire_by_structure():
+    # The cc/pk/mk/rk key layout is selected by the wire CARRYING a
+    # CryptoContext field — not by the wire being named "CryptoParams".
+    files = compile_str("""
+    struct Instance { ring_dim: u32 }
+    fn keydir(inst: Instance) -> path { root() / "keys" }
+    wire MyKeys {
+        context: CryptoContext,
+        public_key: PublicKey,
+        eval_mult_key: EvalMultKey,
+    }
+    fn use_keys(inst: Instance) -> u32 {
+        let params = load(MyKeys, from: keydir(inst))
+        return 0
+    }
+    """)
+    impl = files["nb_shared.cpp"]
+    assert '"cc.bin"' in impl and '"pk.bin"' in impl and '"mk.bin"' in impl
+    assert "MyKeys p;" in impl
+
+
 def test_shared_fn_forward_decl():
     files = compile_str("""
     fn helper(x: f64) -> f64 {
