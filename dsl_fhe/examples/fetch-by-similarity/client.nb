@@ -1,0 +1,177 @@
+// client.nb — Client-side operations for fetch-by-similarity
+//============================================================================
+// Runs on the CLIENT machine. Has access to the secret key.
+// Compiles to separate binaries:
+//   client_key_generation         <size> [--count_only]
+//   client_encode_encrypt_db      <size>
+//   client_encode_encrypt_query   <size>
+//   client_decrypt_decode         <size>
+//   client_postprocess            <size> [--count_only]
+//============================================================================
+
+use shared::*
+
+// ============================================================================
+// Scheme configuration
+// The compiler uses this to generate CryptoContext parameters and to
+// determine which keys are needed by inspecting all @server functions.
+// ============================================================================
+
+scheme CKKS {
+    security: 128-classic
+    key_dist: uniform_ternary
+    key_switch: hybrid
+    scaling: flexible_auto
+    precision: 42 bits
+    first_mod: 57 bits
+    depth: 23
+}
+
+// The compiler inspects all server-side code that uses these CryptoParams
+// and generates the full set of rotation indices, eval-mult keys, and
+// eval-sum keys. No manual EvalAtIndexKeyGen / EvalSumKeyGen calls.
+requires { add, mul, rotate, chebyshev, running_sums, replicate }
+
+// ============================================================================
+// Stage 1: Key Generation
+// Compiles to: client_key_generation <instance-size> [--count_only]
+// ============================================================================
+
+@client @stage("key_generation")
+fn generate_keys(inst: Instance, count_only: bool = false)
+    -> writes(CryptoParams)
+{
+    // Override ring dimension and security for toy instances
+    if inst.size == Toy {
+        scheme.override(security: not_set, ring_dim: 2048)
+    }
+
+    let keys = keygen()
+
+    // Secret key is saved to the client's key directory.
+    // It is NEVER included in CryptoParams (which is sent to the server).
+    save_secret_key(keys.secret, keydir(inst) / "sk.bin")
+
+    // The compiler determines which rotation/eval keys to include based
+    // on static analysis of all @server functions that consume CryptoParams.
+    // For count_only mode, fewer rotation keys are needed (no running sums
+    // or payload extraction), and the compiler detects this automatically.
+    return CryptoParams {
+        context: keys.context,
+        public_key: keys.public,
+        eval_mult_key: keys.eval_mult,
+        eval_rot_keys: keys.eval_rot,
+    }
+}
+
+// ============================================================================
+// Stage 2: Encrypt Database
+// Compiles to: client_encode_encrypt_db <instance-size>
+// ============================================================================
+
+@client @stage("encode_encrypt_db")
+fn encrypt_database(inst: Instance)
+    -> reads(CryptoParams), writes(EncryptedDB)
+{
+    let params = load(CryptoParams, from: keydir(inst))
+
+    // Read cleartext dataset and payloads from disk
+    let db = load_matrix<f32>(datadir(inst) / "db.bin", inst.record_dim)
+    assert rows(db) == inst.db_size
+
+    let payloads = load_matrix<i16>(datadir(inst) / "payloads.bin",
+                                     PAYLOAD_DIM - 1)
+    assert rows(payloads) == inst.db_size
+
+    // Transpose to column-major, split into batches of n_slots rows
+    let db_batched = db |> transpose |> batch(n_slots(inst))
+    assert len(db_batched) == n_ctxts(inst)
+
+    // Add markers to payloads: prepend 2*MAX_PAYLOAD_VAL*PAYLOAD_PRECISION
+    // to each record, then transpose and batch, then scale down
+    let marked_payloads = payloads
+        |> prepend_column(2 * MAX_PAYLOAD_VAL * PAYLOAD_PRECISION)
+        |> transpose
+        |> batch(n_slots(inst))
+        |> scale(1.0 / PAYLOAD_PRECISION)
+
+    // Encrypt at appropriate levels:
+    //   - DB rows at level (degrees.size - 1) to match replication depth
+    //   - Payloads at level 20 (low level, used late in the pipeline)
+    let enc_level_db = len(inst.degrees) - 1
+    let enc_level_payload = 20
+
+    return EncryptedDB {
+        rows: for (i, batch) in enumerate(db_batched) {
+            for (j, row) in enumerate(batch) {
+                encrypt(params.public_key, row, level: enc_level_db)
+            }
+        },
+        payloads: for (i, batch) in enumerate(marked_payloads) {
+            for (j, row) in enumerate(batch) {
+                encrypt(params.public_key, row, level: enc_level_payload)
+            }
+        },
+    }
+}
+
+// ============================================================================
+// Stage 3: Encrypt Query
+// Compiles to: client_encode_encrypt_query <instance-size>
+// ============================================================================
+
+@client @stage("encode_encrypt_query")
+fn encrypt_query(inst: Instance)
+    -> reads(CryptoParams), writes(EncryptedQuery)
+{
+    let params = load(CryptoParams, from: keydir(inst))
+
+    // Read query vector and tile it to fill all slots
+    let query = load_vec<f32>(datadir(inst) / "query.bin", inst.record_dim)
+    let tiled = tile(query, n_slots(inst))
+
+    // Encrypt at top level (will be consumed first in the server pipeline)
+    return EncryptedQuery {
+        query: encrypt(params.public_key, tiled)
+    }
+}
+
+// ============================================================================
+// Stage 4: Decrypt & Decode
+// Compiles to: client_decrypt_decode <instance-size>
+// ============================================================================
+
+@client @stage("decrypt_decode")
+fn decrypt_result(inst: Instance)
+    -> reads(EncryptedResult), writes_plaintext(iodir(inst) / "raw-result.bin")
+{
+    let sk = load_secret_key(keydir(inst) / "sk.bin")
+    let encrypted = load(EncryptedResult, from: encdir(inst))
+
+    // Decrypt and decode to slot vector
+    let slots = decrypt(sk, encrypted.result)
+
+    // Write raw slots to disk for post-processing
+    return slots
+}
+
+// ============================================================================
+// Stage 5: Post-process (plaintext only, no crypto dependencies)
+// Compiles to: client_postprocess <instance-size> [--count_only]
+// ============================================================================
+
+@client @stage("postprocess")
+fn postprocess(inst: Instance, count_only: bool = false)
+    -> reads_plaintext(iodir(inst) / "raw-result.bin"),
+       writes_plaintext(iodir(inst) / "results.bin")
+{
+    let slots = load_vec<f64>(iodir(inst) / "raw-result.bin", n_slots(inst))
+
+    if count_only {
+        let count = round(slots[0]) |> as i16
+        return [[count]]
+    }
+
+    let matrix = to_matrix_form(slots, n_cols(inst))
+    return decode_payloads(matrix, n_cols(inst))
+}

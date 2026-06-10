@@ -1,0 +1,4 @@
+# Generated stub assets (created by make_stub_assets.py at build time).
+# Real model/dataset come from the fhe-NetworkMonitor submission — see README.md.
+models/*.bin
+datasets/*.bin

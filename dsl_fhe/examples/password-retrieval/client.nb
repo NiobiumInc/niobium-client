@@ -1,0 +1,131 @@
+// client.nb — Client-side operations for password retrieval
+//============================================================================
+// Runs on the CLIENT machine. Has access to the secret key.
+// Compiles to separate binaries:
+//   client_key_generation   <size>
+//   client_setup_record     <size> [a1] [a2] [a3] [a4] [a5] [password]
+//   client_submit_query     <size> [a1] [a2] [a3] [a4] [a5]
+//   client_decrypt_result   <size>
+//============================================================================
+
+use shared::*
+
+// ============================================================================
+// Scheme configuration
+//
+// CKKS with depth 15 — enough for:
+//   6 levels (Chebyshev degree 59 per question)
+// + 3 levels (multiplying 5 indicators together, binary tree)
+// + 1 level  (final multiply with password)
+// + headroom for noise management
+// ============================================================================
+
+scheme CKKS {
+    security: not_set
+    key_dist: uniform_ternary
+    scaling: flexible_auto
+    depth: 15
+}
+
+requires { add, mul }
+
+// ============================================================================
+// Stage 1: Key Generation
+// ============================================================================
+
+@client @stage("key_generation")
+fn generate_keys(inst: Instance) -> writes(CryptoParams)
+{
+    if inst.size == Toy {
+        scheme.override(security: not_set, ring_dim: 2048)
+    } else {
+        scheme.override(ring_dim: inst.ring_dim)
+    }
+
+    let keys = keygen()
+
+    save_secret_key(keys.secret, keydir(inst) / "sk.bin")
+
+    return CryptoParams {
+        context: keys.context,
+        public_key: keys.public,
+        eval_mult_key: keys.eval_mult,
+    }
+}
+
+// ============================================================================
+// Stage 2: Setup Record (admin encrypts stored answers + password)
+//
+// Answer codes are small numbers (e.g., 1-9) representing hashed text
+// answers. The password is also numeric (could encode a PIN or token).
+// ============================================================================
+
+@client @stage("setup_record")
+fn setup_record(inst: Instance,
+                a1: f64 = 7.0, a2: f64 = 3.0, a3: f64 = 9.0,
+                a4: f64 = 1.0, a5: f64 = 5.0,
+                password: f64 = 42.0)
+    -> reads(CryptoParams)
+{
+    let params = load(CryptoParams, from: keydir(inst))
+
+    save(EncryptedValue { ciphertext: encrypt(params.public_key, [a1], slots: 1) },
+         to: encdir(inst) / "record_a1.bin")
+    save(EncryptedValue { ciphertext: encrypt(params.public_key, [a2], slots: 1) },
+         to: encdir(inst) / "record_a2.bin")
+    save(EncryptedValue { ciphertext: encrypt(params.public_key, [a3], slots: 1) },
+         to: encdir(inst) / "record_a3.bin")
+    save(EncryptedValue { ciphertext: encrypt(params.public_key, [a4], slots: 1) },
+         to: encdir(inst) / "record_a4.bin")
+    save(EncryptedValue { ciphertext: encrypt(params.public_key, [a5], slots: 1) },
+         to: encdir(inst) / "record_a5.bin")
+    save(EncryptedValue { ciphertext: encrypt(params.public_key, [password], slots: 1) },
+         to: encdir(inst) / "record_pw.bin")
+}
+
+// ============================================================================
+// Stage 3: Submit Query (user encrypts their answers)
+// ============================================================================
+
+@client @stage("submit_query")
+fn submit_query(inst: Instance,
+                a1: f64 = 7.0, a2: f64 = 3.0, a3: f64 = 9.0,
+                a4: f64 = 1.0, a5: f64 = 5.0)
+    -> reads(CryptoParams)
+{
+    let params = load(CryptoParams, from: keydir(inst))
+
+    save(EncryptedValue { ciphertext: encrypt(params.public_key, [a1], slots: 1) },
+         to: encdir(inst) / "query_a1.bin")
+    save(EncryptedValue { ciphertext: encrypt(params.public_key, [a2], slots: 1) },
+         to: encdir(inst) / "query_a2.bin")
+    save(EncryptedValue { ciphertext: encrypt(params.public_key, [a3], slots: 1) },
+         to: encdir(inst) / "query_a3.bin")
+    save(EncryptedValue { ciphertext: encrypt(params.public_key, [a4], slots: 1) },
+         to: encdir(inst) / "query_a4.bin")
+    save(EncryptedValue { ciphertext: encrypt(params.public_key, [a5], slots: 1) },
+         to: encdir(inst) / "query_a5.bin")
+}
+
+// ============================================================================
+// Stage 4: Decrypt Result
+//
+// If answers matched: result ≈ password (e.g., 42.0)
+// If answers didn't match: result ≈ 0
+// ============================================================================
+
+@client @stage("decrypt_result")
+fn decrypt_result(inst: Instance, expected: f64 = 42.0)
+    -> reads(EncryptedResult)
+{
+    let sk = load_secret_key(keydir(inst) / "sk.bin")
+    let encrypted = load(EncryptedResult, from: encdir(inst))
+
+    let result = decrypt(sk, encrypted.result)
+    let password = result[0]
+
+    print(password)
+
+    let tolerance = 1.0
+    assert abs(password - expected) < tolerance
+}

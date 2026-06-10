@@ -1,0 +1,89 @@
+// client.nb — Client-side operations for fhe-NetworkMonitor
+//============================================================================
+// Runs on the CLIENT machine. Has access to the secret key.
+// Compiles to separate binaries:
+//   client_keygen           <profile>
+//   client_encrypt          <profile>
+//   client_decrypt          <profile>
+//============================================================================
+
+use shared::*
+
+// ============================================================================
+// Scheme configuration
+// ============================================================================
+
+scheme CKKS {
+    security: not_set        // development mode (all profiles)
+    key_dist: uniform_ternary
+    scaling: flexible_auto
+    precision: 54 bits
+    depth: 22
+}
+
+requires { add, mul }
+
+// ============================================================================
+// Stage 1: Key Generation
+// ============================================================================
+
+@client @stage("keygen")
+fn generate_keys(inst: Instance) -> writes(CryptoParams)
+{
+    if inst.profile == Toy {
+        scheme.override(ring_dim: 2048)
+    }
+
+    let keys = keygen()
+
+    save_secret_key(keys.secret, keydir(inst) / "secret_key.bin")
+
+    return CryptoParams {
+        context: keys.context,
+        public_key: keys.public,
+        eval_mult_key: keys.eval_mult,
+    }
+}
+
+// ============================================================================
+// Stage 2: Encrypt Features
+//
+// Reads a binary dataset of n_slots packets x n_features doubles.
+// Encrypts each feature column into a separate ciphertext.
+// Each ciphertext slot holds that feature value for one packet.
+// ============================================================================
+
+@client @stage("encrypt")
+fn encrypt_features(inst: Instance) -> reads(CryptoParams), writes(EncryptedFeatures)
+{
+    let params = load(CryptoParams, from: keydir(inst))
+    let cc = params.context
+
+    // Read dataset: n_slots rows x num_features columns of doubles
+    let dataset = load_matrix<f64>(dataset_file(inst), inst.n_features)
+    assert rows(dataset) >= inst.n_slots
+
+    // Encrypt each feature column as a separate ciphertext
+    return EncryptedFeatures {
+        features: for f in 0..inst.n_features {
+            let column = dataset[0..inst.n_slots, f]
+            encrypt(params.public_key, column)
+        }
+    }
+}
+
+// ============================================================================
+// Stage 3: Decrypt Scores
+// ============================================================================
+
+@client @stage("decrypt")
+fn decrypt_scores(inst: Instance)
+    -> reads(EncryptedScore),
+       writes_plaintext(keydir(inst) / "score_plaintext.bin")
+{
+    let sk = load_secret_key(keydir(inst) / "secret_key.bin")
+    let encrypted = load(EncryptedScore, from: encdir(inst))
+
+    let scores = decrypt(sk, encrypted.score)
+    return scores
+}

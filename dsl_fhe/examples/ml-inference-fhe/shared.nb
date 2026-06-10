@@ -1,0 +1,84 @@
+// shared.nb — Types and constants for ml-inference-fhe (MNIST digit classification)
+//============================================================================
+// Encrypted MLP inference on MNIST digits using CKKS.
+// 2-layer feedforward network: 784 -> 512 -> 10 (HEIR v2 model)
+// ReLU activation approximated via Chebyshev polynomial after layer 1.
+//============================================================================
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const INPUT_DIM: u32 = 784           // MNIST 28x28 pixels
+const NORMALIZED_DIM: u32 = 1024     // padded to ring_dim/2
+const NUM_CLASSES: u32 = 10          // digits 0-9
+const RING_DIM: u32 = 2048
+const N_SLOTS: u32 = 1024            // ring_dim / 2
+
+// MLP layer dimensions (HEIR v2: 2-layer 784→512→10)
+const LAYER1_IN: u32 = 784
+const LAYER1_OUT: u32 = 512
+const LAYER2_IN: u32 = 512
+const LAYER2_OUT: u32 = 10
+
+// ============================================================================
+// Instance sizes (batch counts)
+// ============================================================================
+
+enum InstanceSize { Single, Small, Medium, Large }
+
+struct Instance {
+    size: InstanceSize,
+    batch_count: u32,
+}
+
+fn instance(size: InstanceSize) -> Instance {
+    match size {
+        Single => Instance { size, batch_count: 1 },
+        Small  => Instance { size, batch_count: 100 },
+        Medium => Instance { size, batch_count: 1000 },
+        Large  => Instance { size, batch_count: 10000 },
+    }
+}
+
+fn instance_name(size: InstanceSize) -> string {
+    match size {
+        Single => "single",
+        Small  => "small",
+        Medium => "medium",
+        Large  => "large",
+    }
+}
+
+// ============================================================================
+// Directory layout
+// ============================================================================
+
+fn datadir(inst: Instance) -> path  { root() / "datasets" / instance_name(inst.size) }
+fn iodir(inst: Instance) -> path    { root() / "io" / instance_name(inst.size) }
+fn pubkeydir(inst: Instance) -> path { iodir(inst) / "public_keys" }
+fn seckeydir(inst: Instance) -> path { iodir(inst) / "secret_key" }
+fn ctxtupdir(inst: Instance) -> path { iodir(inst) / "ciphertext_inputs" }
+fn ctxtdowndir(inst: Instance) -> path { iodir(inst) / "ciphertext_outputs" }
+
+// ============================================================================
+// Wire types
+// ============================================================================
+
+wire CryptoParams {
+    context: CryptoContext,
+    public_key: PublicKey,
+    eval_mult_key: EvalMultKey,
+    eval_rot_keys: EvalAutomorphismKeys,
+}
+
+wire EncryptedInput {
+    ciphertext: enc<vec<f64>>,
+}
+
+wire EncryptedResult {
+    ciphertext: enc<vec<f64>>,
+}
+
+// Model weights are loaded at runtime from submission/data/*.bin files
+// by the mlp_bridge.cpp wrapper (see server.nb extern_call("mlp", ...)).

@@ -1,0 +1,91 @@
+// server.nb — Server-side cipher operations
+//============================================================================
+// Runs on the SERVER machine. NO access to secret key.
+// Compiles to:
+//   server_compute  <size> <operation> [immediate_value]
+//
+// Performs one of ~25 homomorphic operations on two encrypted scalars.
+// The operation is selected at runtime via CLI argument.
+// Each operation is a small composition of EvalAdd, EvalMult, EvalRotate,
+// EvalNegate, EvalSub, and immediate (cipher-plain) variants.
+//============================================================================
+
+use shared::*
+
+// ============================================================================
+// Server: Encrypted Computation
+//
+// Loads two input ciphertexts (a, b) and a virtual zero, then dispatches
+// to the selected operation. The Niobium compiler records the operation
+// trace on first run and replays it on hardware for subsequent runs.
+// ============================================================================
+
+@server @stage("compute")
+@hardware(cache_key: ["workload_size", "operation"])
+fn compute(inst: Instance, op: Operation = 0, immediate: f64 = 0.0)
+    -> reads(CryptoParams, EncryptedInput),
+       writes(EncryptedResult)
+{
+    let params = load(CryptoParams, from: keydir(inst))
+    let ct1 = load(EncryptedInput, from: iodir(inst) / "input_a.bin").ciphertext
+    let ct2 = load(EncryptedInput, from: iodir(inst) / "input_b.bin").ciphertext
+    let ct_zero = load(EncryptedInput, from: iodir(inst) / "zero.bin").ciphertext
+
+    let result = dispatch(op, ct1, ct2, immediate)
+
+    return EncryptedResult { ciphertext: result }
+}
+
+// ============================================================================
+// Operation dispatch
+// ============================================================================
+
+fn dispatch(op: Operation, ct1: enc<f64>, ct2: enc<f64>, imm: f64) -> enc<f64> {
+    match op {
+        // Cipher-cipher arithmetic
+        ADD             => ct1 + ct2,
+        MUL             => ct1 * ct2,
+        MUL_MUL         => (ct1 * ct2) * ct1,
+        ADD_MUL         => (ct1 + ct2) * ct1,
+        MUL_ADD         => (ct1 * ct2) + ct1,
+        ADD_ADD         => (ct1 + ct2) + ct1,
+        ADD_NEG         => (ct1 + ct2) + negate(ct1),
+        MUL_ADD_NEG     => (ct1 * ct2) + ct1 - ct2,
+        NEG_MUL_ADD     => (negate(ct1) * ct2) + ct1 + ct2,
+        ADD_NEG_MUL_ADD => ((ct1 + ct2) * negate(ct1)) + ct2,
+        MAT_PATTERN     => (ct1 + ct2) * (ct1 - ct2),
+
+        // Rotation-based
+        ROTATE_ADD      => rotate(ct1, int(imm)) + ct2,
+        ADD_ROTATE      => rotate(ct1 + ct2, int(imm)),
+        ROTATE_MUL      => rotate(ct1, int(imm)) * ct2,
+        ROTATE_ROTATE   => rotate(ct1, int(imm)) + rotate(ct2, -int(imm)),
+
+        // Immediate (cipher + scalar)
+        ADDI            => ct1 + imm,
+        SUBI            => ct1 - imm,
+        MULI            => ct1 * imm,
+        MULI_ADDI       => (ct1 * imm) + imm,
+        ADDI_MULI       => (ct1 + imm) * imm,
+
+        // Mixed (cipher + cipher + immediate)
+        MULI_ADD        => (ct1 * imm) + ct2,
+        ADD_ADDI_MULI_ADDI_MULI_NEG => negate(((((ct1 + ct2) + imm) * imm) + imm) * imm),
+        MULI_ROT_ADD_MUL_SUBI       => (rotate(ct1 * imm, int(imm)) + ct2) * ct2 - imm,
+
+        // Loop: repeat N times: result = (result + ct2) * ct2
+        LARGE_ADD_MUL => large_add_mul(ct1, ct2, int(imm)),
+
+        // Low-level monomial multiplication
+        MUL_MONOMIAL => mul_monomial(ct1, int(imm)),
+    }
+}
+
+// Helper for the loop operation (avoids multi-statement match arm)
+fn large_add_mul(ct1: enc<f64>, ct2: enc<f64>, n: u32) -> enc<f64> {
+    let result = ct1
+    for i in 0..n {
+        result = (result + ct2) * ct2
+    }
+    return result
+}
