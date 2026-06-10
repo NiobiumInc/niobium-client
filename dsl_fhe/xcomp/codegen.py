@@ -10,6 +10,11 @@ from typing import TextIO
 import io
 
 import ast_nodes as ast
+from builtins_registry import (
+    ENCRYPTED_RETURN_FNS, PLAINTEXT_RETURN_FNS, VECTOR_RETURN_FNS,
+)
+# Backwards-compatible alias (pre-registry name).
+PLAINTEXT_ONLY_FNS = PLAINTEXT_RETURN_FNS
 from semantic import SemanticAnalyzer
 from nb_types import Domain
 
@@ -103,25 +108,7 @@ ENCRYPTED_EXACT_NAMES = {
 }
 
 # Functions whose return value is always a ciphertext
-ENCRYPTED_RETURN_FNS = {
-    "encrypt", "rotate", "relin", "chebyshev", "clone",
-    "reduce", "slot_sum", "total_sums", "zero",
-    "get_encrypted_payload", "get_ctxt",
-    "mat_vec_mult_single", "compact_and_extract",
-    "extract_payload",
-    "negate", "mul_monomial", "dispatch",
-    "kitnet_ckks", "anomaly_detector_forward",
-}
 
-# DSL built-in functions that operate on plaintext data (never produce FHE ops)
-PLAINTEXT_ONLY_FNS = {
-    "n_slots", "n_ctxts", "n_cols", "max_n_match",
-    "len", "rows", "ceil_div", "log2", "round", "abs",
-    "stride", "instance", "instance_name",
-    "datadir", "iodir", "keydir", "encdir", "root",
-    "decrypt",          # decryption yields a plaintext vector
-    "load_matrix", "load_vec", "slot_mask", "tile",
-}
 
 # Functions that need cc as first argument (FHE shared functions)
 FHE_SHARED_FNS = {
@@ -171,7 +158,18 @@ class CodeGenerator:
         # correctly. Cleared per generated function alongside _declared_vars.
         self._enc_vars: set[str] = set()
         self._plain_vars: set[str] = set()
+        # Locals holding a loaded wire struct: name -> wire type name, so
+        # field accesses (w.field) resolve from the wire declaration.
+        self._wire_vars: dict[str, str] = {}
+        # (fn, var) pairs whose encrypted-ness was decided by the NAME
+        # heuristic rather than structural typing — reported as warnings.
+        self.heuristic_fallbacks: set[tuple[str, str]] = set()
         self._classify_items()
+        # User-function signatures: name -> FnDecl. Lets encrypted-ness (and
+        # vector-ness) of user-fn calls resolve from declared return types
+        # instead of hardcoded name sets.
+        self._fn_sigs: dict[str, ast.FnDecl] = {f.name: f for f in self.shared_fns}
+        self._fn_sigs.update({s.fn.name: s.fn for s in self.stages})
 
     def _classify_items(self):
         for item in self.program.items:
@@ -843,6 +841,7 @@ endforeach()
             self._declared_vars.clear()
             self._enc_vars.clear()
             self._plain_vars.clear()
+            self._wire_vars.clear()
             self._gen_fn_impl(fn, with_cc=self._fn_uses_fhe(fn))
             self._current_fn = None
             self.blank()
@@ -977,6 +976,7 @@ endforeach()
         self._declared_vars.clear()
         self._enc_vars.clear()
         self._plain_vars.clear()
+        self._wire_vars.clear()
         self._gen_fn_impl(stage.fn, with_cc=(stage.domain == Domain.SERVER))
         self._current_stage_hardware = False
         self._current_fn = None
@@ -1802,7 +1802,63 @@ endforeach()
         else:
             self.wl("}")
 
+    def _loop_binding_states(self, names, iterable):
+        """Encrypted-ness of loop-bound variables, derived from the iterable.
+        Iterating an encrypted collection yields encrypted elements; ranges
+        yield plain indices; replicate()/enumerate() yield (plain, element)."""
+        rng = iterable
+        if isinstance(rng, ast.MethodCall) and rng.method == "rev":
+            rng = rng.obj
+        if len(names) == 1:
+            if isinstance(rng, ast.RangeExpr):
+                return {names[0]: False}
+            return {names[0]: self._struct_enc_state(iterable)}
+        if len(names) == 2:
+            idx, val = names
+            if isinstance(iterable, ast.MethodCall) and iterable.method == "replicate":
+                # slot replicator yields (index, replicated ciphertext)
+                return {idx: False, val: True}
+            if (isinstance(iterable, ast.CallExpr)
+                    and isinstance(iterable.func, ast.Ident)
+                    and iterable.func.name == "enumerate" and iterable.args):
+                return {idx: False,
+                        val: self._struct_enc_state(iterable.args[0].value)}
+            return {idx: False, val: None}
+        return {n: None for n in names}
+
+    def _push_loop_bindings(self, names, iterable):
+        return self._push_named_bindings(
+            self._loop_binding_states(list(names), iterable))
+
+    def _push_named_bindings(self, states):
+        saved = []
+        for name, st in states.items():
+            saved.append((name, name in self._enc_vars, name in self._plain_vars))
+            self._enc_vars.discard(name)
+            self._plain_vars.discard(name)
+            if st is True:
+                self._enc_vars.add(name)
+            elif st is False:
+                self._plain_vars.add(name)
+        return saved
+
+    def _pop_loop_bindings(self, saved):
+        for name, was_enc, was_plain in saved:
+            self._enc_vars.discard(name)
+            self._plain_vars.discard(name)
+            if was_enc:
+                self._enc_vars.add(name)
+            if was_plain:
+                self._plain_vars.add(name)
+
     def _gen_for(self, stmt: ast.ForStmt):
+        saved = self._push_loop_bindings(stmt.pattern.names, stmt.iterable)
+        try:
+            self._gen_for_impl(stmt)
+        finally:
+            self._pop_loop_bindings(saved)
+
+    def _gen_for_impl(self, stmt: ast.ForStmt):
         if len(stmt.pattern.names) == 1:
             var = stmt.pattern.names[0]
             if isinstance(stmt.iterable, ast.RangeExpr):
@@ -1908,6 +1964,13 @@ endforeach()
     # ===== For-expression codegen (vector comprehension) =====
 
     def _gen_for_expr_as_stmt(self, name: str, cpp_type: str, expr: ast.ForExpr):
+        saved = self._push_loop_bindings(expr.pattern.names, expr.iterable)
+        try:
+            self._gen_for_expr_as_stmt_impl(name, cpp_type, expr)
+        finally:
+            self._pop_loop_bindings(saved)
+
+    def _gen_for_expr_as_stmt_impl(self, name: str, cpp_type: str, expr: ast.ForExpr):
         """Generate a for-expression as a statement block producing a vector."""
         if len(expr.pattern.names) == 1:
             var = expr.pattern.names[0]
@@ -2302,6 +2365,33 @@ endforeach()
         return f"{right}({left})"
 
     def _gen_call_expr(self, expr: ast.CallExpr) -> str:
+        # Closure parameters take their encrypted-ness from the call context:
+        # map/zip_map/reduce closures see elements of the (possibly encrypted)
+        # collection; chebyshev closures are plaintext approximation functions
+        # evaluated on doubles.
+        saved = None
+        if isinstance(expr.func, ast.Ident) and expr.args:
+            fname = expr.func.name
+            closure = next((a.value for a in expr.args
+                            if isinstance(a.value, ast.Closure)), None)
+            if closure is not None and closure.params:
+                if fname in ("map", "zip_map", "reduce"):
+                    coll = expr.args[1].value if (fname == "reduce"
+                                                  and len(expr.args) > 1) \
+                        else expr.args[0].value
+                    st = self._struct_enc_state(coll)
+                    saved = self._push_named_bindings(
+                        {p.name: st for p in closure.params})
+                elif fname == "chebyshev":
+                    saved = self._push_named_bindings(
+                        {p.name: False for p in closure.params})
+        try:
+            return self._gen_call_expr_impl(expr)
+        finally:
+            if saved:
+                self._pop_loop_bindings(saved)
+
+    def _gen_call_expr_impl(self, expr: ast.CallExpr) -> str:
         func = self._expr_to_cpp(expr.func)
         args = [self._expr_to_cpp(a.value) for a in expr.args]
         named = {a.name: self._expr_to_cpp(a.value) for a in expr.args if a.name}
@@ -2624,6 +2714,13 @@ endforeach()
             return f"[&]({', '.join(params)}) {{ return {body}; }}"
 
     def _gen_for_expr_inline(self, expr: ast.ForExpr) -> str:
+        saved = self._push_loop_bindings(expr.pattern.names, expr.iterable)
+        try:
+            return self._gen_for_expr_inline_impl(expr)
+        finally:
+            self._pop_loop_bindings(saved)
+
+    def _gen_for_expr_inline_impl(self, expr: ast.ForExpr) -> str:
         """Generate a for-expression inline as an IIFE."""
         has_destructure = len(expr.pattern.names) == 2
         if has_destructure:
@@ -3238,6 +3335,54 @@ endforeach()
             return any(self._has_enc_type(e) for e in type_ann.elements)
         return False
 
+    def _load_wire_name(self, expr):
+        """Wire type name for a load(Wire, ...) / load(Wire[i], ...) call."""
+        if not (isinstance(expr, ast.CallExpr) and isinstance(expr.func, ast.Ident)
+                and expr.func.name in ("load", "load_all")):
+            return None
+        positional = [a for a in expr.args if not a.name]
+        if not positional:
+            return None
+        te = positional[0].value
+        if isinstance(te, ast.Ident):
+            return te.name
+        if isinstance(te, ast.IndexExpr) and isinstance(te.obj, ast.Ident):
+            return te.obj.name
+        return None
+
+    def _wire_field_enc_state(self, expr):
+        """Encrypted-ness of a FieldAccess through a wire type: the object is
+        either a local recorded in _wire_vars or a direct load(Wire,...) call.
+        Returns True/False from the wire declaration, or None."""
+        if not isinstance(expr, ast.FieldAccess):
+            return None
+        wire_name = None
+        if isinstance(expr.obj, ast.Ident):
+            wire_name = self._wire_vars.get(expr.obj.name)
+        else:
+            wire_name = self._load_wire_name(expr.obj)
+        if wire_name is None:
+            return None
+        wire = next((w for w in self.wires if w.name == wire_name), None)
+        if wire is None:
+            return None
+        for f in wire.fields:
+            if f.name == expr.field_name:
+                return self._has_enc_type(f.type_ann)
+        return None
+
+    def _call_enc_state(self, fname: str):
+        """Encrypted-ness of a call result: builtin registry first, then the
+        user function's declared return type. None when unresolvable."""
+        if fname in ENCRYPTED_RETURN_FNS:
+            return True
+        if fname in PLAINTEXT_RETURN_FNS:
+            return False
+        fn = self._fn_sigs.get(fname)
+        if fn is not None and fn.return_type is not None:
+            return self._has_enc_type(fn.return_type)
+        return None
+
     def _struct_enc_state(self, expr: ast.Expr | None):
         """Structural-only encrypted-ness: True / False when provable from
         annotations, builtin return kinds, or recorded let-binding flow;
@@ -3259,11 +3404,11 @@ endforeach()
                         return self._has_enc_type(p.type_ann)
             return None
         if isinstance(expr, ast.CallExpr) and isinstance(expr.func, ast.Ident):
-            if expr.func.name in ENCRYPTED_RETURN_FNS:
-                return True
-            if expr.func.name in PLAINTEXT_ONLY_FNS:
-                return False
-            return None
+            if expr.func.name in ("vec_zeros", "mat_zeros") and expr.type_args:
+                return self._has_enc_type(expr.type_args[0])
+            return self._call_enc_state(expr.func.name)
+        if isinstance(expr, ast.FieldAccess):
+            return self._wire_field_enc_state(expr)
         if isinstance(expr, (ast.IndexExpr, ast.MethodCall)):
             return self._struct_enc_state(expr.obj)
         if isinstance(expr, ast.UnaryExpr):
@@ -3289,7 +3434,27 @@ endforeach()
         an explicit type annotation wins, otherwise structural flow from the
         initializer. Makes later uses of the variable independent of its name."""
         if stmt.tuple_names and len(stmt.tuple_names) > 1:
-            return  # destructured bindings: state unknown
+            # Destructured binding from a user fn with a declared tuple return:
+            # record each position's encrypted-ness from the signature.
+            if (isinstance(stmt.value, ast.CallExpr)
+                    and isinstance(stmt.value.func, ast.Ident)):
+                fn = self._fn_sigs.get(stmt.value.func.name)
+                rt = fn.return_type if fn is not None else None
+                if isinstance(rt, ast.TupleType) and len(rt.elements) == len(stmt.tuple_names):
+                    for n, elem_t in zip(stmt.tuple_names, rt.elements):
+                        if n == "_":
+                            continue
+                        if self._has_enc_type(elem_t):
+                            self._enc_vars.add(n)
+                            self._plain_vars.discard(n)
+                        else:
+                            self._plain_vars.add(n)
+                            self._enc_vars.discard(n)
+            return
+        # Loaded wire structs: remember the wire type for field resolution.
+        wname = self._load_wire_name(stmt.value)
+        if wname is not None:
+            self._wire_vars[stmt.name] = wname
         if stmt.type_ann is not None:
             state = self._has_enc_type(stmt.type_ann)
         else:
@@ -3323,17 +3488,21 @@ endforeach()
             if expr.name.isupper() or expr.name.startswith("PAYLOAD") or expr.name.startswith("MAX_") or expr.name.startswith("RUNNING_") or expr.name.startswith("THRESHOLD"):
                 return False
             name = expr.name.lower()
-            if name in ENCRYPTED_EXACT_NAMES:
-                return True
-            if name.startswith(ENCRYPTED_PREFIXES):
+            if name in ENCRYPTED_EXACT_NAMES or name.startswith(ENCRYPTED_PREFIXES):
+                # Classification fell back to the name heuristic — correct for
+                # conventionally-named ciphertexts, but unverified. Surfaced
+                # as a per-variable warning so authors can annotate instead.
+                fn_name = self._current_fn.name if self._current_fn else "?"
+                self.heuristic_fallbacks.add((fn_name, expr.name))
                 return True
         if isinstance(expr, ast.CallExpr) and isinstance(expr.func, ast.Ident):
-            if expr.func.name in ENCRYPTED_RETURN_FNS:
-                return True
-            # Functions that are NOT encrypted
-            if expr.func.name in PLAINTEXT_ONLY_FNS:
-                return False
+            call_state = self._call_enc_state(expr.func.name)
+            if call_state is not None:
+                return call_state
         if isinstance(expr, ast.FieldAccess):
+            wf = self._wire_field_enc_state(expr)
+            if wf is not None:
+                return wf
             if expr.field_name in ("query", "result", "data"):
                 return True
         if isinstance(expr, ast.BinaryExpr):
@@ -3357,15 +3526,21 @@ endforeach()
             return False
         return False
 
-    # Functions that return std::vector<double> (plaintext vectors)
-    VECTOR_RETURN_FNS = {"slot_mask", "tile", "to_matrix_form", "decode_payloads"}
+    # Functions that return std::vector<double> (plaintext vectors) — from
+    # the unified registry; user fns resolve via their declared signatures.
+    VECTOR_RETURN_FNS = VECTOR_RETURN_FNS
 
     def _is_vector_expr(self, expr: ast.Expr | None) -> bool:
         """Heuristic: check if an expression produces a std::vector (not a scalar)."""
         if expr is None:
             return False
         if isinstance(expr, ast.CallExpr) and isinstance(expr.func, ast.Ident):
-            return expr.func.name in self.VECTOR_RETURN_FNS
+            if expr.func.name in self.VECTOR_RETURN_FNS:
+                return True
+            fn = self._fn_sigs.get(expr.func.name)
+            if fn is not None and fn.return_type is not None:
+                return self._type_to_cpp(fn.return_type) == "std::vector<double>"
+            return False
         if isinstance(expr, ast.Ident):
             # Check if this variable was assigned from a vector-returning function
             return self._local_var_cpp_types.get(expr.name, "").startswith("std::vector")
@@ -3446,4 +3621,10 @@ endforeach()
 def generate(program: ast.Program, analyzer: SemanticAnalyzer) -> dict[str, str]:
     """Convenience function to generate all C++ files."""
     gen = CodeGenerator(program, analyzer)
-    return gen.generate_all()
+    files = gen.generate_all()
+    for fn_name, var in sorted(gen.heuristic_fallbacks):
+        analyzer.errors.warn(
+            f"encrypted-ness of '{var}' in '{fn_name}' was decided by the "
+            f"variable-name heuristic; add a type annotation "
+            f"(let {var}: enc<...> = ...) or rename if it is plaintext")
+    return files

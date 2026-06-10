@@ -16,6 +16,7 @@ from nb_types import (
     enc_of, vec_of, mat_of, is_numeric, is_encrypted, common_type,
     CLIENT_ONLY_FNS, SERVER_FORBIDDEN_TYPES,
 )
+from builtins_registry import BUILTINS, DEPTH_OPAQUE_FNS
 from errors import (
     ErrorCollector, SemanticError, DomainError, TypeError_, DepthError,
     SourceLocation,
@@ -58,66 +59,20 @@ class SemanticAnalyzer:
                       "Plaintext"):
             self.type_registry[name] = NbType(TypeKind.STRUCT, name=name)
 
-        # Built-in functions
+        # Built-in functions — classification facts come from the unified
+        # registry in builtins.py (single source of truth shared with codegen).
+        kind_map = {
+            "enc": lambda: enc_of(F64),
+            "u32": lambda: U32, "i64": lambda: I64, "f64": lambda: F64,
+            "string": lambda: STRING, "path": lambda: PATH, "void": lambda: VOID,
+            "keybundle": lambda: NbType(TypeKind.STRUCT, name="KeyBundle"),
+            "secretkey": lambda: NbType(TypeKind.STRUCT, name="SecretKey"),
+            "plain": lambda: UNKNOWN,    # plaintext, precise type not modeled
+            "unknown": lambda: UNKNOWN,
+        }
         builtins = {
-            "keygen": NbType(TypeKind.FN, return_type=NbType(TypeKind.STRUCT, name="KeyBundle")),
-            "encrypt": NbType(TypeKind.FN, return_type=enc_of(F64)),
-            "decrypt": NbType(TypeKind.FN, return_type=F64),
-            "save_secret_key": NbType(TypeKind.FN, return_type=VOID),
-            "load_secret_key": NbType(TypeKind.FN, return_type=NbType(TypeKind.STRUCT, name="SecretKey")),
-            "load": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "load_all": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "load_matrix": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "load_vec": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "tile": NbType(TypeKind.FN, return_type=UNKNOWN),
-            # Ciphertext-returning builtins: typed enc so depth tracking and
-            # encrypted-ness flow engage (depth restarts at 0 at each call —
-            # a best-effort lower bound; chebyshev's internal depth is not
-            # modeled here).
-            "clone": NbType(TypeKind.FN, return_type=enc_of(F64)),
-            "zero": NbType(TypeKind.FN, return_type=enc_of(F64)),
-            "relin": NbType(TypeKind.FN, return_type=enc_of(F64)),
-            "rotate": NbType(TypeKind.FN, return_type=enc_of(F64)),
-            "chebyshev": NbType(TypeKind.FN, return_type=enc_of(F64)),
-            "running_sums": NbType(TypeKind.FN, return_type=VOID),
-            "slot_replicator": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "slot_sum": NbType(TypeKind.FN, return_type=enc_of(F64)),
-            "slot_mask": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "reduce": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "map": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "zip_map": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "len": NbType(TypeKind.FN, return_type=U32),
-            "rows": NbType(TypeKind.FN, return_type=U32),
-            "round": NbType(TypeKind.FN, return_type=I64),
-            "ceil_div": NbType(TypeKind.FN, return_type=U32),
-            "log2": NbType(TypeKind.FN, return_type=U32),
-            "exp": NbType(TypeKind.FN, return_type=F64),
-            "sort": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "argmax": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "enumerate": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "stride": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "transpose": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "batch": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "scale": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "prepend_column": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "root": NbType(TypeKind.FN, return_type=PATH),
-            "total_sums": NbType(TypeKind.FN, return_type=enc_of(F64)),
-            "vec_zeros": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "mat_zeros": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "to_matrix_form": NbType(TypeKind.FN, return_type=UNKNOWN),
-            # FHE / cipher built-ins
-            "negate": NbType(TypeKind.FN, return_type=enc_of(F64)),
-            "mul_monomial": NbType(TypeKind.FN, return_type=enc_of(F64)),
-            "load_model": NbType(TypeKind.FN, return_type=UNKNOWN),
-            "extern_call": NbType(TypeKind.FN, return_type=UNKNOWN),
-            # Casts / scalar helpers
-            "int": NbType(TypeKind.FN, return_type=I64),
-            "str": NbType(TypeKind.FN, return_type=STRING),
-            "abs": NbType(TypeKind.FN, return_type=F64),
-            "tanh": NbType(TypeKind.FN, return_type=F64),
-            # I/O / debug
-            "save": NbType(TypeKind.FN, return_type=VOID),
-            "print": NbType(TypeKind.FN, return_type=VOID),
+            b.name: NbType(TypeKind.FN, return_type=kind_map[b.returns]())
+            for b in BUILTINS
         }
         for name, ty in builtins.items():
             self.global_scope.define(Symbol(name, ty))
@@ -412,9 +367,7 @@ class SemanticAnalyzer:
                 # (chebyshev polynomial evaluation, external C++, closure
                 # bodies applied by combinators) is not statically modeled, so
                 # the over-provision check must stay silent for this program.
-                if expr.func.name in ("chebyshev", "extern_call",
-                                      "map", "zip_map", "reduce",
-                                      "running_sums"):
+                if expr.func.name in DEPTH_OPAQUE_FNS:
                     self._depth_opaque = True
             if func_type.kind == TypeKind.FN and func_type.return_type:
                 return func_type.return_type

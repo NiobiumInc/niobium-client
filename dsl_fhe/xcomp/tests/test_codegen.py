@@ -273,6 +273,91 @@ def test_decrypt_output_is_plain():
     assert "EvalSub(score" not in impl
 
 
+def test_loop_element_enc_flow():
+    # Iterating an encrypted collection yields encrypted elements, no matter
+    # what the loop variable is called; range loops yield plain indices.
+    files = compile_str("""
+    fn f(xs: vec<enc<vec<f64>>>) -> enc<vec<f64>> {
+        let acc_out: enc<vec<f64>> = zero()
+        for item in xs {
+            acc_out = acc_out + item * item
+        }
+        return acc_out
+    }
+    """)
+    impl = files["nb_shared.cpp"]
+    assert "EvalMult(item, item)" in impl
+
+
+def test_wire_field_enc_flow():
+    # Field accesses through a loaded wire struct resolve from the wire
+    # declaration: enc fields are ciphertexts, plain fields are not.
+    files = compile_str("""
+    wire Payload { blob: enc<vec<f64>>, count: u32 }
+    fn f(p: path, k: f64) -> enc<vec<f64>> {
+        let w = load(Payload, from: p)
+        let n = w.count
+        let scaled = w.blob * (k / n)
+        return scaled
+    }
+    """)
+    impl = files["nb_shared.cpp"]
+    assert "EvalMult(w.blob" in impl          # enc field -> FHE op
+    assert "EvalMult(w.count" not in impl     # plain field stays plain
+
+
+def test_destructured_tuple_enc_flow():
+    # let (a, b) = user_fn(...) with a declared tuple return records each
+    # position's encrypted-ness from the signature.
+    files = compile_str("""
+    fn produce(ct: enc<vec<f64>>) -> (vec<enc<vec<f64>>>, u32) {
+        return ([ct], 1)
+    }
+    fn f(ct: enc<vec<f64>>) -> enc<vec<f64>> {
+        let (parts, n) = produce(ct)
+        let m = n + 1
+        return parts[0] * parts[0]
+    }
+    """)
+    impl = files["nb_shared.cpp"]
+    assert "EvalMult(parts[0], parts[0])" in impl
+    assert "(n + 1)" in impl                  # plain position stays plain
+
+
+def test_vec_zeros_type_arg_enc():
+    # vec_zeros<enc<...>> classifies from its explicit type argument.
+    files = compile_str("""
+    fn f(xs: vec<enc<vec<f64>>>, n: u32) -> vec<enc<vec<f64>>> {
+        let buckets = vec_zeros<enc<vec<f64>>>(n)
+        for i in 0..n {
+            buckets[i] = buckets[i] + xs[i]
+        }
+        return buckets
+    }
+    """)
+    impl = files["nb_shared.cpp"]
+    assert "NullSafeEvalAdd(cc, buckets[i], xs[i])" in impl
+
+
+def test_heuristic_fallback_warns():
+    # When classification can only come from the name heuristic, the compiler
+    # records it and generate() surfaces a warning naming the variable.
+    from lexer import lex as _lex
+    from parser import parse as _parse
+    from semantic import analyze as _analyze
+    from codegen import generate as _generate
+    program = _parse(_lex("""
+    fn helper(x: f64) -> f64 { return x }
+    fn f() -> f64 {
+        return ct_mystery + 1.0
+    }
+    """))
+    sa = _analyze(program)
+    _generate(program, sa)
+    assert any("heuristic" in w and "ct_mystery" in w for w in sa.errors.warnings), \
+        sa.errors.warnings
+
+
 def test_shared_fn_forward_decl():
     files = compile_str("""
     fn helper(x: f64) -> f64 {
