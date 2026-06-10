@@ -19,7 +19,7 @@ buildable with no external/private repo:
   (record → replay → decrypt) but the output is **not** real inference.
 - **Real inference (opt-in)**: obtain the HEIR model + trained weights from the
   ml-inference submission package and build with
-  `make ml-inference NIOBIUM_COMPILER_ROOT=/path/to/checkout`. The submission's
+  `make ml-inference SUBMISSION_REPO=/path/to/submission-repo`. The submission's
   `src/mlp_openfhe.cpp` and `data/*.bin` then take precedence over the stub.
 
 See `data/README.md`. The rest of this guide describes the real submission.
