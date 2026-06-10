@@ -30,6 +30,11 @@ constexpr const char* kTargetHeader = "X-Target";
 // The server uses this to name the temp working tree and to scope error logs.
 constexpr const char* kProjectNameHeader = "X-Project-Name";
 
+// Optimization level for the compiler-side replay ("O0".."O3"). Optional; when
+// absent the server forwards no -On and the compiler defaults to O0. The server
+// turns this into a native -O<n> flag on the nbcc_fhetch_replay command line.
+constexpr const char* kOptLevelHeader = "X-Opt-Level";
+
 // ---- Defaults ----------------------------------------------------------
 constexpr const char* kDefaultServerEnv  = "NBCC_FHETCH_SERVER";
 constexpr const char* kDefaultServerAddr = "http://127.0.0.1:9443";

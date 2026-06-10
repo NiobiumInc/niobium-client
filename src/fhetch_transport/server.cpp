@@ -100,6 +100,16 @@ bool is_safe_cli_token(const std::string& s) {
     return true;
 }
 
+// Translate an X-Opt-Level header value ("O0".."O3", or bare "0".."3") into the
+// native compiler flag "-O0".."-O3". Returns "" if empty or not a valid level,
+// so the caller can reject malformed values and fall back to the O0 default.
+std::string opt_level_to_flag(const std::string& v) {
+    std::string s = v;
+    if (!s.empty() && (s[0] == 'O' || s[0] == 'o')) s = s.substr(1);
+    if (s.size() == 1 && s[0] >= '0' && s[0] <= '3') return std::string("-O") + s[0];
+    return "";
+}
+
 std::string unique_tempdir(const std::string& prefix) {
     auto base = fs::temp_directory_path();
     for (int attempt = 0; attempt < 64; ++attempt) {
@@ -120,6 +130,7 @@ struct Handler {
         // ---- Header validation ---------------------------------------
         auto target  = req.get_header_value(nft::kTargetHeader);
         auto project = req.get_header_value(nft::kProjectNameHeader);
+        auto opt_in  = req.get_header_value(nft::kOptLevelHeader);
         if (target.empty()) {
             res.status = 400;
             res.set_content("missing header " + std::string(nft::kTargetHeader) + "\n",
@@ -134,6 +145,20 @@ struct Handler {
             return;
         }
         if (project.empty()) project = "niobium_fhetch_project";
+
+        // Optional optimization level → native -O<n>. Absent means O0 (the
+        // compiler-side default); a present-but-malformed value is rejected
+        // rather than silently ignored.
+        std::string opt_flag;
+        if (!opt_in.empty()) {
+            opt_flag = opt_level_to_flag(opt_in);
+            if (opt_flag.empty()) {
+                res.status = 400;
+                res.set_content("header " + std::string(nft::kOptLevelHeader) +
+                                " must be one of O0,O1,O2,O3\n", "text/plain");
+                return;
+            }
+        }
 
         // ---- Unpack the request -------------------------------------
         std::string tempdir;
@@ -157,8 +182,9 @@ struct Handler {
         std::ostringstream cmd;
         cmd << compiler_bin
             << " --project=" << tempdir
-            << " --target="  << target
-            << " 2>&1";
+            << " --target="  << target;
+        if (!opt_flag.empty()) cmd << " " << opt_flag;  // pre-validated -O<n>
+        cmd << " 2>&1";
 
         std::string log;
         int exit_code = -1;

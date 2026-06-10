@@ -35,6 +35,7 @@ namespace fs = std::filesystem;
 struct Args {
     std::string project;
     std::string target;
+    std::string opt_level;   // O0..O3; empty → server defaults to O0
 };
 
 void print_usage() {
@@ -43,6 +44,8 @@ void print_usage() {
         "\n"
         "  --project=<dir>    fhetch project directory (contains fhetch_replay.json).\n"
         "  --target=<target>  Target device id, forwarded verbatim to the server.\n"
+        "  --opt-level=<lvl>  Optimization level (O0..O3) for the compiler-side\n"
+        "                     replay. Optional; omitted means the server uses O0.\n"
         "\n"
         "Environment:\n"
         "  NBCC_FHETCH_SERVER  Base URL of the replay server. Default http://127.0.0.1:9443.\n";
@@ -56,6 +59,8 @@ Args parse(int argc, char** argv) {
         else if (a == "--project" && i + 1 < argc)    out.project = argv[++i];
         else if (a.rfind("--target=", 0) == 0)        out.target  = a.substr(9);
         else if (a == "--target"  && i + 1 < argc)    out.target  = argv[++i];
+        else if (a.rfind("--opt-level=", 0) == 0)     out.opt_level = a.substr(12);
+        else if (a == "--opt-level" && i + 1 < argc)  out.opt_level = argv[++i];
         else if (a == "-h" || a == "--help") {
             print_usage();
             std::exit(0);
@@ -139,6 +144,10 @@ int main(int argc, char** argv) {
         {nft::kTargetHeader,      args.target},
         {nft::kProjectNameHeader, project_dir.filename().string()},
     };
+    // Only send the opt-level header when the caller asked for one; absent →
+    // the server forwards no -On and the compiler defaults to O0.
+    if (!args.opt_level.empty())
+        headers.emplace(nft::kOptLevelHeader, args.opt_level);
 
     auto res = cli.Post(nft::kReplayPath, headers,
                         request_body, nft::kArchiveContentType);
