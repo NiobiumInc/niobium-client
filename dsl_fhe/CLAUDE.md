@@ -171,6 +171,25 @@ without any `enc<T>` in their signature.
 Built-in FHE operations (`rotate`, `negate`, etc.) use `cc->` directly in their
 codegen handlers and don't need to be in `FHE_SHARED_FNS`.
 
+### ⚠️ Encrypted-Variable Detection Is a Fragile Heuristic
+
+`_is_encrypted_expr()` decides whether an expression is a ciphertext — which
+drives critical codegen choices (`NullSafeEvalAdd` vs `cc->EvalAdd`, whether to
+`const_pointer_cast`, etc.). It **first** uses real type information (symbol
+table entries and the current function's `enc<T>` parameters); only when that is
+unavailable does it fall back to a **name heuristic**: `ENCRYPTED_PREFIXES` /
+`ENCRYPTED_EXACT_NAMES` (`codegen.py:80`).
+
+The fallback is fragile. A plaintext local whose name happens to start with an
+encrypted prefix — e.g. `result_index`, `hidden_dim`, `recon_loss` (matching
+`result`, `hidden`, `recon`) — is **misclassified as encrypted** and will
+generate C++ that compiles but produces garbage. ALL-CAPS names are exempted
+(treated as constants). When adding examples, avoid plaintext variable names
+that collide with these prefixes, or give them an explicit type so the
+type-info path wins. `test_encrypted_var_heuristic` in `tests/test_codegen.py`
+pins both the good classifications and the known false positives; a proper fix
+would be full type-driven detection (update that test when doing so).
+
 ### How `encrypt()` Compiles
 
 The encrypt function generates different code depending on the data argument:

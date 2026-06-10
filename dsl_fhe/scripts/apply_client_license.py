@@ -72,7 +72,12 @@ def relicense(text: str) -> str | None:
             end = i
             break
     if end is None:
-        return None  # malformed / unrecognized; leave it alone
+        # Saw the Niobium copyright line but not the expected end-of-block
+        # marker — the header isn't the shape we know how to relicense.
+        print("apply_client_license: WARNING: found the Niobium copyright line "
+              f"but not the block end ({NIOBIUM_BLOCK_END!r}); leaving file "
+              "unchanged — check its license header manually.", file=sys.stderr)
+        return None
 
     return shebang + _header(prefix) + "".join(lines[end + 1:])
 
