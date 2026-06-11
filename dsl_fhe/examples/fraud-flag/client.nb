@@ -1,0 +1,93 @@
+// client.nb — Client-side stages for private fraud-flag checking
+//============================================================================
+// Runs on the CLIENT machine (owns the secret key).
+// Compiles to:
+//   key_generation  <profile>
+//   encrypt_card    <profile>
+//   decrypt_verify  <profile> [expected_score]
+//
+// Profiles: 0=Toy (ring 2048, dev security), 1=Full (ring 32768, 128-classic)
+//============================================================================
+
+use shared::*
+
+// CKKS, depth = 2 + K (distance squaring + normalization + K iterated
+// squarings). logQ ~= 60 + 15*50 = 810 bits -> 128-classic at ring 32768.
+scheme CKKS {
+    security: 128-classic    // Toy overrides to not_set below
+    key_dist: uniform_ternary
+    scaling: flexible_auto
+    precision: 50
+    first_mod: 60
+    depth: 15
+}
+
+requires { add, mul }
+
+// ============================================================================
+// Stage 1: Key generation
+// ============================================================================
+
+@client @stage("key_generation")
+fn generate_keys(inst: Instance) -> writes(CryptoParams)
+{
+    scheme.override(depth: inst.depth)
+
+    if inst.profile == Toy {
+        scheme.override(security: not_set)    // small ring for fast dev runs
+    }
+
+    let keys = keygen()
+    save_secret_key(keys.secret, keydir(inst) / "sk.bin")
+
+    return CryptoParams {
+        context: keys.context,
+        public_key: keys.public,
+        eval_mult_key: keys.eval_mult,
+    }
+}
+
+// ============================================================================
+// Stage 2: Encrypt the query card
+//
+// query.bin holds the encoded card replicated to n_slots rows (one column
+// per digit position), so each column encrypts to a ciphertext with that
+// position's digit value in every SIMD slot.
+// ============================================================================
+
+@client @stage("encrypt_card")
+fn encrypt_card(inst: Instance) -> reads(CryptoParams), writes(EncryptedCard)
+{
+    let params = load(CryptoParams, from: keydir(inst))
+    let qmat = load_matrix<f64>(query_file(inst), inst.n_digits)
+
+    return EncryptedCard {
+        digits: for pos in 0..inst.n_digits {
+            let column = qmat[0..inst.n_slots, pos]
+            encrypt(params.public_key, column)
+        }
+    }
+}
+
+// ============================================================================
+// Stage 3: Decrypt and verify the flag score
+//
+// A flagged card contributes ~1.0; every other entry decays to ~0 after
+// iterated squaring. expected is the cleartext match count computed by
+// harness/encode_cards.py (0.0 or 1.0 — card numbers are unique).
+// ============================================================================
+
+@client @stage("decrypt_verify")
+fn decrypt_verify(inst: Instance, expected: f64 = 1.0) -> reads(EncryptedResult)
+{
+    let sk = load_secret_key(keydir(inst) / "sk.bin")
+    let encrypted = load(EncryptedResult, from: encdir(inst))
+
+    let result = decrypt(sk, encrypted.flag)
+    let value = result[0]
+
+    print(value)
+
+    let tolerance = 0.3
+    assert abs(value - expected) < tolerance
+}

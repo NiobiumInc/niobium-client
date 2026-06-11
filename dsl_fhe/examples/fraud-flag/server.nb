@@ -1,0 +1,62 @@
+// server.nb — Server-side encrypted fraud-flag evaluation
+//============================================================================
+// Runs on the SERVER machine. NO access to the secret key. The flagged-card
+// list is the server's PRIVATE data — loaded as a plaintext matrix here and
+// folded into the homomorphic circuit; it never leaves the server, and the
+// client's card number is never decrypted.
+// Compiles to:
+//   check_card <profile>
+//============================================================================
+
+use shared::*
+
+// ============================================================================
+// Encrypted evaluation: squared distance + iterated-squaring indicator
+//
+// For each batch of n_slots flagged cards (one card per SIMD slot):
+//   acc   = sum_pos (query[pos] - flagged_column[pos])^2      [1 level]
+//   ct_t  = 1 - acc/C                                          [1 level]
+//   ct_t  = ct_t^(2^K)     (K squarings amplify the gap)       [K levels]
+//   flag += slot_sum(ct_t) (the flagged card contributes ~1)
+// ============================================================================
+
+@server @stage("check_card")
+@hardware(cache_key: ["workload_size"])
+fn check_card(inst: Instance)
+    -> reads(CryptoParams, EncryptedCard),
+       writes(EncryptedResult)
+{
+    let params = load(CryptoParams, from: keydir(inst))
+    let eqry = load(EncryptedCard, from: encdir(inst)).digits
+
+    // Server's private flagged list, column-major packing prepared by the
+    // harness: (n_batches * n_slots) rows x n_digits cols, zero-padded.
+    let flagged = load_matrix<f64>(flagged_file(inst), inst.n_digits)
+    let n_batches = rows(flagged) / inst.n_slots
+
+    let acc_total: enc<vec<f64>> = zero()
+
+    for b in 0..n_batches {
+        // Squared Euclidean distance to the query, per slot
+        let acc: enc<vec<f64>> = zero()
+        for pos in 0..inst.n_digits {
+            let column = flagged[b*inst.n_slots .. (b+1)*inst.n_slots, pos]
+            let diff = eqry[pos] - column
+            acc = acc + diff * diff
+        }
+
+        // Normalize to [0,1] and complement: flagged ~= 1, others < 1
+        let ct_t = negate(acc * (1.0 / norm_const(inst))) + 1.0
+
+        // Iterated squaring: non-matches decay exponentially toward 0
+        for r in 0..inst.k_squarings {
+            ct_t = ct_t * ct_t
+        }
+
+        // Aggregate this batch's indicators across all SIMD slots
+        let ct_batch = ct_t |> slot_sum(inst.n_slots)
+        acc_total = acc_total + ct_batch
+    }
+
+    return EncryptedResult { flag: acc_total }
+}

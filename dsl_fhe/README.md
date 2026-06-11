@@ -163,6 +163,10 @@ dsl_fhe/
       server.nb                        # Squared-distance + iterated-squaring indicator
       harness/encode_names.py          # Plaintext name encoding (exact + Soundex)
       nb_out/                          # Generated C++ + build
+    fraud-flag/                        # Private card-number checking (skill-eval dogfood)
+      shared.nb, client.nb, server.nb  # 8-stage design walkthrough in README.md
+      harness/encode_cards.py          # Plaintext ground truth (5,000-card list)
+      nb_out/                          # Generated C++ + build
     simple/                            # Basic cipher operations (compilable, runnable)
       shared.nb                        # Operation enum (25 ops), instance sizes
       client.nb                        # Encrypt two scalars, decrypt+verify
@@ -202,12 +206,14 @@ make fhe-network-monitor    # Build KitNET anomaly detection (4 binaries)
 make ml-inference           # Build ML inference (4 binaries)
 make password-retrieval     # Build password retrieval (5 binaries)
 make set-membership         # Build private name matching (4 binaries)
+make fraud-flag             # Build private card-number checking (4 + ref binaries)
 make test-simple            # End-to-end: 8 FHE operations verified
 make test-fetch             # End-to-end: toy fetch pipeline
 make test-nid               # End-to-end: toy KitNET (keygen+encrypt+inference)
 make test-ml                # End-to-end: keygen+encrypt+compute (single)
 make test-password          # End-to-end: correct + wrong answer verification
 make test-set-membership    # End-to-end: exact match, no-match, Soundex fuzzy
+make test-fraud             # End-to-end: flagged/clean card + reference pipeline
 make test-examples          # Run all end-to-end tests
 ```
 
