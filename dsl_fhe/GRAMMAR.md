@@ -471,6 +471,11 @@ RULE hardware-instrumentation:
 RULE hardware-domain:
   @hardware may only appear on @server functions.
   It is a compile error to annotate a @client function with @hardware.
+
+  A function annotated with @encryptors(independent) declares the
+  independent-encryptor model: encrypt() of a column slice spanning records
+  (m[a..b, col]) is a compile error (cross-owner SIMD packing). The default,
+  @encryptors(single) or no annotation, permits column-major packing.
 ```
 
 ---

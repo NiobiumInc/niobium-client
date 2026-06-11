@@ -284,6 +284,64 @@ def test_chebyshev_max_error_selects_degree():
     assert any("not compile-time evaluable" in str(e) for e in sa3.errors.errors), sa3.errors.errors
 
 
+def test_encryptors_independent_forbids_cross_owner_packing():
+    common = """
+    scheme CKKS { security: not_set depth: 5 }
+    struct Instance { ring_dim: u32, n_slots: u32, n_feat: u32 }
+    fn datadir(inst: Instance) -> path { root() / "d" }
+    wire CryptoParams { context: CryptoContext, public_key: PublicKey,
+                        eval_mult_key: EvalMultKey }
+    wire EncRecord { ct: enc<vec<f64>> }
+    """
+    # Column-major packing (slots = records) in an independent-encryptor
+    # stage is the privacy violation the skill warns about -> compile error.
+    sa = check(common + """
+    @client @stage(name: "encrypt_all")
+    @encryptors(independent)
+    fn encrypt_all(inst: Instance) -> reads(CryptoParams), writes(EncRecord) {
+        let params = load(CryptoParams, from: datadir(inst))
+        let m = load_matrix<f64>(datadir(inst) / "all_owners.bin", inst.n_feat)
+        let column = m[0..inst.n_slots, 0]
+        return EncRecord { ct: encrypt(params.public_key, column) }
+    }
+    """)
+    assert any("cross-owner" in str(e) for e in sa.errors.errors), sa.errors.errors
+
+    # Per-record (row) packing is fine in independent mode.
+    sa2 = check(common + """
+    @client @stage(name: "encrypt_one")
+    @encryptors(independent)
+    fn encrypt_one(inst: Instance, owner: u32) -> reads(CryptoParams), writes(EncRecord) {
+        let params = load(CryptoParams, from: datadir(inst))
+        let m = load_matrix<f64>(datadir(inst) / "mine.bin", inst.n_feat)
+        let row = m[owner]
+        return EncRecord { ct: encrypt(params.public_key, row) }
+    }
+    """)
+    assert not any("cross-owner" in str(e) for e in sa2.errors.errors), sa2.errors.errors
+
+    # Without the annotation (single-encryptor default), column-major
+    # packing remains the recommended pattern.
+    sa3 = check(common + """
+    @client @stage(name: "encrypt_db")
+    fn encrypt_db(inst: Instance) -> reads(CryptoParams), writes(EncRecord) {
+        let params = load(CryptoParams, from: datadir(inst))
+        let m = load_matrix<f64>(datadir(inst) / "my_db.bin", inst.n_feat)
+        let column = m[0..inst.n_slots, 0]
+        return EncRecord { ct: encrypt(params.public_key, column) }
+    }
+    """)
+    assert not any("cross-owner" in str(e) for e in sa3.errors.errors), sa3.errors.errors
+
+    # Unknown mode is rejected.
+    sa4 = check(common + """
+    @client @stage(name: "f")
+    @encryptors(sideways)
+    fn f(inst: Instance) -> u32 { return 0 }
+    """)
+    assert any("unknown mode" in str(e) for e in sa4.errors.errors), sa4.errors.errors
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_")]
     passed = 0
