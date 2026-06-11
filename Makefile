@@ -236,7 +236,7 @@ test-bootstrap: build ## Run the bootstrap example: client → server → decryp
 	$(BUILD_DIR)/examples/bootstrap_client bootstrap_keys
 	@echo ""
 	@echo "=== Running bootstrap server ==="
-	$(BUILD_DIR)/examples/bootstrap_server bootstrap_keys
+	$(BUILD_DIR)/examples/bootstrap_server bootstrap_keys --no-ring-dim-check
 	@echo ""
 	@echo "=== Running bootstrap decrypt ==="
 	$(BUILD_DIR)/examples/bootstrap_decrypt bootstrap_keys
@@ -248,7 +248,7 @@ test-bootstrap-release: build-release ## Run the bootstrap example: client → s
 	$(BUILD_DIR)/examples/bootstrap_client bootstrap_keys
 	@echo ""
 	@echo "=== Running bootstrap server ==="
-	$(BUILD_DIR)/examples/bootstrap_server bootstrap_keys
+	$(BUILD_DIR)/examples/bootstrap_server bootstrap_keys --no-ring-dim-check
 	@echo ""
 	@echo "=== Running bootstrap decrypt ==="
 	$(BUILD_DIR)/examples/bootstrap_decrypt bootstrap_keys
@@ -260,7 +260,7 @@ test-plaintext-add: build ## Run the plaintext-add example: client → server �
 	$(BUILD_DIR)/examples/plaintext_add_client plaintext_add_keys
 	@echo ""
 	@echo "=== Running plaintext_add server ==="
-	$(BUILD_DIR)/examples/plaintext_add_server plaintext_add_keys
+	$(BUILD_DIR)/examples/plaintext_add_server plaintext_add_keys --no-ring-dim-check
 	@echo ""
 	@echo "=== Running plaintext_add decrypt ==="
 	$(BUILD_DIR)/examples/plaintext_add_decrypt plaintext_add_keys
@@ -272,7 +272,7 @@ test-plaintext-add-release: build-release ## Run the plaintext-add example: clie
 	$(BUILD_DIR)/examples/plaintext_add_client plaintext_add_keys
 	@echo ""
 	@echo "=== Running plaintext_add server ==="
-	$(BUILD_DIR)/examples/plaintext_add_server plaintext_add_keys
+	$(BUILD_DIR)/examples/plaintext_add_server plaintext_add_keys --no-ring-dim-check
 	@echo ""
 	@echo "=== Running plaintext_add decrypt ==="
 	$(BUILD_DIR)/examples/plaintext_add_decrypt plaintext_add_keys
@@ -324,6 +324,7 @@ test-auto-ciphers-release: build-release ## Auto-facade ciphers_ops: keygen → 
 		python3 $(CURDIR)/tools/nbcc.py \
 		--name auto_ops_$(AUTO_OP) --cache wl=TOY --cache op=$(AUTO_OP) \
 		--keys-mult io/toy/keys/mk.bin --keys-auto io/toy/keys/rk.bin \
+		--no-ring-dim-check \
 		-- \
 		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_server_auto 0 output_a.bin output_b.bin $(AUTO_EXPECTED) $(AUTO_OP) $(AUTO_IMM)
 	@echo ""
@@ -332,6 +333,7 @@ test-auto-ciphers-release: build-release ## Auto-facade ciphers_ops: keygen → 
 		python3 $(CURDIR)/tools/nbcc.py \
 		--name auto_ops_$(AUTO_OP) --cache wl=TOY --cache op=$(AUTO_OP) \
 		--keys-mult io/toy/keys/mk.bin --keys-auto io/toy/keys/rk.bin \
+		--no-ring-dim-check \
 		-- \
 		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_server_auto 0 output_a.bin output_b.bin $(AUTO_EXPECTED) $(AUTO_OP) $(AUTO_IMM)
 
@@ -342,7 +344,7 @@ test-mult: build ## Run the multiply example: client → server → decrypt (Deb
 	$(BUILD_DIR)/examples/mult_client mult_keys 7 13
 	@echo ""
 	@echo "=== Running mult server ==="
-	$(BUILD_DIR)/examples/mult_server mult_keys
+	$(BUILD_DIR)/examples/mult_server mult_keys --no-ring-dim-check
 	@echo ""
 	@echo "=== Running mult decrypt ==="
 	$(BUILD_DIR)/examples/mult_decrypt mult_keys
@@ -354,7 +356,7 @@ test-mult-release: build-release ## Run the multiply example: client → server 
 	$(BUILD_DIR)/examples/mult_client mult_keys 7 13
 	@echo ""
 	@echo "=== Running mult server ==="
-	$(BUILD_DIR)/examples/mult_server mult_keys
+	$(BUILD_DIR)/examples/mult_server mult_keys --no-ring-dim-check
 	@echo ""
 	@echo "=== Running mult decrypt ==="
 	$(BUILD_DIR)/examples/mult_decrypt mult_keys
@@ -399,7 +401,7 @@ test-mult-target-release: build-release ## Run mult with --target=$(TARGET). Ove
 	@echo "=== [2/3] mult_server --target=$(TARGET) (hollow record → dispatch to compiler) ==="
 	NBCC_FHETCH_REPLAY=$(NIOBIUM_COMPILER_ROOT)/build/nbcc_fhetch_replay \
 	LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib:$(NIOBIUM_COMPILER_ROOT)/build:$(NIOBIUM_COMPILER_ROOT)/deps/photovoltaic/build/ntl/lib:$(LD_LIBRARY_PATH) \
-		$(BUILD_DIR)/examples/mult_server mult_keys --target=$(TARGET)
+		$(BUILD_DIR)/examples/mult_server mult_keys --target=$(TARGET) --no-ring-dim-check
 	@echo ""
 	@echo "=== [3/3] mult_decrypt ==="
 	$(BUILD_DIR)/examples/mult_decrypt mult_keys
@@ -451,7 +453,7 @@ define run-simple-op
 	@echo "=== Testing $(1): $(2) ==="
 	@rm -rf simple_ops_keys simple_ops_server_*
 	@$(BUILD_DIR)/examples/simple_ops_client simple_ops_keys $(2) $(3) 2>&1 | tail -1
-	@$(BUILD_DIR)/examples/simple_ops_server simple_ops_keys $(1) 2>&1 | grep -E "Live-in|Complete|ERROR"
+	@$(BUILD_DIR)/examples/simple_ops_server simple_ops_keys $(1) --no-ring-dim-check 2>&1 | grep -E "Live-in|Complete|ERROR"
 	@$(BUILD_DIR)/examples/simple_ops_decrypt simple_ops_keys $(1) 2>&1 | grep -E "PASS|FAIL"
 	@echo ""
 endef
@@ -489,6 +491,25 @@ test-op-release: build-release ## Run a single simple_ops test: make test-op-rel
 	$(call set-build-config,Release,build)
 	$(call run-simple-op,$(OP),$(A),$(B))
 
+# Negative test for the Niobium hardware parameter checks: the mult example
+# uses ring dimension 2048, so running mult_server WITHOUT
+# --no-ring-dim-check must abort with the compatibility error.
+test-ring-dim-check-release: build-release ## Verify the ring-dimension hardware check rejects incompatible parameters
+	$(call set-build-config,Release,build)
+	@rm -rf mult_keys mult_server_workload_*
+	@echo "=== ring-dim check: mult_server without --no-ring-dim-check must fail ==="
+	$(BUILD_DIR)/examples/mult_client mult_keys 7 13
+	@out=$$($(BUILD_DIR)/examples/mult_server mult_keys 2>&1); status=$$?; \
+	 if [ $$status -eq 0 ]; then \
+	     echo "FAIL: mult_server succeeded despite incompatible ring dimension"; exit 1; \
+	 fi; \
+	 if echo "$$out" | grep -q "Ring dimension 2048 is not compatible with Niobium Hardware."; then \
+	     echo "PASS: ring-dim check rejected ring dimension 2048"; \
+	 else \
+	     echo "FAIL: mult_server failed but without the expected error message:"; \
+	     echo "$$out" | tail -5; exit 1; \
+	 fi
+
 # ==============================================================================
 # test-fhetch-release — delegate to the niobium-fhetch submodule's own
 # test-release target. Forwards OPENFHE_INSTALL_DIR so the submodule reuses
@@ -512,6 +533,7 @@ test-fhetch-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Run the fhetch submodule's 
 #   - test-mult-release            (CKKS EvalMult, primary decrypt)
 #   - test-auto-ciphers-release    (auto-facade, AUTO_OP defaults to ADD)
 #   - test-bootstrap-release       (client → server → decrypt)
+#   - test-ring-dim-check-release  (hardware param check rejects ring dim 2048)
 #
 # test-release — full suite (client + fhetch submodule); run on internal server only.
 #   Adds via test-fhetch-release:
@@ -524,7 +546,7 @@ test-fhetch-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Run the fhetch submodule's 
 # relin path inside the auto-facade test.
 
 ## Run all client-level Release tests (CI target — no fhetch submodule)
-test-client-release: test-simple-ops-release test-mult-release test-auto-ciphers-release test-bootstrap-release test-plaintext-add-release
+test-client-release: test-simple-ops-release test-mult-release test-auto-ciphers-release test-bootstrap-release test-plaintext-add-release test-ring-dim-check-release
 
 ## Run all currently-passing Release tests (client + fhetch submodule) — internal server only, do not run in CI
 test-release: test-client-release test-fhetch-release

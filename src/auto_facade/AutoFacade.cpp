@@ -263,6 +263,7 @@ static std::vector<std::string> build_init_argv(const YAML::Node &node) {
   add_bool_flag("no_preserve_input_ciphertexts", "--no-preserve-input-ciphertexts");
   add_bool_flag("formal", "--formal");
   add_bool_flag("lock_timing", "--lock-timing");
+  add_bool_flag("no_ring_dim_check", "--no-ring-dim-check");
 
   return args;
 }
