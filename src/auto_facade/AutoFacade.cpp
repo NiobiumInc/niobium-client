@@ -495,6 +495,12 @@ void on_deserialize_ciphertext(const std::string &filepath,
   // is about to write computed output to, which corrupts replay.
   if (g_in_facade_io) return;
 
+  // The same applies in COOPERATIVE mode, where the HOST calls
+  // Compiler::result() directly (g_in_facade_io is only set around the
+  // facade's own IO). serialized_probes/ files are reconstructed OUTPUTS
+  // by definition — never tag them as inputs.
+  if (filepath.find("serialized_probes") != std::string::npos) return;
+
   // Tag the eval keys lazily on first user-ciphertext deserialize. By this
   // point user code has already loaded the CC and the eval keys (cc.bin
   // and the eval-key files come before the first input ciphertext in every

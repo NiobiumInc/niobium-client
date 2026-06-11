@@ -341,6 +341,8 @@ test-simple: simple
 		sleep 1.1 && ./encrypt 0 4.0 7.0 && \
 		./compute 0 0 0.0 && ./decrypt_verify 0 11.0 && \
 		echo "  PASS  record-once / replay-with-new-inputs (refresh_stale_inputs)" && \
+		test -z "$$(find compute_workload* -name '*serialized_probes*load*' 2>/dev/null)" && \
+		echo "  PASS  replay did not re-capture outputs as inputs (primary trace untouched)" && \
 		rm -rf io && \
 		echo "" && echo "All simple tests passed."
 
