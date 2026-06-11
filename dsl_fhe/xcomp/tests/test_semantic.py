@@ -251,6 +251,39 @@ def test_parameter_advisor():
     assert any("dev profiles" in n for n in sa2.errors.notes), sa2.errors.notes
 
 
+def test_chebyshev_max_error_selects_degree():
+    # max_error: resolves a degree from the ladder at compile time, charges
+    # the implied depth, and reports a note. Sigmoid on [-5,5] @ 1e-3 -> 13.
+    sa = check("""
+    scheme CKKS { security: not_set depth: 20 }
+    fn f(a: enc<f64>) -> enc<f64> {
+        return chebyshev(|x| 1.0 / (1.0 + exp(0.0 - x)), a,
+                         domain: [-5.0, 5.0], max_error: 0.001)
+    }
+    """)
+    assert not sa.errors.has_errors(), sa.errors.errors
+    assert any("selected degree 13" in n for n in sa.errors.notes), sa.errors.notes
+    assert sa.observed_max_depth == 5, sa.observed_max_depth  # ceil(log2(14))+1
+
+    # Unreachable tolerance -> hard error with guidance.
+    sa2 = check("""
+    scheme CKKS { security: not_set depth: 20 }
+    fn f(a: enc<f64>) -> enc<f64> {
+        return chebyshev(|x| abs(x), a, domain: [-1.0, 1.0], max_error: 0.0000001)
+    }
+    """)
+    assert any("unreachable" in str(e) for e in sa2.errors.errors), sa2.errors.errors
+
+    # Non-evaluable closure -> error directing to explicit degree.
+    sa3 = check("""
+    scheme CKKS { security: not_set depth: 20 }
+    fn f(a: enc<f64>, b: enc<f64>) -> enc<f64> {
+        return chebyshev(|x| x * b, a, domain: [-1.0, 1.0], max_error: 0.001)
+    }
+    """)
+    assert any("not compile-time evaluable" in str(e) for e in sa3.errors.errors), sa3.errors.errors
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_")]
     passed = 0
