@@ -338,11 +338,11 @@ test-simple: simple
 		echo "  ADD_ADD ((3+5)+3=11)..." && ./compute 0 5 0.0 && ./decrypt_verify 0 11.0 && \
 		echo "  PASS  ADD_ADD" && \
 		echo "  replay with NEW inputs (re-encrypt a=4 b=7, replay ADD trace -> 11)..." && \
+		python3 $(CURDIR)/tools/verify_replay_integrity.py snapshot compute_workload_size_0_operation_0 && \
 		sleep 1.1 && ./encrypt 0 4.0 7.0 && \
 		./compute 0 0 0.0 && ./decrypt_verify 0 11.0 && \
 		echo "  PASS  record-once / replay-with-new-inputs (refresh_stale_inputs)" && \
-		test -z "$$(find compute_workload* -name '*serialized_probes*load*' 2>/dev/null)" && \
-		echo "  PASS  replay did not re-capture outputs as inputs (primary trace untouched)" && \
+		python3 $(CURDIR)/tools/verify_replay_integrity.py verify compute_workload_size_0_operation_0 && \
 		rm -rf io && \
 		echo "" && echo "All simple tests passed."
 
@@ -357,11 +357,13 @@ test-fetch: fetch-by-similarity
 		echo "=== Replay run with a REGENERATED query (cache hit — zero FHE" && \
 		echo "=== ops; refresh_stale_inputs reloads the new query into the" && \
 		echo "=== recorded trace; seed 21 matches different rows than seed 42)" && \
+		python3 $(CURDIR)/tools/verify_replay_integrity.py snapshot encrypted_compute_workload_size_0 && \
 		python3 harness/generate_query.py 0 --seed 21 && \
 		python3 harness/cleartext_impl.py 0 && \
 		sleep 1.1 && \
 		nb_out/build/encode_encrypt_query 0 && \
 		nb_out/build/encrypted_compute 0 && \
+		python3 $(CURDIR)/tools/verify_replay_integrity.py verify encrypted_compute_workload_size_0 && \
 		nb_out/build/decrypt_decode 0 && \
 		nb_out/build/postprocess 0 && \
 		python3 harness/verify_result.py datasets/toy/expected.bin io/toy/results.bin && \
