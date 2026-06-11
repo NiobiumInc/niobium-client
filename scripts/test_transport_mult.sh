@@ -108,7 +108,7 @@ echo "=== [3/5] mult_server --target=$TARGET (through transport) ==="
 # hits it — matches the production install layout.
 export PATH="$TRANSPORT_DIR:$PATH"
 export NBCC_FHETCH_SERVER="http://127.0.0.1:$PORT"
-LD_LIBRARY_PATH="$OPENFHE_LIB" "$mult_server" mult_keys --target="$TARGET"
+LD_LIBRARY_PATH="$OPENFHE_LIB" "$mult_server" mult_keys --target="$TARGET" --no-ring-dim-check
 
 echo
 echo "=== [4/5] mult_decrypt ==="

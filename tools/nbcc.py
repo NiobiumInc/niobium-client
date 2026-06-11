@@ -73,6 +73,7 @@ def build_yaml(args):
     add_bool("no_preserve_input_ciphertexts", args.no_preserve_input_ciphertexts)
     add_bool("formal", args.formal)
     add_bool("lock_timing", args.lock_timing)
+    add_bool("no_ring_dim_check", args.no_ring_dim_check)
 
     if compiler_lines:
         lines.append("compiler:")
@@ -159,6 +160,8 @@ def parse_args():
                         default=None)
     parser.add_argument("--formal", action="store_true", default=None)
     parser.add_argument("--lock-timing", action="store_true", default=None)
+    parser.add_argument("--no-ring-dim-check", action="store_true", default=None,
+                        help="Skip the Niobium hardware ring-dimension check")
 
     # Positional: everything after --
     parser.add_argument("command", nargs=argparse.REMAINDER,
