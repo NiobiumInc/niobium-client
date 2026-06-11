@@ -342,6 +342,21 @@ def test_encryptors_independent_forbids_cross_owner_packing():
     assert any("unknown mode" in str(e) for e in sa4.errors.errors), sa4.errors.errors
 
 
+def test_parameter_advisor_headroom():
+    # A ring_dim pinned ABOVE the security minimum (hardware target) gets a
+    # headroom report: spare modulus bits -> larger q_i (capped at the
+    # 59-bit limb) and/or more depth.
+    sa = check("""
+    scheme CKKS { security: 128-classic precision: 50 first_mod: 60 depth: 15 }
+    struct Instance { ring_dim: u32 }
+    fn instance() -> Instance { return Instance { ring_dim: 65536 } }
+    """)
+    note = next((n for n in sa.errors.notes if "headroom" in n), "")
+    assert "headroom at N=65536: 962 bits" in note, sa.errors.notes
+    assert "q_i up to 59 (+9 bits/level precision)" in note, note
+    assert "depth up to 34 (+19 levels)" in note, note
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_")]
     passed = 0

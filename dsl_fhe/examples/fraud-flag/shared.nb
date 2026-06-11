@@ -11,12 +11,15 @@
 //   - Encoding (harness/encode_cards.py): each digit d -> d+1 (values 1..10),
 //     so zero-padded batch rows can never match a real query.
 //   - Column-major SIMD: one ciphertext per digit position (L=16), one
-//     flagged card per slot; 5,000 cards -> 5 batches at 1,024 slots (Toy).
+//     flagged card per slot; 5 batches at 1,024 slots (Toy), one batch
+//     at 32,768 slots (Full).
 //   - Circuit per slot: S = sum_i (q_i - c_i)^2; t = 1 - S/C with
 //     C = 9^2 * 16 = 1296; t^(2^K) amplifies (match ~= 1, others -> 0);
 //     slot_sum aggregates. K: (1 - 1/C)^(2^K) < 0.01 -> K = 13 -> depth 15.
-//   - Parameters: logQ ~= 60 + 15*50 = 810 bits -> 128-classic fits at
-//     ring_dim 32768 (the compiler's params note confirms).
+//   - Parameters: logQ ~= 60 + 15*50 = 810 bits; deployment pins
+//     ring_dim = 65536 (hardware target) — above the 32768 security
+//     minimum, leaving ~962 bits of headroom (the params note quantifies
+//     what it buys in q_i / depth).
 //============================================================================
 
 enum Profile { Toy, Full }
@@ -34,7 +37,11 @@ fn instance(profile: Profile) -> Instance {
     match profile {
         Toy  => Instance { profile, ring_dim: 2048,  n_slots: 1024,
                            n_digits: 16, k_squarings: 13, depth: 15 },
-        Full => Instance { profile, ring_dim: 32768, n_slots: 16384,
+        // HARD deployment constraint: the hardware targets ring dim 2^16.
+        // Security needs only 32768 at logQ ~= 810 — the surplus is headroom
+        // (see the compiler's params note: larger q_i and/or more depth),
+        // and 32768 slots pack all 5,000 flagged cards in ONE batch.
+        Full => Instance { profile, ring_dim: 65536, n_slots: 32768,
                            n_digits: 16, k_squarings: 13, depth: 15 },
     }
 }
