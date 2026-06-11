@@ -128,6 +128,28 @@ class SemanticAnalyzer:
             low = sorted(n for n in self.ring_dims if not min_n or n < min_n)
             if ok:
                 msg += f"; declared ring_dims OK: {ok}"
+                # Fixed-N headroom: when the deployment pins N above the
+                # security minimum (e.g. a hardware ring-dimension target),
+                # quantify what the spare modulus budget buys — more bits per
+                # level (q_i, capped by the ~59-bit limb width) and/or more
+                # depth (higher approximation degrees).
+                n_top = max(ok)
+                spare = table[n_top] - log_q
+                if spare > 0:
+                    LIMB_CAP = 59
+                    max_qi = min(LIMB_CAP,
+                                 (table[n_top] - first) // self.max_depth)
+                    max_d = (table[n_top] - first) // q_i
+                    extras = []
+                    if max_qi > q_i:
+                        extras.append(f"q_i up to {max_qi} "
+                                      f"(+{max_qi - q_i} bits/level precision)")
+                    if max_d > self.max_depth:
+                        extras.append(f"depth up to {max_d} "
+                                      f"(+{max_d - self.max_depth} levels)")
+                    if extras:
+                        msg += (f"; headroom at N={n_top}: {spare} bits -> "
+                                + " or ".join(extras))
             if low:
                 msg += (f"; below target: {low}"
                         + (" (covered by scheme.override(security: not_set) "

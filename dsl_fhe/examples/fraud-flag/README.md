@@ -55,16 +55,24 @@ nothing and buys the fastest bulk numeric throughput.
 
 ## Stage 6 — Parameters
 
-`logQ ≈ first_mod + depth × q_i = 60 + 15×50 = 810 bits` → 128-classic fits
-at **ring_dim 32768** (one size smaller than the set-membership example,
-because the shorter L=16 vectors shrink C and therefore K). The compiler's
-params note confirms this exact computation at `nbc check` time:
+`logQ ≈ first_mod + depth × q_i = 60 + 15×50 = 810 bits` → 128-classic needs
+only **ring_dim 32768**. The deployment, however, pins **ring_dim = 65536**
+as a hard constraint (the hardware ring-dimension target) — above the
+security minimum, which is pure upside: 32,768 slots pack all 5,000 flagged
+cards in one batch, and the spare modulus budget is headroom the compiler
+quantifies at `nbc check` time:
 
 ```
 note: params: logQ ~= 810 bits (first_mod 60 + depth 15 x q_i 50);
-128-classic needs ring_dim >= 32768; declared ring_dims OK: [32768];
+128-classic needs ring_dim >= 32768; declared ring_dims OK: [65536];
+headroom at N=65536: 962 bits -> q_i up to 59 (+9 bits/level precision)
+or depth up to 34 (+19 levels);
 below target: [2048] (covered by scheme.override(security: not_set) dev profiles)
 ```
+
+The headroom line is the deployment-constrained tuning surface: raise `q_i`
+toward the limb cap for tighter precision, or spend levels on higher
+approximation degrees — without touching security.
 
 ## Stage 7 — Implementation (Track A)
 
