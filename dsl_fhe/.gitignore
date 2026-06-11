@@ -19,3 +19,6 @@ examples/fhe-NetworkMonitor/Mirai_Workload_Inputs/
 examples/ml-inference-fhe/data/*.bin
 examples/fhe-NetworkMonitor/assets/models/*.bin
 examples/fhe-NetworkMonitor/assets/datasets/*.bin
+
+# replay-integrity snapshots (tools/verify_replay_integrity.py)
+.*.manifest.json
