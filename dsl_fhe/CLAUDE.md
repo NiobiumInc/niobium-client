@@ -52,7 +52,9 @@ spends ~80% of its code on plumbing:
 ## Core Design Principles
 
 1. **Trust boundaries are language constructs.** `@client` / `@server` compile to
-   separate binaries. The compiler rejects server code that references `SecretKey`.
+   separate binaries. The compiler rejects server code that references `SecretKey`,
+   and `@encryptors(independent)` stages reject cross-owner SIMD packing
+   (encrypting a column slice that spans records).
 
 2. **Declare intent, not mechanism.** `requires { add, mul, rotate }` replaces manual
    key generation. `@hardware(cache_key: [...])` replaces 120 lines of record/replay.

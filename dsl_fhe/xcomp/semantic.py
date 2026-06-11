@@ -365,6 +365,21 @@ class SemanticAnalyzer:
     def _check_fn(self, fn: ast.FnDecl):
         self.current_fn = fn.name
         self.current_domain = self._fn_domain(fn)
+        # Encryption-model enforcement (skill Stage 1/5): in an
+        # @encryptors(independent) stage, each ciphertext may pack only ONE
+        # owner's record — packing a column slice across records (rows) into
+        # one ciphertext would let one owner's key decrypt another's data.
+        self._encryptors_independent = False
+        self._record_slice_vars: set[str] = set()
+        for ann in fn.annotations:
+            if ann.name == "encryptors":
+                mode = ann.args.get("name") or ann.args.get("mode")
+                if mode == "independent":
+                    self._encryptors_independent = True
+                elif mode != "single":
+                    self.errors.error(SemanticError(
+                        f"@encryptors: unknown mode '{mode}' "
+                        f"(expected independent or single)", fn.loc))
         scope = self.current_scope.child(fn.name)
 
         # Bind parameters
@@ -387,6 +402,10 @@ class SemanticAnalyzer:
     def _check_stmt(self, stmt: ast.Node):
         if isinstance(stmt, ast.LetStmt):
             val_type = self._check_expr(stmt.value) if stmt.value else UNKNOWN
+            if (isinstance(stmt.value, ast.IndexExpr)
+                    and isinstance(stmt.value.obj, ast.SliceExpr)):
+                # m[a..b, col] — a column spanning many records (rows)
+                self._record_slice_vars.add(stmt.name)
             if stmt.tuple_names and len(stmt.tuple_names) > 1:
                 # Destructured binding: let (a, b) = expr — define each name.
                 for n in stmt.tuple_names:
@@ -544,6 +563,22 @@ class SemanticAnalyzer:
                 # subcircuit: OpenFHE's Paterson-Stockmeyer evaluation consumes
                 # ceil(log2(degree+1)) + 1 levels (matches the documented
                 # degree->depth table: 5->4, 13->5, 27->6, 59->7, 119->8, ...).
+                if (expr.func.name == "encrypt"
+                        and getattr(self, "_encryptors_independent", False)):
+                    positional = [a for a in expr.args if not a.name]
+                    data = positional[1].value if len(positional) > 1 else None
+                    crosses = (isinstance(data, ast.IndexExpr)
+                               and isinstance(data.obj, ast.SliceExpr)) or (
+                        isinstance(data, ast.Ident)
+                        and data.name in self._record_slice_vars)
+                    if crosses:
+                        self.errors.error(DomainError(
+                            "cross-owner SIMD packing: this stage is "
+                            "@encryptors(independent) — each ciphertext may "
+                            "pack only one owner's record. Encrypt per-record "
+                            "vectors (matrix rows), not column slices across "
+                            "records; column-major packing is for "
+                            "single-encryptor designs", expr.loc))
                 if expr.func.name == "chebyshev":
                     d = self._resolve_int_arg(expr, "degree")
                     if d is None:

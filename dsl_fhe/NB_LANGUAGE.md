@@ -260,6 +260,29 @@ eval keys, and the crypto context are tagged automatically by the
 instrumented-OpenFHE deserialize hooks (cooperative auto-tagging) — no explicit
 `tag_input`/`tag_keys` calls are emitted.
 
+### `@encryptors(independent)`
+
+Declares the stage's encryption model (skill Stage 1, question 2). Default is
+single-encryptor: one party owns all the data and may pack records across
+SIMD slots (column-major). Annotating a stage `@encryptors(independent)`
+declares that each data owner encrypts independently — and the compiler then
+**rejects cross-owner packing**: `encrypt()` of a column slice spanning
+records (`m[a..b, col]`) is a compile error, because slots from different
+owners in one ciphertext would let one owner's key decrypt another's data.
+Per-record vectors (`m[i]`, explicit vectors) remain fine; SIMD slots may
+still pack one owner's features.
+
+```nb
+@client @stage("encrypt_ballot")
+@encryptors(independent)
+fn encrypt_ballot(inst: Instance, voter: u32) -> reads(CryptoParams), writes(EncBallot) {
+    let params = load(CryptoParams, from: keydir(inst))
+    let ballots = load_matrix<f64>(ballot_file(inst), inst.n_candidates)
+    return EncBallot { ct: encrypt(params.public_key, ballots[voter]) }  // OK: one owner's row
+    // encrypt(params.public_key, ballots[0..inst.n_slots, 0])  <- compile error
+}
+```
+
 ### Return Specifications
 
 Stage functions use `reads`/`writes` instead of simple return types:
