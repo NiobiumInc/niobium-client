@@ -164,6 +164,12 @@ class CodeGenerator:
         # (fn, var) pairs whose encrypted-ness was decided by the NAME
         # heuristic rather than structural typing — reported as warnings.
         self.heuristic_fallbacks: set[tuple[str, str]] = set()
+        # Plaintext-reference mode: when True, expression/type/IO generation
+        # produces the cleartext twin (enc<T> -> std::vector<double> slot
+        # vectors, FHE ops -> nb_plain:: elementwise helpers, wire IO ->
+        # {field}.ref.bin raw-double files). Set only while emitting
+        # <stage>_ref.cpp translation units.
+        self._plain_mode: bool = False
         self._classify_items()
         # User-function signatures: name -> FnDecl. Lets encrypted-ness (and
         # vector-ness) of user-fn calls resolve from declared return types
@@ -284,9 +290,14 @@ class CodeGenerator:
         """Generate all output files. Returns {filename: content}."""
         files = {}
         files["nb_shared.h"] = self._gen_shared_header()
+        self.ref_stage_names = []
         for stage in self.stages:
             fname = f"{stage.name}.cpp"
             files[fname] = self._gen_stage_file(stage)
+            ok, why = self._stage_ref_supported(stage)
+            if ok:
+                files[f"{stage.name}_ref.cpp"] = self._gen_stage_file_ref(stage)
+                self.ref_stage_names.append(f"{stage.name}_ref")
         if self.shared_fns:
             files["nb_shared.cpp"] = self._gen_shared_impl()
         files["CMakeLists.txt"] = self._gen_cmake()
@@ -301,7 +312,8 @@ class CodeGenerator:
         if "running_sums" in self.requires:
             extra_src.append("running_sums.cpp")
 
-        stage_names = [s.name for s in self.stages]
+        stage_names = [s.name for s in self.stages] + list(
+            getattr(self, "ref_stage_names", []))
         shared_src = " ".join(["nb_shared.cpp"] + extra_src)
         stages_list = "\n  ".join(stage_names)
 
@@ -585,6 +597,30 @@ endforeach()
             self.wl("};")
             self.blank()
 
+        # Plaintext-reference twins of the wire structs: ciphertext fields
+        # become slot vectors (std::vector<double> at each nesting level);
+        # key/context fields are dropped (no crypto in the reference).
+        KEY_TYPES = {"CryptoContext", "PublicKey", "SecretKey",
+                     "EvalMultKey", "EvalAutomorphismKeys"}
+        for s in self.wires:
+            self.wl(f"struct {s.name}Ref {{")
+            self.indent()
+            for f in s.fields:
+                if (isinstance(f.type_ann, ast.NamedType)
+                        and f.type_ann.name in KEY_TYPES):
+                    # Inert placeholder so field accesses (e.g. a bound-but-
+                    # unused `let cc = params.context`) still compile.
+                    self.wl(f"nb_plain::NoCrypto {f.name};")
+                    continue
+                saved_mode = self._plain_mode
+                self._plain_mode = True
+                cpp_type = self._type_to_cpp(f.type_ann)
+                self._plain_mode = saved_mode
+                self.wl(f"{cpp_type} {f.name};")
+            self.dedent()
+            self.wl("};")
+            self.blank()
+
 
         # Forward declarations for shared functions (with default parameter values)
         # Skip extern wrappers — they delegate to external C++ functions
@@ -767,6 +803,49 @@ endforeach()
 
         # slot_mask - create a plaintext mask vector
         # Null-safe EvalAdd: handles accumulation into uninitialized ciphertexts
+        # Plaintext-reference runtime: slot-vector twins of the FHE ops.
+        # Used only by generated <stage>_ref binaries (namespace nbref).
+        self.wl("namespace nb_plain {")
+        self.wl("struct NoCrypto {};  // inert stand-in for key/context fields")
+        self.wl("using Slots = std::vector<double>;")
+        self.wl("inline Slots add(Slots a, const Slots& b) {")
+        self.wl("  if (a.size() < b.size()) a.resize(b.size(), 0.0);")
+        self.wl("  for (size_t i = 0; i < b.size(); ++i) a[i] += b[i]; return a; }")
+        self.wl("inline Slots add(Slots a, double s) { for (auto& x : a) x += s; return a; }")
+        self.wl("inline Slots sub(Slots a, const Slots& b) {")
+        self.wl("  if (a.size() < b.size()) a.resize(b.size(), 0.0);")
+        self.wl("  for (size_t i = 0; i < b.size(); ++i) a[i] -= b[i]; return a; }")
+        self.wl("inline Slots sub(Slots a, double s) { for (auto& x : a) x -= s; return a; }")
+        self.wl("inline Slots mul(const Slots& a, const Slots& b) {")
+        self.wl("  Slots r(std::min(a.size(), b.size()));")
+        self.wl("  for (size_t i = 0; i < r.size(); ++i) r[i] = a[i] * b[i]; return r; }")
+        self.wl("inline Slots mul(Slots a, double s) { for (auto& x : a) x *= s; return a; }")
+        self.wl("inline Slots nullsafe_add(const Slots& a, const Slots& b) {")
+        self.wl("  return a.empty() ? b : add(a, b); }")
+        self.wl("inline Slots negate(Slots a) { for (auto& x : a) x = -x; return a; }")
+        self.wl("inline Slots rotate(Slots a, int k) {  // EvalRotate: +k rotates left")
+        self.wl("  if (a.empty()) return a;")
+        self.wl("  k = ((k % (int)a.size()) + (int)a.size()) % (int)a.size();")
+        self.wl("  std::rotate(a.begin(), a.begin() + k, a.end()); return a; }")
+        self.wl("inline Slots slot_sum(const Slots& a, size_t n) {  // EvalSum semantics")
+        self.wl("  double s = 0.0;")
+        self.wl("  for (size_t i = 0; i < std::min(n, a.size()); ++i) s += a[i];")
+        self.wl("  return Slots(a.empty() ? n : a.size(), s); }")
+        self.wl("template <typename F> inline Slots apply(Slots a, F f) {")
+        self.wl("  for (auto& x : a) x = f(x); return a; }")
+        self.wl("inline Slots read_slots(const std::filesystem::path& p) {")
+        self.wl("  std::ifstream f(p, std::ios::binary);")
+        self.wl('  if (!f.is_open()) throw std::runtime_error("cannot open " + p.string());')
+        self.wl("  f.seekg(0, std::ios::end); auto n = f.tellg() / sizeof(double);")
+        self.wl("  f.seekg(0, std::ios::beg); Slots v(n);")
+        self.wl("  f.read(reinterpret_cast<char*>(v.data()), n * sizeof(double)); return v; }")
+        self.wl("inline void write_slots(const std::filesystem::path& p, const Slots& v) {")
+        self.wl("  std::filesystem::create_directories(p.parent_path());")
+        self.wl("  std::ofstream f(p, std::ios::binary);")
+        self.wl("  f.write(reinterpret_cast<const char*>(v.data()), v.size() * sizeof(double)); }")
+        self.wl("}  // namespace nb_plain")
+        self.blank()
+
         self.wl("inline Ciphertext<DCRTPoly> NullSafeEvalAdd(")
         self.wl("    CryptoContext<DCRTPoly> cc, Ciphertext<DCRTPoly> a, Ciphertext<DCRTPoly> b) {")
         self.indent()
@@ -973,9 +1052,126 @@ endforeach()
 
     # ===== main() generation =====
 
+    # Constructs whose cleartext twin we cannot generate (external C++,
+    # stateful helpers without plain equivalents, key generation).
+    REF_FORBIDDEN_FNS = {"extern_call", "slot_replicator", "running_sums",
+                         "load_model", "mul_monomial", "load_all", "keygen"}
+
+    def _collect_called_fns(self, fn, acc: dict):
+        if not fn.body:
+            return
+        for node in self._walk_ast(fn.body):
+            if isinstance(node, ast.CallExpr) and isinstance(node.func, ast.Ident):
+                name = node.func.name
+                target = self._fn_sigs.get(name)
+                if target is not None and name not in acc:
+                    acc[name] = target
+                    self._collect_called_fns(target, acc)
+
+    def _stage_ref_supported(self, stage: StageInfo):
+        """Can a cleartext reference twin be generated for this stage?
+        Returns (ok, reason)."""
+        fns = {stage.fn.name: stage.fn}
+        self._collect_called_fns(stage.fn, fns)
+        for fn in fns.values():
+            if not fn.body:
+                continue
+            for node in self._walk_ast(fn.body):
+                if (isinstance(node, ast.CallExpr)
+                        and isinstance(node.func, ast.Ident)
+                        and node.func.name in self.REF_FORBIDDEN_FNS):
+                    return False, node.func.name
+                if isinstance(node, ast.MethodCall) and node.method == "replicate":
+                    return False, "replicate"
+        return True, None
+
+    def _gen_stage_file_ref(self, stage: StageInfo) -> str:
+        """Cleartext reference twin of a stage: the SAME .nb code compiled
+        with plaintext semantics (enc<T> -> slot vectors, FHE ops ->
+        elementwise arithmetic, chebyshev -> the true function, wire IO ->
+        {field}.ref.bin raw-double files). Running the _ref pipeline gives
+        the ground-truth values the encrypted pipeline is verified against."""
+        self.out = io.StringIO()
+        self._plain_mode = True
+        try:
+            self.wl(f"// Auto-generated by nbc — CLEARTEXT REFERENCE for stage: {stage.name}")
+            self.wl("// Same circuit, plaintext semantics. No crypto, no keys, no Niobium.")
+            self.wl("// DO NOT EDIT — changes will be overwritten")
+            self.blank()
+            self.wl('#include "nb_shared.h"')
+            self.blank()
+            self.wl("namespace nbref {")
+            self.blank()
+            # Wire names refer to their plaintext twins inside this namespace.
+            for w in self.wires:
+                self.wl(f"using {w.name} = ::{w.name}Ref;")
+            self.blank()
+
+            # Plain twins of every FHE-using user function the stage calls.
+            called = {}
+            self._collect_called_fns(stage.fn, called)
+            twin_fns = [f for f in called.values()
+                        if self._fn_uses_fhe(f) and not self._is_extern_wrapper(f)]
+            for fn in twin_fns:
+                self._gen_fn_decl(fn, with_cc=False)
+                self.w(";\n")
+            self.blank()
+            for fn in twin_fns:
+                self._current_fn = fn
+                self._local_var_cpp_types.clear()
+                self._declared_vars.clear()
+                self._enc_vars.clear()
+                self._plain_vars.clear()
+                self._wire_vars.clear()
+                self._gen_fn_impl(fn, with_cc=False)
+                self._current_fn = None
+                self.blank()
+
+            # The stage function itself.
+            self._current_fn = stage.fn
+            self._current_stage_hardware = False
+            self._local_var_cpp_types.clear()
+            self._declared_vars.clear()
+            self._enc_vars.clear()
+            self._plain_vars.clear()
+            self._wire_vars.clear()
+            self._gen_fn_impl(stage.fn, with_cc=False)
+            self._current_fn = None
+            self.blank()
+            self.wl("}  // namespace nbref")
+            self.blank()
+
+            # main(): same CLI, call the twin, serialize the plain result.
+            self.wl("int main(int argc, char* argv[]) {")
+            self.indent()
+            self._gen_main_arg_parsing(stage, hardware=False)
+
+            call_args = []
+            for p in stage.fn.params:
+                call_args.append(p.name if p.name != "batch_id" else "batch_id")
+            has_return = self._fn_has_return(stage.fn)
+            args_str = ", ".join(call_args)
+            if has_return:
+                self.wl(f"auto result = nbref::{stage.fn.name}({args_str});")
+                self._gen_result_serialization(stage)
+            else:
+                self.wl(f"nbref::{stage.fn.name}({args_str});")
+            self.blank()
+            self.wl("return 0;")
+            self.dedent()
+            self.wl("}")
+            return self.out.getvalue()
+        finally:
+            self._plain_mode = False
+            self._current_stage_hardware = False
+
     def _gen_main(self, stage: StageInfo):
         self.wl("int main(int argc, char* argv[]) {")
         self.indent()
+        self._gen_main_arg_parsing(stage, hardware=bool(stage.hardware))
+        self._gen_main_body_after_args(stage)
+
+    def _gen_main_arg_parsing(self, stage: StageInfo, hardware: bool):
 
         # Argument parsing
         self.wl("if (argc < 2 || !std::isdigit(argv[1][0])) {")
@@ -1012,7 +1208,7 @@ endforeach()
         # Extra flags for hardware stages. --hollow skips expensive polynomial
         # math during recording (structure + probes preserved); replay then
         # reconstructs the real values via the FHETCH simulator.
-        if stage.hardware:
+        if hardware:
             self.wl("bool hollow_record = false;")
         for bp in bool_params:
             self.wl(f"bool {bp.name} = false;")
@@ -1022,7 +1218,7 @@ endforeach()
         self.wl("std::string arg = argv[i];")
         for bp in bool_params:
             self.wl(f'if (arg == "--{bp.name}") {{ {bp.name} = true; }}')
-        if stage.hardware:
+        if hardware:
             self.wl('if (arg == "--hollow") { hollow_record = true; }')
         self.dedent()
         self.wl("}")
@@ -1070,6 +1266,7 @@ endforeach()
             self.wl("int batch_id = std::stoi(argv[2]);")
             self.blank()
 
+    def _gen_main_body_after_args(self, stage: StageInfo):
         # Niobium hardware init
         if stage.hardware:
             self._gen_niobium_init(stage)
@@ -1307,6 +1504,10 @@ endforeach()
         self.wl("fs::create_directories(_out_path.parent_path());")
         self.wl("write2disk(result, _out_path);")
 
+    def _ct_type(self) -> str:
+        """The C++ type of a ciphertext value in the current mode."""
+        return "std::vector<double>" if self._plain_mode else "Ciphertext<DCRTPoly>"
+
     def _is_crypto_params_wire(self, wire) -> bool:
         """A wire carrying the crypto context (and keys) — uses the canonical
         cc/pk/mk/rk key-file layout regardless of what the wire is named."""
@@ -1339,18 +1540,26 @@ endforeach()
           plain             -> {field}.bin (Serial)
         _gen_load mirrors this exactly."""
         path_expr = self._find_output_dir(stage)
+        ext = ".ref.bin" if self._plain_mode else ".bin"
         self.wl(f"// Serialize {type_name} (field-type-driven layout)")
         self.wl(f"auto _dir = {path_expr};")
         self.wl("fs::create_directories(_dir);")
+
+        def _emit_one(target_expr, file_expr):
+            if self._plain_mode:
+                self.wl(f"nb_plain::write_slots({file_expr}, {target_expr});")
+            else:
+                self.wl(f"Serial::SerializeToFile({file_expr}, {target_expr}, SerType::BINARY);")
+
         for f in wire.fields:
             kind = self._field_kind(f)
             if kind == "enc" or kind == "plain":
-                self.wl(f'Serial::SerializeToFile(_dir / "{f.name}.bin", result.{f.name}, SerType::BINARY);')
+                _emit_one(f"result.{f.name}", f'_dir / "{f.name}{ext}"')
             elif kind == "vec_enc":
                 self.wl(f"for (size_t _i = 0; _i < result.{f.name}.size(); _i++) {{")
                 self.indent()
-                self.wl(f'auto _fname = _dir / ("{f.name}_" + std::to_string(_i) + ".bin");')
-                self.wl(f"Serial::SerializeToFile(_fname, result.{f.name}[_i], SerType::BINARY);")
+                self.wl(f'auto _fname = _dir / ("{f.name}_" + std::to_string(_i) + "{ext}");')
+                _emit_one(f"result.{f.name}[_i]", "_fname")
                 self.dedent()
                 self.wl("}")
             elif kind == "mat_enc":
@@ -1362,7 +1571,8 @@ endforeach()
                 self.wl(f"for (size_t _i = 0; _i < result.{f.name}[_b].size(); _i++) {{")
                 self.indent()
                 self.wl("std::stringstream _is; _is << std::setw(4) << std::setfill('0') << _i;")
-                self.wl(f'Serial::SerializeToFile(_bdir / ("{f.name}_" + _is.str() + ".bin"), result.{f.name}[_b][_i], SerType::BINARY);')
+                _emit_one(f"result.{f.name}[_b][_i]",
+                          f'_bdir / ("{f.name}_" + _is.str() + "{ext}")'.replace("{ext}", ext))
                 self.dedent()
                 self.wl("}")
                 self.dedent()
@@ -2011,14 +2221,14 @@ endforeach()
                 last = body_stmts[-1]
                 if isinstance(last, ast.ExprStmt):
                     if self._is_encrypted_expr(last.expr):
-                        effective_type = "std::vector<Ciphertext<DCRTPoly>>"
+                        effective_type = f"std::vector<{self._ct_type()}>"
                     else:
                         effective_type = "std::vector<decltype(0)>"
             # Also detect nested ForStmt as collecting expression
             if effective_type == "auto" and body_stmts:
                 last = body_stmts[-1]
                 if isinstance(last, ast.ForStmt):
-                    effective_type = "std::vector<std::vector<Ciphertext<DCRTPoly>>>"
+                    effective_type = f"std::vector<std::vector<{self._ct_type()}>>"
             self.wl(f"{effective_type} {name};")
             self.wl(f"for (auto& {var} : {iterable}) {{")
             self.indent()
@@ -2238,7 +2448,7 @@ endforeach()
                     continue
                 val = self._expr_to_cpp(fi.value) if fi.value else fi.name
                 # Cast ConstCiphertext to Ciphertext for enc wire fields
-                if fi.name in enc_fields:
+                if fi.name in enc_fields and not self._plain_mode:
                     val = f"std::const_pointer_cast<CiphertextImpl<DCRTPoly>>({val})"
                 fields.append(f".{fi.name} = {val}")
             return f"{expr.type_name}{{{', '.join(fields)}}}"
@@ -2281,6 +2491,17 @@ endforeach()
                 if self._is_vector_expr(ast_expr):
                     return f"cc->MakeCKKSPackedPlaintext({cpp_str})"
                 return cpp_str
+            if self._plain_mode:
+                # Cleartext twin: elementwise slot-vector arithmetic. The
+                # vector/scalar distinction is handled by overloads.
+                if expr.op == "+":
+                    if left_enc and right_enc:
+                        return f"nb_plain::nullsafe_add({left}, {right})"
+                    return f"nb_plain::add({left}, {right})"
+                if expr.op == "-":
+                    return f"nb_plain::sub({left}, {right})"
+                if expr.op in ("*", "*_norelin"):
+                    return f"nb_plain::mul({left}, {right})"
             l = _maybe_wrap_plaintext(left, left_enc, expr.left)
             r = _maybe_wrap_plaintext(right, right_enc, expr.right)
             if expr.op == "+":
@@ -2330,6 +2551,8 @@ endforeach()
                 if fname == "scale":
                     return f"scale_batched({left}, {args[1]})"
                 if fname == "slot_sum":
+                    if self._plain_mode:
+                        return f"nb_plain::slot_sum({left}, {args[1]})"
                     return f"cc->EvalSum({left}, {args[1]})"
 
             return f"{func}({', '.join(args)})"
@@ -2339,6 +2562,8 @@ endforeach()
             if fname == "transpose":
                 return f"transpose_matrix({left})"
             if fname == "relin":
+                if self._plain_mode:
+                    return f"({left})"
                 return (f"[&]() {{ auto tmp = {left}; "
                         f"cc->RelinearizeInPlace(tmp); return tmp; }}()")
             return f"{fname}({left})"
@@ -2381,14 +2606,20 @@ endforeach()
             fname = expr.func.name
             # Map built-in FHE functions
             if fname == "rotate":
+                if self._plain_mode:
+                    return f"nb_plain::rotate({', '.join(args)})"
                 return f"cc->{FHE_ROTATE}({', '.join(args)})"
             if fname == "relin":
+                if self._plain_mode:
+                    return f"({args[0]})"
                 # relin does in-place, but if used as expression value, wrap
                 return (f"[&]() {{ auto tmp = {args[0]}; "
                         f"cc->{FHE_RELIN}(tmp); return tmp; }}()")
             if fname == "chebyshev":
                 return self._gen_chebyshev(expr.args)
             if fname == "slot_sum":
+                if self._plain_mode:
+                    return f"nb_plain::slot_sum({', '.join(args)})"
                 return f"cc->EvalSum({', '.join(args)})"
             if fname == "encrypt":
                 return self._gen_encrypt(expr.args)
@@ -2397,11 +2628,15 @@ endforeach()
             if fname == "reduce":
                 return self._gen_reduce(expr.args)
             if fname == "clone":
+                if self._plain_mode:
+                    return f"({args[0]})"  # value semantics: copy is a copy
                 # clone on a vector of ciphertexts: deep copy
                 return (f"[&]() {{ auto v = {args[0]}; "
                         f"for (auto& ct : v) if (ct) ct = ct->Clone(); "
                         f"return v; }}()")
             if fname == "zero":
+                if self._plain_mode:
+                    return "std::vector<double>{}"
                 return "Ciphertext<DCRTPoly>()"
 
             # Running sums (statement-level call, modifies in-place)
@@ -2474,6 +2709,8 @@ endforeach()
 
             # FHE built-in operations
             if fname == "negate":
+                if self._plain_mode:
+                    return f"nb_plain::negate({args[0]})"
                 return f"cc->EvalNegate({args[0]})"
             if fname == "mul_monomial":
                 return f"cc->GetScheme()->MultByMonomial({args[0]}, {args[1]})"
@@ -2506,8 +2743,12 @@ endforeach()
             if fname == "save":
                 return self._gen_save(expr.args)
             if fname == "save_secret_key":
+                if self._plain_mode:
+                    return "((void)0)"  # no keys in the cleartext reference
                 return self._gen_save_secret_key(expr.args)
             if fname == "load_secret_key":
+                if self._plain_mode:
+                    return "0  /* no secret key in reference */"
                 return self._gen_load_secret_key(expr.args)
             if fname == "print":
                 return f"std::cout << {args[0]} << std::endl"
@@ -2620,13 +2861,14 @@ endforeach()
                     return f"{ext_name}(cc, {', '.join(ext_args)})" if ext_args else f"{ext_name}(cc)"
                 return "/* extern_call: missing function name */"
 
-            # FHE shared functions need cc as first arg
-            # Check the hardcoded set first, then auto-detect from function signature
-            if fname in FHE_SHARED_FNS:
-                return f"{fname}(cc, {', '.join(args)})"
-            fhe_fn = next((f for f in self.shared_fns if f.name == fname), None)
-            if fhe_fn and self._fn_uses_fhe(fhe_fn):
-                return f"{fname}(cc, {', '.join(args)})"
+            # FHE shared functions need cc as first arg (not in the
+            # cleartext reference, which has no crypto context).
+            if not self._plain_mode:
+                if fname in FHE_SHARED_FNS:
+                    return f"{fname}(cc, {', '.join(args)})"
+                fhe_fn = next((f for f in self.shared_fns if f.name == fname), None)
+                if fhe_fn and self._fn_uses_fhe(fhe_fn):
+                    return f"{fname}(cc, {', '.join(args)})"
 
             # Extern wrapper functions: call the external C++ function with cc
             ext_fn = next((f for f in self.shared_fns
@@ -2741,12 +2983,12 @@ endforeach()
         if last_expr_str:
             if inner_is_for:
                 # Nested for produces a vector; outer collects vectors of vectors
-                result_elem_type = "std::vector<Ciphertext<DCRTPoly>>"
+                result_elem_type = f"std::vector<{self._ct_type()}>"
             elif body_stmts:
                 last = body_stmts[-1]
                 last_ast = last.expr if isinstance(last, ast.ExprStmt) else last
                 if self._is_encrypted_expr(last_ast):
-                    result_elem_type = "Ciphertext<DCRTPoly>"
+                    result_elem_type = self._ct_type()
 
         # Helper to generate result vector type
         def result_type_decl():
@@ -2919,6 +3161,11 @@ endforeach()
             if len(parts) == 2:
                 lower, upper = parts[0].strip(), parts[1].strip()
 
+        if self._plain_mode:
+            # Ground truth applies the TRUE function elementwise — the real
+            # circuit approximates it, so reference comparison bounds the
+            # approximation + noise error together.
+            return f"nb_plain::apply({ct}, {func})"
         return f"cc->EvalChebyshevFunction({func}, {ct}, {lower}, {upper}, {degree})"
 
     def _gen_encrypt(self, args: list[ast.Arg]) -> str:
@@ -2937,6 +3184,8 @@ endforeach()
         else:
             # Use iterator construction to handle type conversion (e.g. float→double)
             data_init = f"std::vector<double>({data}.begin(), {data}.end())"
+        if self._plain_mode:
+            return data_init  # the slot vector IS the "ciphertext"
         return (f"[&]() {{ auto _cc = {pk}->GetCryptoContext(); "
                 f"auto _data = {data_init}; "
                 f"return _cc->Encrypt({pk}, "
@@ -2946,6 +3195,8 @@ endforeach()
         positional = [self._expr_to_cpp(a.value) for a in args if not a.name]
         sk = positional[0] if positional else "sk"
         ct = positional[1] if len(positional) > 1 else "ct"
+        if self._plain_mode:
+            return f"({ct})"  # already a slot vector
         return (f"[&]() {{ Plaintext pt; "
                 f"{sk}->GetCryptoContext()->Decrypt({sk}, {ct}, &pt); "
                 f"return pt->GetRealPackedValue(); }}()")
@@ -2956,6 +3207,11 @@ endforeach()
         vec = positional[1] if len(positional) > 1 else "vec"
         # For + on ciphertexts, use EvalAddInPlace accumulation
         if op in ("std::plus<>()", "+"):
+            if self._plain_mode:
+                return (f"[&]() {{ auto acc = {vec}[0]; "
+                        f"for (size_t i = 1; i < {vec}.size(); i++) "
+                        f"acc = nb_plain::add(acc, {vec}[i]); "
+                        f"return acc; }}()")
             return (f"[&]() {{ auto acc = {vec}[0]; "
                     f"for (size_t i = 1; i < {vec}.size(); i++) "
                     f"cc->EvalAddInPlace(acc, {vec}[i]); "
@@ -2989,6 +3245,8 @@ endforeach()
         # Crypto-parameter wires (any wire carrying a CryptoContext) use the
         # canonical cc/pk/mk/rk key-file layout.
         if self._is_crypto_params_wire(wire_def):
+            if self._plain_mode:
+                return f"{type_name}{{}}"  # no crypto in the reference
             if self._current_fn and any(
                 si.fn.name == self._current_fn.name and si.domain == Domain.SERVER
                 for si in self.stages
@@ -3005,27 +3263,47 @@ endforeach()
             if (len(enc_fields) == 1 and len(wire_def.fields) == 1
                     and ('".bin"' in from_path or '.bin"' in from_path)):
                 f0 = enc_fields[0]
+                if self._plain_mode:
+                    return (f"[&]() {{ {type_name} _w; "
+                            f"_w.{f0.name} = nb_plain::read_slots("
+                            f"fs::path({from_path}).string() + \".ref\"); "
+                            f"return _w; }}()")
                 return (f"[&]() {{ {type_name} _w; Ciphertext<DCRTPoly> _ct; "
                         f"Serial::DeserializeFromFile(fs::path({from_path}), _ct, SerType::BINARY); "
                         f"_w.{f0.name} = _ct; return _w; }}()")
             # Generic layout: {field}.bin / {field}_<i>.bin /
             # batchNNNN/{field}_NNNN.bin.
+            ext = ".ref.bin" if self._plain_mode else ".bin"
             parts = [f"[&]() {{ {type_name} _w; fs::path _dir = fs::path({from_path}); "]
             for f in wire_def.fields:
                 kind = self._field_kind(f)
                 if kind == "enc":
-                    parts.append(
-                        f"{{ Ciphertext<DCRTPoly> _ct; "
-                        f'Serial::DeserializeFromFile(_dir / "{f.name}.bin", _ct, SerType::BINARY); '
-                        f"_w.{f.name} = _ct; }} ")
+                    if self._plain_mode:
+                        parts.append(f'_w.{f.name} = nb_plain::read_slots(_dir / "{f.name}{ext}"); ')
+                    else:
+                        parts.append(
+                            f"{{ Ciphertext<DCRTPoly> _ct; "
+                            f'Serial::DeserializeFromFile(_dir / "{f.name}{ext}", _ct, SerType::BINARY); '
+                            f"_w.{f.name} = _ct; }} ")
                 elif kind == "vec_enc":
-                    parts.append(
-                        f"for (int _i = 0; ; _i++) {{ "
-                        f'auto _f = _dir / ("{f.name}_" + std::to_string(_i) + ".bin"); '
-                        f"if (!fs::exists(_f)) break; "
-                        f"Ciphertext<DCRTPoly> _ct; Serial::DeserializeFromFile(_f, _ct, SerType::BINARY); "
-                        f"_w.{f.name}.push_back(_ct); }} ")
+                    if self._plain_mode:
+                        parts.append(
+                            f"for (int _i = 0; ; _i++) {{ "
+                            f'auto _f = _dir / ("{f.name}_" + std::to_string(_i) + "{ext}"); '
+                            f"if (!fs::exists(_f)) break; "
+                            f"_w.{f.name}.push_back(nb_plain::read_slots(_f)); }} ")
+                    else:
+                        parts.append(
+                            f"for (int _i = 0; ; _i++) {{ "
+                            f'auto _f = _dir / ("{f.name}_" + std::to_string(_i) + "{ext}"); '
+                            f"if (!fs::exists(_f)) break; "
+                            f"Ciphertext<DCRTPoly> _ct; Serial::DeserializeFromFile(_f, _ct, SerType::BINARY); "
+                            f"_w.{f.name}.push_back(_ct); }} ")
                 elif kind == "mat_enc":
+                    inner = (f"_batch.push_back(nb_plain::read_slots(_f)); "
+                             if self._plain_mode else
+                             f"Ciphertext<DCRTPoly> _ct; Serial::DeserializeFromFile(_f, _ct, SerType::BINARY); "
+                             f"_batch.push_back(_ct); ")
                     parts.append(
                         f"for (int _b = 0; ; _b++) {{ "
                         f"std::stringstream _bs; _bs << std::setw(4) << std::setfill('0') << _b; "
@@ -3034,10 +3312,9 @@ endforeach()
                         f"std::remove_reference_t<decltype(_w.{f.name}[0])> _batch; "
                         f"for (int _i = 0; ; _i++) {{ "
                         f"std::stringstream _is; _is << std::setw(4) << std::setfill('0') << _i; "
-                        f'auto _f = _bdir / ("{f.name}_" + _is.str() + ".bin"); '
+                        f'auto _f = _bdir / ("{f.name}_" + _is.str() + "{ext}"); '
                         f"if (!fs::exists(_f)) break; "
-                        f"Ciphertext<DCRTPoly> _ct; Serial::DeserializeFromFile(_f, _ct, SerType::BINARY); "
-                        f"_batch.push_back(_ct); }} "
+                        f"{inner}}} "
                         f"_w.{f.name}.push_back(_batch); }} ")
                 # plain fields: not round-tripped through wire files
             parts.append("return _w; }()")
@@ -3091,6 +3368,10 @@ endforeach()
                              or f.name in ("ciphertext", "score", "query", "result")]
                 if len(ct_fields) == 1:
                     field = ct_fields[0].name
+                    if self._plain_mode:
+                        return (f"nb_plain::write_slots("
+                                f'fs::path({to_path}).string() + ".ref", '
+                                f"{data_expr}.{field})")
                     return (f"[&]() {{ auto _dir = {to_path}; "
                             f"fs::create_directories(_dir.parent_path()); "
                             f"Serial::SerializeToFile(_dir, {data_expr}.{field}, SerType::BINARY); }}()")
@@ -3529,6 +3810,8 @@ endforeach()
             return fhe_map.get(name, name)
 
         if isinstance(texpr, ast.EncType):
+            if self._plain_mode:
+                return "std::vector<double>"
             return "Ciphertext<DCRTPoly>"
 
         if isinstance(texpr, ast.VecType):
