@@ -18,7 +18,7 @@ NIOBIUM_CLIENT_ROOT ?= $(realpath $(CURDIR)/..)
 SUBMISSION_REPO ?=
 
 .PHONY: test-compiler examples fetch-by-similarity simple fhe-network-monitor ml-inference \
-       set-membership test-set-membership \
+       set-membership test-set-membership fraud-flag test-fraud \
        password-retrieval test-simple test-fetch test-nid test-ml test-password test-examples \
        clean help
 
@@ -64,6 +64,10 @@ test-compiler:
 	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/set-membership/client.nb  > /dev/null
 	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/set-membership/server.nb  > /dev/null
 	@echo "  PASS  parse set-membership/*.nb"
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fraud-flag/shared.nb  > /dev/null
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fraud-flag/client.nb  > /dev/null
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fraud-flag/server.nb  > /dev/null
+	@echo "  PASS  parse fraud-flag/*.nb"
 	@echo ""
 	@echo "=== End-to-end: semantic check ==="
 	@cd $(XCOMP) && python3 nbc.py check \
@@ -90,6 +94,10 @@ test-compiler:
 		../$(EXAMPLES)/set-membership/shared.nb \
 		../$(EXAMPLES)/set-membership/client.nb \
 		../$(EXAMPLES)/set-membership/server.nb
+	@cd $(XCOMP) && python3 nbc.py check \
+		../$(EXAMPLES)/fraud-flag/shared.nb \
+		../$(EXAMPLES)/fraud-flag/client.nb \
+		../$(EXAMPLES)/fraud-flag/server.nb
 	@echo ""
 	@echo "All tests passed."
 
@@ -102,7 +110,7 @@ test-compiler:
 # but don't produce real results (real model/weights need the submission; see
 # each example's data/README.md). test-examples runs only the examples that
 # produce meaningful, verifiable output.
-examples: simple fetch-by-similarity ml-inference fhe-network-monitor password-retrieval set-membership test-examples
+examples: simple fetch-by-similarity ml-inference fhe-network-monitor password-retrieval set-membership fraud-flag test-examples
 
 # --- fetch-by-similarity ---
 
@@ -254,6 +262,27 @@ set-membership:
 		$(MAKE) -j$(NPROC) 2>&1
 	@echo ""
 	@echo "Built binaries in $(SETM_NB_OUT)/build/"
+
+# --- fraud-flag (private card-number set membership) ---
+
+FRAUD_NB_OUT := $(EXAMPLES)/fraud-flag/nb_out
+
+fraud-flag:
+	@echo "=== Compiling fraud-flag (DSL → C++) ==="
+	@mkdir -p $(FRAUD_NB_OUT)
+	@cd $(XCOMP) && python3 nbc.py compile \
+		../$(EXAMPLES)/fraud-flag/shared.nb \
+		../$(EXAMPLES)/fraud-flag/client.nb \
+		../$(EXAMPLES)/fraud-flag/server.nb \
+		--outdir ../$(FRAUD_NB_OUT)
+	@echo ""
+	@echo "=== Building fraud-flag (C++ → binaries) ==="
+	@mkdir -p $(FRAUD_NB_OUT)/build
+	@cd $(FRAUD_NB_OUT)/build && \
+		cmake .. -DNIOBIUM_CLIENT_ROOT=$(NIOBIUM_CLIENT_ROOT) && \
+		$(MAKE) -j$(NPROC) 2>&1
+	@echo ""
+	@echo "Built binaries in $(FRAUD_NB_OUT)/build/"
 
 password-retrieval:
 	@echo "=== Compiling password-retrieval (DSL → C++) ==="
@@ -411,7 +440,32 @@ test-set-membership: set-membership
 		rm -rf io *_workload_* fhetch_driver_source_* && \
 		echo "" && echo "All set-membership tests passed."
 
-test-examples: test-simple test-fetch test-password test-set-membership
+test-fraud: fraud-flag
+	@echo ""
+	@echo "=== Testing fraud-flag (end-to-end, toy profile, 5000 cards) ==="
+	@cd $(EXAMPLES)/fraud-flag && \
+		export LD_LIBRARY_PATH=$(LD_LIB_PATH) && \
+		rm -rf io *_workload_* fhetch_driver_source_* && \
+		B=nb_out/build && \
+		echo "  flagged card (expect 1)..." && \
+		python3 harness/encode_cards.py 0 --query-flagged 1234 && \
+		$$B/key_generation 0 && $$B/encrypt_card 0 && $$B/check_card 0 && \
+		$$B/decrypt_verify 0 1.0 && \
+		echo "  PASS  flagged card → score ≈ 1" && \
+		echo "  clean card (expect 0)..." && \
+		rm -rf *_workload_* fhetch_driver_source_* && \
+		python3 harness/encode_cards.py 0 --query-card 9999888877776666 && \
+		$$B/encrypt_card 0 && $$B/check_card 0 && \
+		$$B/decrypt_verify 0 0.0 && \
+		echo "  PASS  clean card → score ≈ 0" && \
+		echo "  cleartext reference pipeline (generated ground truth)..." && \
+		$$B/encrypt_card_ref 0 && $$B/check_card_ref 0 && \
+		$$B/decrypt_verify_ref 0 0.0 && \
+		echo "  PASS  reference pipeline agrees" && \
+		rm -rf io *_workload_* fhetch_driver_source_* && \
+		echo "" && echo "All fraud-flag tests passed."
+
+test-examples: test-simple test-fetch test-password test-set-membership test-fraud
 	@echo ""
 	@echo "All example tests passed."
 
@@ -426,6 +480,7 @@ clean:
 		find . -maxdepth 1 -type f ! -name utils.h ! -name .gitignore -delete 2>/dev/null; true
 	rm -rf $(SIMPLE_NB_OUT)
 	rm -rf $(SETM_NB_OUT) $(EXAMPLES)/set-membership/io
+	rm -rf $(FRAUD_NB_OUT) $(EXAMPLES)/fraud-flag/io
 	rm -rf $(NID_NB_OUT)/build
 	cd $(NID_NB_OUT) && \
 		find . -maxdepth 1 -type f ! -name .gitignore -delete 2>/dev/null; true

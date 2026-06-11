@@ -1,0 +1,88 @@
+// shared.nb — Types and constants for private fraud-flag checking
+//============================================================================
+// A client holds a private 16-digit card number; a server holds a private
+// list of ~5,000 flagged card numbers. The client learns whether their card
+// is flagged — without revealing the number to the server, and without the
+// server revealing anything else about its list.
+//
+// Design (skill stages 1–6; full walkthrough in README.md):
+//   - Single encryptor: the client encrypts the query card; the server's
+//     list stays plaintext on the server and is folded into the circuit.
+//   - Encoding (harness/encode_cards.py): each digit d -> d+1 (values 1..10),
+//     so zero-padded batch rows can never match a real query.
+//   - Column-major SIMD: one ciphertext per digit position (L=16), one
+//     flagged card per slot; 5,000 cards -> 5 batches at 1,024 slots (Toy).
+//   - Circuit per slot: S = sum_i (q_i - c_i)^2; t = 1 - S/C with
+//     C = 9^2 * 16 = 1296; t^(2^K) amplifies (match ~= 1, others -> 0);
+//     slot_sum aggregates. K: (1 - 1/C)^(2^K) < 0.01 -> K = 13 -> depth 15.
+//   - Parameters: logQ ~= 60 + 15*50 = 810 bits -> 128-classic fits at
+//     ring_dim 32768 (the compiler's params note confirms).
+//============================================================================
+
+enum Profile { Toy, Full }
+
+struct Instance {
+    profile: Profile,
+    ring_dim: u32,
+    n_slots: u32,       // flagged cards per batch (ring_dim / 2)
+    n_digits: u32,      // L = 16 (fixed-length card numbers, no padding)
+    k_squarings: u32,   // K = 13
+    depth: u32,         // 2 + K = 15
+}
+
+fn instance(profile: Profile) -> Instance {
+    match profile {
+        Toy  => Instance { profile, ring_dim: 2048,  n_slots: 1024,
+                           n_digits: 16, k_squarings: 13, depth: 15 },
+        Full => Instance { profile, ring_dim: 32768, n_slots: 16384,
+                           n_digits: 16, k_squarings: 13, depth: 15 },
+    }
+}
+
+fn instance_name(profile: Profile) -> string {
+    match profile {
+        Toy  => "toy",
+        Full => "full",
+    }
+}
+
+// C: the largest possible squared distance between two encoded cards
+// (digit values 1..10 -> max per-position diff 9; 16 positions).
+fn norm_const(inst: Instance) -> f64 {
+    81.0 * inst.n_digits
+}
+
+// ============================================================================
+// Directory layout
+// ============================================================================
+
+fn iodir(inst: Instance) -> path  { root() / "io" / instance_name(inst.profile) }
+fn keydir(inst: Instance) -> path { iodir(inst) / "keys" }
+fn encdir(inst: Instance) -> path { iodir(inst) / "encrypted" }
+
+// Written by harness/encode_cards.py:
+//   flagged.bin — server's private flagged list, row-major
+//                 (padded_rows x n_digits doubles), zero-padded to a
+//                 multiple of n_slots
+//   query.bin   — client's encoded card, replicated (n_slots x n_digits)
+fn flagged_file(inst: Instance) -> path { iodir(inst) / "flagged.bin" }
+fn query_file(inst: Instance) -> path   { iodir(inst) / "query.bin" }
+
+// ============================================================================
+// Wire types (field-type-driven serialization; names are domain-chosen)
+// ============================================================================
+
+wire CryptoParams {
+    context: CryptoContext,
+    public_key: PublicKey,
+    eval_mult_key: EvalMultKey,
+}
+
+wire EncryptedCard {
+    digits: vec<enc<vec<f64>>>,      // one ciphertext per digit position,
+                                     // the digit value replicated in all slots
+}
+
+wire EncryptedResult {
+    flag: enc<vec<f64>>,             // slot 0: aggregate match score
+}

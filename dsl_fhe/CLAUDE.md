@@ -438,6 +438,7 @@ dsl_fhe/
       shared.nb, client.nb, server.nb
       nb_out/                        # Generated C++ + build
       README.md                      # Design rationale and usage guide
+    fraud-flag/                      # Private card-number checking (skill dogfood; README = 8-stage walkthrough)
     set-membership/                  # Private name matching (exact + Soundex fuzzy)
       shared.nb, client.nb, server.nb
       harness/encode_names.py        # Plaintext name encoding -> dataset.bin/query.bin
