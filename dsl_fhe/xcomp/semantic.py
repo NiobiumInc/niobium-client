@@ -47,6 +47,12 @@ class SemanticAnalyzer:
         self._loop_depth: int = 0
         self._enc_mul_in_loop: bool = False
         self._depth_opaque: bool = False
+        # Parameter-advisor inputs: ring_dim literals seen in Instance-style
+        # struct literals, and whether any scheme.override(security: ...)
+        # exists (per-profile dev overrides make static N-vs-security checks
+        # advisory rather than errors).
+        self.ring_dims: set[int] = set()
+        self.has_security_override: bool = False
 
         # Register predefined type names
         self._register_builtins()
@@ -84,6 +90,69 @@ class SemanticAnalyzer:
         for name in ("op_+", "op_-", "op_*", "op_/", "scheme", "not_set"):
             self.global_scope.define(Symbol(name, UNKNOWN))
 
+    # Max log2(Q) per ring dimension for a CLASSICAL security target with
+    # ternary secrets (homomorphicencryption.org standard; >=65536
+    # extrapolated by doubling — treat as estimates).
+    HESTD_MAX_LOGQ = {
+        "128-classic": {1024: 27, 2048: 54, 4096: 109, 8192: 218,
+                        16384: 438, 32768: 881, 65536: 1772, 131072: 3524},
+        "192-classic": {1024: 19, 2048: 37, 4096: 75, 8192: 152,
+                        16384: 305, 32768: 611, 65536: 1222, 131072: 2444},
+        "256-classic": {1024: 14, 2048: 29, 4096: 58, 8192: 118,
+                        16384: 237, 32768: 476, 65536: 952, 131072: 1904},
+    }
+
+    def _advise_parameters(self):
+        security = str(self.scheme_config.get("security", "")).strip()
+        table = self.HESTD_MAX_LOGQ.get(security)
+        if table is None:
+            return  # not_set or unknown level: nothing to check
+        try:
+            q_i = int(str(self.scheme_config.get("precision", 0)).split()[0])
+            first = int(str(self.scheme_config.get("first_mod", 0)).split()[0])
+        except (ValueError, IndexError):
+            return
+        if q_i <= 0 or self.max_depth <= 0:
+            return
+        log_q = first + self.max_depth * q_i
+        min_n = next((n for n in sorted(table) if table[n] >= log_q), None)
+        msg = (f"params: logQ ~= {log_q} bits (first_mod {first} + depth "
+               f"{self.max_depth} x q_i {q_i}); {security} needs "
+               + (f"ring_dim >= {min_n}" if min_n else
+                  f"more than ring_dim 131072 — reduce depth or q_i"))
+        if self.ring_dims:
+            ok = sorted(n for n in self.ring_dims if min_n and n >= min_n)
+            low = sorted(n for n in self.ring_dims if not min_n or n < min_n)
+            if ok:
+                msg += f"; declared ring_dims OK: {ok}"
+            if low:
+                msg += (f"; below target: {low}"
+                        + (" (covered by scheme.override(security: not_set) "
+                           "dev profiles)" if self.has_security_override
+                           else ""))
+                if not self.has_security_override:
+                    self.errors.warn(
+                        f"ring_dim {low} cannot reach {security} at "
+                        f"logQ ~= {log_q} bits (needs >= {min_n}); lower "
+                        f"depth/q_i or raise ring_dim", None)
+        self.errors.note(msg)
+
+    def _resolve_int_arg(self, call: ast.CallExpr, name: str):
+        """Resolve a named argument to an int when it is a literal or a
+        declared const; None otherwise."""
+        for a in call.args:
+            if a.name == name:
+                v = a.value
+                if isinstance(v, ast.IntLiteral):
+                    return int(v.value)
+                if isinstance(v, ast.Ident):
+                    sym = self.global_scope.lookup(v.name)
+                    if sym is not None and sym.is_const and isinstance(
+                            sym.const_value, int):
+                        return sym.const_value
+                return None
+        return None
+
     # ===== Entry point =====
 
     def analyze(self, program: ast.Program):
@@ -113,6 +182,12 @@ class SemanticAnalyzer:
                 f"larger than needed — consider lowering depth",
                 None,
             )
+        # Pass 6: security/parameter frontier advisor. logQ ~= first_mod +
+        # depth * q_i; the HE standard bounds logQ per ring dimension for a
+        # given security level. Surfacing the numbers makes the
+        # security-vs-accuracy tradeoff (N vs q_i vs depth vs approximation
+        # degree) visible at compile time.
+        self._advise_parameters()
 
     # ===== Pass 1: Collect types =====
 
@@ -358,13 +433,42 @@ class SemanticAnalyzer:
 
         if isinstance(expr, ast.CallExpr):
             func_type = self._check_expr(expr.func)
-            for arg in expr.args:
-                self._check_expr(arg.value)
+            arg_types = [self._check_expr(arg.value) for arg in expr.args]
             # Domain enforcement
             if isinstance(expr.func, ast.Ident):
                 self._check_domain_call(expr.func.name, expr.loc)
+                # Chebyshev with a statically-resolvable degree is a MODELED
+                # subcircuit: OpenFHE's Paterson-Stockmeyer evaluation consumes
+                # ceil(log2(degree+1)) + 1 levels (matches the documented
+                # degree->depth table: 5->4, 13->5, 27->6, 59->7, 119->8, ...).
+                if expr.func.name == "chebyshev":
+                    d = self._resolve_int_arg(expr, "degree")
+                    if d is not None and d > 0:
+                        import math
+                        used = math.ceil(math.log2(d + 1)) + 1
+                        in_depth = 0
+                        positional = [a for a in expr.args if not a.name]
+                        if len(positional) > 1:
+                            idx = expr.args.index(positional[1])
+                            in_depth = getattr(arg_types[idx], "depth", 0) or 0
+                        result = enc_of(F64)
+                        result.depth = in_depth + used
+                        self.observed_max_depth = max(self.observed_max_depth,
+                                                      result.depth)
+                        if self._loop_depth > 0:
+                            self._enc_mul_in_loop = True
+                        if result.depth > self.max_depth:
+                            # Warning (not error): the per-degree model is the
+                            # documented table, but implementations may differ
+                            # by a level.
+                            self.errors.warn(
+                                f"chebyshev chain depth ~{result.depth} "
+                                f"(degree {d} consumes {used} levels) exceeds "
+                                f"scheme depth {self.max_depth}",
+                                expr.loc)
+                        return result
                 # Depth-opaque constructs: their internal multiplicative depth
-                # (chebyshev polynomial evaluation, external C++, closure
+                # (chebyshev with non-literal degree, external C++, closure
                 # bodies applied by combinators) is not statically modeled, so
                 # the over-provision check must stay silent for this program.
                 if expr.func.name in DEPTH_OPAQUE_FNS:
@@ -384,6 +488,10 @@ class SemanticAnalyzer:
             self._check_expr(expr.obj)
             for arg in expr.args:
                 self._check_expr(arg.value)
+            if (isinstance(expr.obj, ast.Ident) and expr.obj.name == "scheme"
+                    and expr.method == "override"
+                    and any(a.name == "security" for a in expr.args)):
+                self.has_security_override = True
             return UNKNOWN
 
         if isinstance(expr, ast.IndexExpr):
@@ -408,6 +516,8 @@ class SemanticAnalyzer:
             for fi in expr.fields:
                 if fi.value:
                     self._check_expr(fi.value)
+                if fi.name == "ring_dim" and isinstance(fi.value, ast.IntLiteral):
+                    self.ring_dims.add(int(fi.value.value))
             return ty
 
         if isinstance(expr, ast.Closure):

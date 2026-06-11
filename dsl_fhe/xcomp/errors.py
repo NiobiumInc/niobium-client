@@ -65,6 +65,9 @@ class ErrorCollector:
     def __init__(self):
         self.errors: list[CompileError] = []
         self.warnings: list[str] = []
+        # Informational notes (parameter/accuracy advisories) — printed but
+        # not counted as warnings.
+        self.notes: list[str] = []
 
     def error(self, err: CompileError):
         self.errors.append(err)
@@ -72,6 +75,9 @@ class ErrorCollector:
     def warn(self, message: str, loc: SourceLocation | None = None):
         prefix = f"{loc}: " if loc else ""
         self.warnings.append(f"{prefix}warning: {message}")
+
+    def note(self, message: str):
+        self.notes.append(f"note: {message}")
 
     def has_errors(self) -> bool:
         return len(self.errors) > 0

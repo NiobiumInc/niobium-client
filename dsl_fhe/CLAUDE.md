@@ -58,7 +58,13 @@ spends ~80% of its code on plumbing:
    key generation. `@hardware(cache_key: [...])` replaces 120 lines of record/replay.
 
 3. **Encryption state is part of the type system.** `enc<f64>` vs `f64` makes the
-   boundary explicit. The compiler tracks multiplicative depth.
+   boundary explicit. The compiler tracks multiplicative depth — including
+   `chebyshev` subcircuits with literal/const degrees (`ceil(log2(d+1)) + 1`
+   levels, matching OpenFHE's Paterson-Stockmeyer table) — errors when a
+   tracked chain exceeds the scheme budget, and emits a compile-time
+   security/parameter note (`logQ ≈ first_mod + depth × q_i` vs. the
+   HE-standard minimum ring dimension for the declared security level), so the
+   security-vs-accuracy frontier is visible before anything runs.
 
 4. **Wire types enforce serialization boundaries.** `wire CryptoParams { ... }` defines
    what crosses the client-server boundary. The compiler generates all serialization.
