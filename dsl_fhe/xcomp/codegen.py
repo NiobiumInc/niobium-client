@@ -80,32 +80,6 @@ OPENFHE_INCLUDES = [
 
 NIOBIUM_INCLUDE = "niobium/compiler.h"
 
-# Names that indicate encrypted ciphertext variables (exact names or safe prefixes)
-# IMPORTANT: Avoid short prefixes that match plaintext constant names
-ENCRYPTED_PREFIXES = (
-    "ct_", "ct",  # ct or ct_something
-    "enc_", "encrypted",
-    "eqry", "edb", "eres",
-    "result",
-    "acc",  # accumulator variable
-    "indicator",
-    "replicated",
-    "masked",
-    "payload_block",  # NOT "payload" — conflicts with PAYLOAD_DIM constant
-    "to_replicate",
-    "accumulator",
-    "matches",
-    "qry_slot",
-    "residual",  # NID: reconstruction residuals (enc vectors)
-    "hidden",    # NID: hidden layer ciphertexts
-    "recon",     # NID: reconstruction layer ciphertexts
-)
-
-# Exact encrypted variable names (not prefix-based)
-ENCRYPTED_EXACT_NAMES = {
-    "ct", "acc", "part", "eqry", "edb",
-    "mse", "diff", "score",  # NID: anomaly detector accumulators
-}
 
 # Functions whose return value is always a ciphertext
 
@@ -161,9 +135,6 @@ class CodeGenerator:
         # Locals holding a loaded wire struct: name -> wire type name, so
         # field accesses (w.field) resolve from the wire declaration.
         self._wire_vars: dict[str, str] = {}
-        # (fn, var) pairs whose encrypted-ness was decided by the NAME
-        # heuristic rather than structural typing — reported as warnings.
-        self.heuristic_fallbacks: set[tuple[str, str]] = set()
         # Plaintext-reference mode: when True, expression/type/IO generation
         # produces the cleartext twin (enc<T> -> std::vector<double> slot
         # vectors, FHE ops -> nb_plain:: elementwise helpers, wire IO ->
@@ -3704,17 +3675,13 @@ endforeach()
                 for p in self._current_fn.params:
                     if p.name == expr.name and self._has_enc_type(p.type_ann):
                         return True
-            # ALL_CAPS names are constants, never encrypted
-            if expr.name.isupper() or expr.name.startswith("PAYLOAD") or expr.name.startswith("MAX_") or expr.name.startswith("RUNNING_") or expr.name.startswith("THRESHOLD"):
-                return False
-            name = expr.name.lower()
-            if name in ENCRYPTED_EXACT_NAMES or name.startswith(ENCRYPTED_PREFIXES):
-                # Classification fell back to the name heuristic — correct for
-                # conventionally-named ciphertexts, but unverified. Surfaced
-                # as a per-variable warning so authors can annotate instead.
-                fn_name = self._current_fn.name if self._current_fn else "?"
-                self.heuristic_fallbacks.add((fn_name, expr.name))
-                return True
+            # Unresolved names are plaintext. Encrypted-ness is fully
+            # structural (annotations, builtin/user-fn return types,
+            # let-binding flow, loop elements, closure params, wire fields,
+            # destructured tuples); a genuinely-encrypted local the flow
+            # cannot reach fails at C++ compile time — annotate it
+            # (let x: enc<...> = ...) rather than relying on its name.
+            return False
         if isinstance(expr, ast.CallExpr) and isinstance(expr.func, ast.Ident):
             call_state = self._call_enc_state(expr.func.name)
             if call_state is not None:
@@ -3723,8 +3690,6 @@ endforeach()
             wf = self._wire_field_enc_state(expr)
             if wf is not None:
                 return wf
-            if expr.field_name in ("query", "result", "data"):
-                return True
         if isinstance(expr, ast.BinaryExpr):
             return (self._is_encrypted_expr(expr.left) or
                     self._is_encrypted_expr(expr.right))
@@ -3842,10 +3807,4 @@ endforeach()
 def generate(program: ast.Program, analyzer: SemanticAnalyzer) -> dict[str, str]:
     """Convenience function to generate all C++ files."""
     gen = CodeGenerator(program, analyzer)
-    files = gen.generate_all()
-    for fn_name, var in sorted(gen.heuristic_fallbacks):
-        analyzer.errors.warn(
-            f"encrypted-ness of '{var}' in '{fn_name}' was decided by the "
-            f"variable-name heuristic; add a type annotation "
-            f"(let {var}: enc<...> = ...) or rename if it is plaintext")
-    return files
+    return gen.generate_all()

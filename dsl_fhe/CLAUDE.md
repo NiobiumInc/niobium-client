@@ -180,11 +180,12 @@ without any `enc<T>` in their signature.
 Built-in FHE operations (`rotate`, `negate`, etc.) use `cc->` directly in their
 codegen handlers and don't need to be in `FHE_SHARED_FNS`.
 
-### Encrypted-Variable Detection: Structural Flow with a Warned Fallback
+### Encrypted-Variable Detection Is Fully Structural
 
 `_is_encrypted_expr()` decides whether an expression is a ciphertext — which
 drives critical codegen choices (`NullSafeEvalAdd` vs `cc->EvalAdd`, whether to
-`const_pointer_cast`, etc.). Classification is **structural first**:
+`const_pointer_cast`, etc.). Classification is **purely structural** — there
+is no name heuristic:
 
 - let-binding flow (`_enc_vars`/`_plain_vars` via `_record_let_enc_state`):
   explicit `enc<T>` annotations, builtin return kinds from the unified
@@ -199,14 +200,12 @@ drives critical codegen choices (`NullSafeEvalAdd` vs `cc->EvalAdd`, whether to
 - destructured tuples from user fns with declared tuple returns record each
   position.
 
-Only when none of that resolves does it fall back to the **name heuristic**
-(`ENCRYPTED_PREFIXES` / `ENCRYPTED_EXACT_NAMES`) — and every fallback is
-reported as a per-variable warning by `nbc compile`
-("encrypted-ness of 'x' ... decided by the variable-name heuristic"). All six
-shipped examples compile with **zero** fallbacks. When you see the warning,
-add an annotation (`let x: enc<...> = ...`) or rename a plaintext variable —
-don't rely on the heuristic for new code. `test_enc_flow_beats_name_heuristic`
-and friends in `tests/test_codegen.py` pin the behavior.
+A name the machinery cannot resolve is **plaintext**: if it was actually a
+ciphertext, the generated C++ fails to compile (vector/scalar ops on a
+`Ciphertext` shared_ptr) — never silently wrong. The fix is always an
+annotation (`let x: enc<vec<f64>> = ...`), never a naming convention. The
+removal was validated by byte-identical generated C++ across all seven
+examples; `test_no_name_heuristic` pins it.
 
 ### How `encrypt()` Compiles
 
