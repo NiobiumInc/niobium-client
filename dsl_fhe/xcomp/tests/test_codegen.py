@@ -204,20 +204,20 @@ def test_scheme_override_detected_when_nested():
     assert gen._fn_has_scheme_override(fn) is True
 
 
-def test_encrypted_var_heuristic():
-    # The prefix/name heuristic is a *fallback* used only when no type info is
-    # available. Guard the known-good classifications, and pin the known
-    # false-positives so any future type-driven fix is an intentional change.
+def test_no_name_heuristic():
+    # Encrypted-ness is fully structural — variable NAMES carry no meaning.
+    # Names that the old prefix heuristic classified as encrypted (including
+    # its known false positives) are all plaintext when unresolvable, and the
+    # ALL_CAPS rule is gone with it.
     import ast_nodes as ast
     gen, _ = _make_gen(KEYGEN_SRC.format(ring=""))
     enc = lambda n: gen._is_encrypted_expr(ast.Ident(name=n))
-    assert enc("ct") and enc("acc") and enc("result")     # genuinely encrypted
-    assert not enc("THRESHOLD") and not enc("PAYLOAD_DIM")  # ALL_CAPS constants
-    # KNOWN false positives — these are plaintext but match an encrypted prefix.
-    # See CLAUDE.md "prefix-based encrypted detection". Update if types replace it.
-    assert enc("result_index")   # matches "result"
-    assert enc("hidden_dim")     # matches "hidden"
-    assert enc("recon_loss")     # matches "recon"
+    for name in ("ct", "acc", "result", "eqry", "result_index",
+                 "hidden_dim", "recon_loss", "THRESHOLD"):
+        assert not enc(name), name
+    # Structural flow still classifies, regardless of name.
+    gen._enc_vars.add("zzz_totally_plain_sounding")
+    assert enc("zzz_totally_plain_sounding")
 
 
 def test_ct_minus_column_slice():
@@ -339,23 +339,19 @@ def test_vec_zeros_type_arg_enc():
     assert "NullSafeEvalAdd(cc, buckets[i], xs[i])" in impl
 
 
-def test_heuristic_fallback_warns():
-    # When classification can only come from the name heuristic, the compiler
-    # records it and generate() surfaces a warning naming the variable.
-    from lexer import lex as _lex
-    from parser import parse as _parse
-    from semantic import analyze as _analyze
-    from codegen import generate as _generate
-    program = _parse(_lex("""
-    fn helper(x: f64) -> f64 { return x }
-    fn f() -> f64 {
+def test_unresolved_name_is_plain():
+    # A name the structural machinery cannot reach generates PLAIN C++ (which
+    # fails at C++ compile time if it was actually a ciphertext) — the fix is
+    # an annotation, never a naming convention.
+    files = compile_str("""
+    fn f(xs: vec<f64>) -> f64 {
+        let ct_mystery = xs[0]
         return ct_mystery + 1.0
     }
-    """))
-    sa = _analyze(program)
-    _generate(program, sa)
-    assert any("heuristic" in w and "ct_mystery" in w for w in sa.errors.warnings), \
-        sa.errors.warnings
+    """)
+    impl = files["nb_shared.cpp"]
+    assert "(ct_mystery + 1.0)" in impl
+    assert "EvalAdd(ct_mystery" not in impl
 
 
 def test_wire_layout_is_field_type_driven():
