@@ -69,6 +69,8 @@ def cmd_check(args):
             return 1
         for w in sa.errors.warnings:
             print(w, file=sys.stderr)
+        for n in sa.errors.notes:
+            print(n, file=sys.stderr)
         print(f"OK: {sum(1 for i in program.items)} declarations, "
               f"{len(sa.errors.warnings)} warnings, 0 errors.")
         return 0
@@ -96,6 +98,8 @@ def cmd_compile(args):
         # Warnings from analysis AND code generation (heuristic fallbacks).
         for w in sa.errors.warnings:
             print(w, file=sys.stderr)
+        for n in sa.errors.notes:
+            print(n, file=sys.stderr)
 
         outdir = Path(args.outdir)
         outdir.mkdir(parents=True, exist_ok=True)

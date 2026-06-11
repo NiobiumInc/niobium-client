@@ -192,9 +192,10 @@ def test_depth_overprovision_warning():
     assert any("greatly exceeds" in w for w in sa.errors.warnings), sa.errors.warnings
 
 
-def test_depth_overprovision_suppressed_when_opaque():
-    # chebyshev's internal depth is not modeled — the over-provision warning
-    # must stay silent rather than give a false economy recommendation.
+def test_chebyshev_depth_modeled_with_literal_degree():
+    # A literal (or const) degree makes chebyshev a MODELED subcircuit:
+    # ceil(log2(d+1)) + 1 levels are charged (59 -> 7), so the over-provision
+    # warning fires accurately on a straight-line program...
     sa = check("""
     scheme CKKS { security: not_set depth: 20 }
     fn f(a: enc<f64>, b: enc<f64>) -> enc<f64> {
@@ -202,7 +203,52 @@ def test_depth_overprovision_suppressed_when_opaque():
         return chebyshev(|v| v, x, domain: [-1.0, 1.0], degree: 59)
     }
     """)
+    assert sa.observed_max_depth == 8, sa.observed_max_depth  # 1 mul + 7 cheb
+    assert any("greatly exceeds" in w for w in sa.errors.warnings), sa.errors.warnings
+    # ...and a chain exceeding the budget warns.
+    sa2 = check("""
+    scheme CKKS { security: not_set depth: 6 }
+    fn f(a: enc<f64>) -> enc<f64> {
+        return chebyshev(|v| v, a, domain: [-1.0, 1.0], degree: 59)
+    }
+    """)
+    assert any("chebyshev chain depth" in w for w in sa2.errors.warnings), sa2.errors.warnings
+
+
+def test_depth_overprovision_suppressed_when_opaque():
+    # A NON-literal degree keeps chebyshev depth-opaque — the over-provision
+    # warning must stay silent rather than give a false recommendation.
+    sa = check("""
+    scheme CKKS { security: not_set depth: 20 }
+    fn f(a: enc<f64>, b: enc<f64>, d: u32) -> enc<f64> {
+        let x = a * b
+        return chebyshev(|v| v, x, domain: [-1.0, 1.0], degree: d)
+    }
+    """)
     assert not any("greatly exceeds" in w for w in sa.errors.warnings), sa.errors.warnings
+
+
+def test_parameter_advisor():
+    # logQ = 60 + 18*50 = 960 -> 128-classic needs N >= 65536. A declared
+    # ring_dim below target without a security override warns; with an
+    # override it is only noted.
+    src = """
+    scheme CKKS { security: 128-classic precision: 50 first_mod: 60 depth: 18 }
+    struct Instance { ring_dim: u32 }
+    fn instance() -> Instance { return Instance { ring_dim: 2048 } }
+    """
+    sa = check(src)
+    assert any("needs ring_dim >= 65536" in n for n in sa.errors.notes), sa.errors.notes
+    assert any("cannot reach 128-classic" in w for w in sa.errors.warnings), sa.errors.warnings
+
+    sa2 = check(src + """
+    fn keygen_stage() -> u32 {
+        scheme.override(security: not_set)
+        return 0
+    }
+    """)
+    assert not any("cannot reach" in w for w in sa2.errors.warnings), sa2.errors.warnings
+    assert any("dev profiles" in n for n in sa2.errors.notes), sa2.errors.notes
 
 
 if __name__ == "__main__":
