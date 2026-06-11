@@ -317,7 +317,14 @@ test-fetch: fetch-by-similarity
 	@cd $(EXAMPLES)/fetch-by-similarity && \
 		export LD_LIBRARY_PATH=$(LD_LIB_PATH) && \
 		rm -rf *_workload_* fhetch_driver_source_* && \
-		python3 harness/run.py 0 --seed 42
+		python3 harness/run.py 0 --seed 42 && \
+		echo "" && \
+		echo "=== Replay run (cache hit — zero FHE ops, FHETCH simulator) ===" && \
+		nb_out/build/encrypted_compute 0 && \
+		nb_out/build/decrypt_decode 0 && \
+		nb_out/build/postprocess 0 && \
+		python3 harness/verify_result.py datasets/toy/expected.bin io/toy/results.bin && \
+		echo "  PASS  replay run verified against expected payloads"
 	@echo ""
 	@echo "All fetch-by-similarity tests passed."
 
