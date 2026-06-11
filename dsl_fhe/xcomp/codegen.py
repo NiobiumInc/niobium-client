@@ -2616,7 +2616,7 @@ endforeach()
                 return (f"[&]() {{ auto tmp = {args[0]}; "
                         f"cc->{FHE_RELIN}(tmp); return tmp; }}()")
             if fname == "chebyshev":
-                return self._gen_chebyshev(expr.args)
+                return self._gen_chebyshev(expr.args, expr)
             if fname == "slot_sum":
                 if self._plain_mode:
                     return f"nb_plain::slot_sum({', '.join(args)})"
@@ -3145,14 +3145,19 @@ endforeach()
 
     # ===== FHE-specific code generation helpers =====
 
-    def _gen_chebyshev(self, args: list[ast.Arg]) -> str:
+    def _gen_chebyshev(self, args: list[ast.Arg], call=None) -> str:
         named = {a.name: self._expr_to_cpp(a.value) for a in args if a.name}
         positional = [self._expr_to_cpp(a.value) for a in args if not a.name]
 
         func = positional[0] if len(positional) > 0 else "func"
         ct = positional[1] if len(positional) > 1 else named.get("ct", "ct")
         domain = named.get("domain", "{-1.0, 1.0}")
-        degree = named.get("degree", "59")
+        # Degree precedence: explicit degree: arg, else the degree the
+        # semantic analyzer selected from a max_error: target (annotated on
+        # the call node), else the legacy default.
+        selected = getattr(call, "_nb_selected_degree", None) if call else None
+        degree = named.get("degree",
+                           str(selected) if selected is not None else "59")
 
         lower, upper = "-1.0", "1.0"
         if domain.startswith("{") or domain.startswith("["):

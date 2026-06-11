@@ -53,6 +53,9 @@ class SemanticAnalyzer:
         # advisory rather than errors).
         self.ring_dims: set[int] = set()
         self.has_security_override: bool = False
+        # Function declarations by name (bodies included) — used by the
+        # compile-time Chebyshev closure evaluator.
+        self.fn_decls: dict[str, ast.FnDecl] = {}
 
         # Register predefined type names
         self._register_builtins()
@@ -136,6 +139,105 @@ class SemanticAnalyzer:
                         f"logQ ~= {log_q} bits (needs >= {min_n}); lower "
                         f"depth/q_i or raise ring_dim", None)
         self.errors.note(msg)
+
+    def _resolve_float_arg(self, call: ast.CallExpr, name: str):
+        for a in call.args:
+            if a.name == name:
+                v = a.value
+                if isinstance(v, (ast.FloatLiteral, ast.IntLiteral)):
+                    return float(v.value)
+                if isinstance(v, ast.Ident):
+                    sym = self.global_scope.lookup(v.name)
+                    if sym is not None and sym.is_const and isinstance(
+                            sym.const_value, (int, float)):
+                        return float(sym.const_value)
+                return None
+        return None
+
+    def _resolve_domain_arg(self, call: ast.CallExpr):
+        for a in call.args:
+            if a.name == "domain" and isinstance(a.value, ast.ArrayLiteral) \
+                    and len(a.value.elements) == 2:
+                vals = []
+                for e in a.value.elements:
+                    neg = False
+                    if isinstance(e, ast.UnaryExpr) and e.op == "-":
+                        neg, e = True, e.operand
+                    if isinstance(e, (ast.FloatLiteral, ast.IntLiteral)):
+                        vals.append(-float(e.value) if neg else float(e.value))
+                    elif isinstance(e, ast.Ident):
+                        sym = self.global_scope.lookup(e.name)
+                        if sym is not None and sym.is_const and isinstance(
+                                sym.const_value, (int, float)):
+                            v = float(sym.const_value)
+                            vals.append(-v if neg else v)
+                        else:
+                            return None
+                    else:
+                        return None
+                return vals[0], vals[1]
+        return None
+
+    def _select_chebyshev_degree(self, expr: ast.CallExpr):
+        """Resolve `chebyshev(..., max_error: e)` (no degree) into a concrete
+        degree at compile time: evaluate the closure numerically, fit
+        Chebyshev interpolants on the domain, pick the minimal ladder degree
+        meeting the error target. The chosen degree is annotated on the AST
+        node for codegen and reported as a note."""
+        target = self._resolve_float_arg(expr, "max_error")
+        if target is None:
+            return None
+        import chebfit
+        positional = [a for a in expr.args if not a.name]
+        closure = positional[0].value if positional else None
+        if not isinstance(closure, ast.Closure):
+            self.errors.error(TypeError_(
+                "max_error: requires a closure as the first chebyshev "
+                "argument", expr.loc))
+            return None
+        dom = self._resolve_domain_arg(expr)
+        if dom is None:
+            self.errors.error(TypeError_(
+                "max_error: requires a literal/const domain: [lo, hi]",
+                expr.loc))
+            return None
+        lo, hi = dom
+        consts = {}
+        for name, sym in getattr(self.global_scope, "symbols", {}).items():
+            if getattr(sym, "is_const", False) and isinstance(
+                    sym.const_value, (int, float)):
+                consts[name] = float(sym.const_value)
+        try:
+            f = chebfit.ClosureEvaluator(consts, self.fn_decls).make_fn(closure)
+        except chebfit.Unevaluable as e:
+            self.errors.error(TypeError_(
+                f"max_error: closure is not compile-time evaluable ({e}); "
+                f"specify degree: explicitly", expr.loc))
+            return None
+        except (ArithmeticError, ValueError) as e:
+            self.errors.error(TypeError_(
+                f"max_error: closure evaluation failed ({e})", expr.loc))
+            return None
+        try:
+            degree, err = chebfit.select_degree(f, lo, hi, target)
+        except (ArithmeticError, ValueError) as e:
+            self.errors.error(TypeError_(
+                f"max_error: Chebyshev fit failed on [{lo}, {hi}] ({e})",
+                expr.loc))
+            return None
+        if degree is None:
+            self.errors.error(TypeError_(
+                f"max_error {target:g} unreachable on [{lo}, {hi}]: best "
+                f"ladder degree {chebfit.DEGREE_LADDER[-1]} achieves "
+                f"~{err:.2e}; widen the tolerance or rescale the domain",
+                expr.loc))
+            return None
+        expr._nb_selected_degree = degree
+        self.errors.note(
+            f"chebyshev (max_error {target:g} on [{lo:g}, {hi:g}]): selected "
+            f"degree {degree} (est. max approx error {err:.2e}), "
+            f"+{chebfit.depth_for_degree(degree)} levels")
+        return degree
 
     def _resolve_int_arg(self, call: ast.CallExpr, name: str):
         """Resolve a named argument to an int when it is a literal or a
@@ -243,6 +345,7 @@ class SemanticAnalyzer:
     def _pass_collect_functions(self, program: ast.Program):
         for item in program.items:
             if isinstance(item, ast.FnDecl):
+                self.fn_decls[item.name] = item
                 param_types = []
                 for p in item.params:
                     pt = self._resolve_type_expr(p.type_ann) if p.type_ann else UNKNOWN
@@ -443,6 +546,8 @@ class SemanticAnalyzer:
                 # degree->depth table: 5->4, 13->5, 27->6, 59->7, 119->8, ...).
                 if expr.func.name == "chebyshev":
                     d = self._resolve_int_arg(expr, "degree")
+                    if d is None:
+                        d = self._select_chebyshev_degree(expr)
                     if d is not None and d > 0:
                         import math
                         used = math.ceil(math.log2(d + 1)) + 1

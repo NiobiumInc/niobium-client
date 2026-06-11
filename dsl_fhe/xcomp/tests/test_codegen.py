@@ -449,6 +449,21 @@ def test_reference_twin_skipped_for_extern():
     assert "compute_ref.cpp" not in files
 
 
+def test_chebyshev_max_error_emits_selected_degree():
+    # The degree chosen by the semantic analyzer from max_error: lands in
+    # the generated EvalChebyshevFunction call.
+    files = compile_str("""
+    fn f(ct: enc<f64>) -> enc<f64> {
+        return chebyshev(|x| 1.0 / (1.0 + exp(0.0 - x)), ct,
+                         domain: [-5.0, 5.0], max_error: 0.001)
+    }
+    """)
+    impl = files["nb_shared.cpp"]
+    assert "EvalChebyshevFunction" in impl
+    assert "5.0, 13)" in impl             # sigmoid @ 1e-3 -> ladder degree 13
+    assert "max_error" not in impl        # compile-time only, not C++
+
+
 def test_shared_fn_forward_decl():
     files = compile_str("""
     fn helper(x: f64) -> f64 {

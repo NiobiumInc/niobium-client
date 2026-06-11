@@ -489,6 +489,7 @@ scheme.override(security: not_set, ring_dim: 2048)
 | `negate(ct)` | Negate ciphertext | `cc->EvalNegate(ct)` |
 | `relin(ct)` | Relinearize after *_norelin | `cc->Relinearize(ct)` |
 | `chebyshev(fn, ct, domain:, degree:)` | Chebyshev function evaluation | `cc->EvalChebyshevFunction(...)` |
+| `chebyshev(fn, ct, domain:, max_error:)` | Same, with the degree **auto-selected at compile time**: the closure is evaluated numerically, Chebyshev interpolants are fitted on the domain, and the minimal ladder degree (5, 13, 27, 59, 119, 247, 495, 1007, 2031) meeting the error target is chosen. `nbc` reports the selection as a note (degree, est. max approx error, levels consumed) and charges the implied depth. Requires a compile-time-evaluable closure (arithmetic + `exp`/`tanh`/`abs` + consts + pure user fns) and a literal/const domain; an unreachable tolerance is a compile error | `cc->EvalChebyshevFunction(..., <selected degree>)` |
 | `slot_sum(ct, n)` | Sum all slots | `cc->EvalSum(ct, n)` |
 | `running_sums(cts, stride:, depth:)` | In-place running sums | `RunningSums(cc, ...).eval_in_place(cts)` |
 | `reduce(+, vec)` | Reduce vector with add | `EvalAddInPlace` accumulation |
