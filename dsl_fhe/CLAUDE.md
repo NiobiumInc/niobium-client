@@ -261,6 +261,33 @@ Each `@stage("name")` function generates a `.cpp` with:
 6. **Result serialization** — always: OpenFHE's own output on a record run,
    the reconstructed ciphertext on a replay run
 
+### Generated Cleartext Reference Twins
+
+For every stage whose body avoids non-twinnable constructs (`extern_call`,
+`slot_replicator`/`replicate`, `running_sums`, `load_model`, `mul_monomial`,
+`load_all`, `keygen`), the codegen ALSO emits `<stage>_ref.cpp` — the same
+`.nb` code compiled with **plaintext semantics**:
+
+- `enc<T>` → `std::vector<double>` slot vectors;
+- FHE ops → `nb_plain::` elementwise helpers (add/sub/mul/rotate/slot_sum,
+  null-safe accumulate);
+- `chebyshev(|x| f(x), ...)` → applies the **true** function `f` elementwise
+  (the encrypted circuit approximates it, so the reference bounds
+  approximation + noise error together);
+- `encrypt`/`decrypt` → identity; keys/context → inert `nb_plain::NoCrypto`;
+- wire IO → the same field-driven layout with `.ref.bin` raw-double files
+  (parallel to the ciphertext files, no clobbering).
+
+The twin lives in `namespace nbref` with `using <Wire> = ::<Wire>Ref;`
+aliases, includes plain twins of every FHE-using user function the stage
+calls, and shares `main()`'s CLI. Running the `_ref` pipeline gives the
+ground-truth values the skill's "plaintext correctness is ground truth"
+principle calls for — generated, not hand-rolled. `test-set-membership` and
+`test-password` run their reference pipelines as part of the suite
+(password's reference returns exactly 42 where the encrypted run gives
+~41.85 — the gap IS the approximation/noise budget).
+`test_reference_twin_generation` pins the behavior.
+
 ### How Match Expressions Compile
 
 Match expressions compile to C++ `switch` statements with an IIFE wrapper when used

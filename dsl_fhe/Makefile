@@ -366,6 +366,11 @@ test-password: password-retrieval
 		echo "  verify..." && ./verify 0 && \
 		echo "  decrypt (expect ≈ 0)..." && ./decrypt_result 0 0.0 && \
 		echo "  PASS  wrong answers → password hidden" && \
+		echo "  cleartext reference pipeline (generated ground truth)..." && \
+		rm -rf io && \
+		./setup_record_ref 0 && ./submit_query_ref 0 && ./verify_ref 0 && \
+		./decrypt_result_ref 0 42.0 && \
+		echo "  PASS  reference pipeline → exact 42" && \
 		rm -rf io && \
 		echo "" && echo "All password-retrieval tests passed."
 
@@ -393,6 +398,9 @@ test-set-membership: set-membership
 		$$B/key_generation 1 && $$B/encrypt_query 1 && $$B/compute 1 && \
 		$$B/decrypt_verify 1 10.0 && \
 		echo "  PASS  soundex fuzzy match → score ≈ 10" && \
+		echo "  cleartext reference pipeline (generated ground truth)..." && \
+		$$B/encrypt_query_ref 1 && $$B/compute_ref 1 && $$B/decrypt_verify_ref 1 10.0 && \
+		echo "  PASS  reference pipeline agrees (score ≈ 10)" && \
 		rm -rf io *_workload_* fhetch_driver_source_* && \
 		echo "" && echo "All set-membership tests passed."
 

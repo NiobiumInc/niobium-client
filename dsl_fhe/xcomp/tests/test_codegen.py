@@ -408,6 +408,47 @@ def test_crypto_params_wire_by_structure():
     assert "MyKeys p;" in impl
 
 
+def test_reference_twin_generation():
+    # Twinnable stages get a <stage>_ref.cpp cleartext twin: enc -> slot
+    # vectors, FHE ops -> nb_plain helpers, chebyshev -> the true function,
+    # wire IO -> .ref.bin files, inside namespace nbref with Ref wire aliases.
+    files = compile_str("""
+    struct Instance { ring_dim: u32 }
+    fn encdir(inst: Instance) -> path { root() / "enc" }
+    wire Income { ct: enc<vec<f64>> }
+    wire Outcome { score: enc<vec<f64>> }
+    @server @stage(name: "compute")
+    fn compute(inst: Instance) -> reads(Income), writes(Outcome) {
+        let w = load(Income, from: encdir(inst))
+        let acc = w.ct * w.ct
+        let smooth = chebyshev(|x| x, acc, domain: [-1.0, 1.0], degree: 59)
+        return Outcome { score: smooth }
+    }
+    """)
+    assert "compute_ref.cpp" in files
+    ref = files["compute_ref.cpp"]
+    assert "namespace nbref" in ref
+    assert "using Outcome = ::OutcomeRef;" in ref
+    assert "nb_plain::mul(w.ct, w.ct)" in ref
+    assert "nb_plain::apply(acc," in ref          # true function, not Chebyshev
+    assert ".ref.bin" in ref
+    assert "EvalMult" not in ref and "niobium" not in ref
+    # The encrypted stage is unchanged alongside.
+    assert "EvalMult" in files["compute.cpp"]
+
+
+def test_reference_twin_skipped_for_extern():
+    # Stages using non-twinnable constructs get no reference twin.
+    files = compile_str("""
+    struct Instance { ring_dim: u32 }
+    @server @stage(name: "compute")
+    fn compute(inst: Instance, ct: enc<vec<f64>>) -> enc<vec<f64>> {
+        return extern_call("magic", ct)
+    }
+    """)
+    assert "compute_ref.cpp" not in files
+
+
 def test_shared_fn_forward_decl():
     files = compile_str("""
     fn helper(x: f64) -> f64 {
