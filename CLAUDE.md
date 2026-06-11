@@ -4,9 +4,15 @@ Guidance for Claude Code (and other agents) working in this repository.
 
 ## Project Overview
 
-**Niobium Client** is the open-source OpenFHE integration layer for the Niobium
-Mistic FHE accelerator. It wires the Niobium-instrumented OpenFHE branch to the
-FHETCH recording/replay library (`libnbfhetch`, vendored from
+**Niobium Client** is the open-source client stack for the Niobium Mistic FHE
+accelerator, with four entry points converging on one FHETCH Polynomial IR
+trace: the **nb DSL + design skill** (AI-agent coding, `dsl_fhe/` +
+`.claude/skills/fhe-application-design`), **instrumented OpenFHE**
+(application developers, `examples/`), **direct FHETCH IR emission** (compiler
+writers, via `libnbfhetch` + `src/fhetch_transport/`), and **HAZE** (FHE
+library integrators, CUDA-shaped C API, `vendor/niobium-haze`). It wires the
+Niobium-instrumented OpenFHE branch to the FHETCH recording/replay library
+(`libnbfhetch`, vendored from
 [`niobium-fhetch`](https://github.com/NiobiumInc/niobium-fhetch)) and ships
 end-to-end OpenFHE examples.
 
@@ -85,9 +91,12 @@ niobium-client/
     fhetch_transport/       # trace transport client/server + archive
   examples/                 # hand-written OpenFHE examples (bootstrap, mult, simple_ops, ...)
   dsl_fhe/                  # DSL + cross-compiler (nbc); see dsl_fhe/README.md
+  .claude/skills/
+    fhe-application-design/ # submodule: 8-stage FHE design skill (AI agents)
   vendor/
     niobium-fhetch/         # submodule: libnbfhetch + fhetch_sim + API headers
       vendor/openfhe/       # nested submodule: Niobium-instrumented OpenFHE
+    niobium-haze/           # submodule: CUDA-shaped C API (library integrations)
     lib/openfhe/            # installed OpenFHE (built by the Makefile)
   docs/AUTO_FACADE.md       # transparent record/replay design
   CMakeLists.txt  Makefile  README.md  CLAUDE.md  LICENSE (Apache 2.0)
