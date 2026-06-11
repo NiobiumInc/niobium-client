@@ -182,11 +182,13 @@ jobs:
           make -C dsl_fhe test-compiler
           make -C dsl_fhe test-simple test-password test-set-membership test-fraud test-ml test-nid
 
-      # fetch-by-similarity end-to-end: the record run generates the dataset,
-      # records the trace, and verifies all 8 payload vectors; the replay run
-      # (cache hit, zero FHE ops) re-executes through the FHETCH simulator and
-      # must reproduce the same verified payloads.
-      - name: DSL — fetch-by-similarity end-to-end (record + replay)
+      # fetch-by-similarity end-to-end: the record run (seed 42) generates the
+      # dataset, records the trace, and verifies all 8 payload vectors; the
+      # replay run then REGENERATES the query (seed 21 — different matching
+      # rows), re-encrypts it, and replays the cached trace (zero FHE ops,
+      # refresh_stale_inputs reloads the new query) — gating both replay
+      # correctness and the record-once/replay-with-new-data promise.
+      - name: DSL — fetch-by-similarity end-to-end (record + new-query replay)
         run: |
           python3 -m pip install --user --quiet numpy
           make -C dsl_fhe test-fetch
