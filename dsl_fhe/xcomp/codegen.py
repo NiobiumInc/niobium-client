@@ -1144,6 +1144,14 @@ endforeach()
 
     def _gen_main_arg_parsing(self, stage: StageInfo, hardware: bool):
 
+        # init() consumes Niobium-specific flags (--hollow, --no-ring-dim-check,
+        # ...) and compacts argv, so it must run before the positional argument
+        # parsing below — otherwise a Niobium flag would be misread as a
+        # positional value.
+        if hardware:
+            self.wl("niobium::compiler().init(argc, argv);")
+            self.blank()
+
         # Argument parsing
         self.wl("if (argc < 2 || !std::isdigit(argv[1][0])) {")
         self.indent()
@@ -1178,9 +1186,11 @@ endforeach()
                        and p.type_ann.name == "bool"]
         # Extra flags for hardware stages. --hollow skips expensive polynomial
         # math during recording (structure + probes preserved); replay then
-        # reconstructs the real values via the FHETCH simulator.
+        # reconstructs the real values via the FHETCH simulator. init() above
+        # already consumed --hollow from argv, so read it back from the
+        # compiler instead of parsing it here.
         if hardware:
-            self.wl("bool hollow_record = false;")
+            self.wl("bool hollow_record = niobium::compiler().is_hollow_mode();")
         for bp in bool_params:
             self.wl(f"bool {bp.name} = false;")
 
@@ -1189,8 +1199,6 @@ endforeach()
         self.wl("std::string arg = argv[i];")
         for bp in bool_params:
             self.wl(f'if (arg == "--{bp.name}") {{ {bp.name} = true; }}')
-        if hardware:
-            self.wl('if (arg == "--hollow") { hollow_record = true; }')
         self.dedent()
         self.wl("}")
         self.blank()
@@ -1588,7 +1596,9 @@ endforeach()
     # ===== Niobium instrumentation generation =====
 
     def _gen_niobium_init(self, stage: StageInfo):
-        self.wl("niobium::compiler().init(argc, argv);")
+        # init(argc, argv) already ran at the top of main (see
+        # _gen_main_arg_parsing) so Niobium flags never reach the positional
+        # argument parsing.
         # Cooperative (host-driven) auto-tagging: the host owns the
         # init/start/stop/probe/replay/result lifecycle, while input/key/context
         # tagging happens automatically via the instrumented-OpenFHE deserialize
