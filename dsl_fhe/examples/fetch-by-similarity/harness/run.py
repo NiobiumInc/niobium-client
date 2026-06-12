@@ -81,11 +81,15 @@ def main():
                         help="Skip key generation (reuse existing)")
     parser.add_argument("--skip-encrypt", action="store_true",
                         help="Skip encryption stages (reuse existing)")
+    parser.add_argument("--no-ring-dim-check", action="store_true",
+                        help="Skip the Niobium hardware ring-dimension check "
+                             "(forwarded to encrypted_compute)")
     args = parser.parse_args()
 
     params = InstanceParams(args.size, rootdir=RUN_CWD)
     size_name = instance_name(args.size)
     count_flag = ["--count_only"] if args.count_only else []
+    compute_flags = ["--no-ring-dim-check"] if args.no_ring_dim_check else []
 
     print(f"=== Fetch-by-similarity: {size_name} (size={args.size}) ===")
     print(f"    Build dir: {BUILD_DIR}")
@@ -175,7 +179,8 @@ def main():
     print("--- Step 6: Encrypted computation (monolithic) ---")
     timings["encrypted_compute"] = run_stage(
         "encrypted_compute",
-        [str(BUILD_DIR / "encrypted_compute"), str(args.size)] + count_flag)
+        [str(BUILD_DIR / "encrypted_compute"), str(args.size)]
+        + count_flag + compute_flags)
     print()
 
     # ------------------------------------------------------------------

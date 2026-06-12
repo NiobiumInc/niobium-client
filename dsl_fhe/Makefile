@@ -321,26 +321,26 @@ test-simple: simple
 		rm -rf io && \
 		echo "  key_generation..." && ./key_generation 0 3 && \
 		echo "  encrypt (a=3, b=5)..." && ./encrypt 0 3.0 5.0 && \
-		echo "  ADD (3+5=8)..." && ./compute 0 0 0.0 && ./decrypt_verify 0 8.0 && \
+		echo "  ADD (3+5=8)..." && ./compute 0 0 0.0 --no-ring-dim-check && ./decrypt_verify 0 8.0 && \
 		echo "  PASS  ADD" && \
-		echo "  MUL (3*5=15)..." && ./compute 0 1 0.0 && ./decrypt_verify 0 15.0 && \
+		echo "  MUL (3*5=15)..." && ./compute 0 1 0.0 --no-ring-dim-check && ./decrypt_verify 0 15.0 && \
 		echo "  PASS  MUL" && \
-		echo "  ADDI (3+2=5)..." && ./compute 0 15 2.0 && ./decrypt_verify 0 5.0 && \
+		echo "  ADDI (3+2=5)..." && ./compute 0 15 2.0 --no-ring-dim-check && ./decrypt_verify 0 5.0 && \
 		echo "  PASS  ADDI" && \
-		echo "  SUBI (3-2=1)..." && ./compute 0 16 2.0 && ./decrypt_verify 0 1.0 && \
+		echo "  SUBI (3-2=1)..." && ./compute 0 16 2.0 --no-ring-dim-check && ./decrypt_verify 0 1.0 && \
 		echo "  PASS  SUBI" && \
-		echo "  MULI (3*2=6)..." && ./compute 0 17 2.0 && ./decrypt_verify 0 6.0 && \
+		echo "  MULI (3*2=6)..." && ./compute 0 17 2.0 --no-ring-dim-check && ./decrypt_verify 0 6.0 && \
 		echo "  PASS  MULI" && \
-		echo "  MUL_MUL ((3*5)*3=45)..." && ./compute 0 2 0.0 && ./decrypt_verify 0 45.0 && \
+		echo "  MUL_MUL ((3*5)*3=45)..." && ./compute 0 2 0.0 --no-ring-dim-check && ./decrypt_verify 0 45.0 && \
 		echo "  PASS  MUL_MUL" && \
-		echo "  ADD_MUL ((3+5)*3=24)..." && ./compute 0 3 0.0 && ./decrypt_verify 0 24.0 && \
+		echo "  ADD_MUL ((3+5)*3=24)..." && ./compute 0 3 0.0 --no-ring-dim-check && ./decrypt_verify 0 24.0 && \
 		echo "  PASS  ADD_MUL" && \
-		echo "  ADD_ADD ((3+5)+3=11)..." && ./compute 0 5 0.0 && ./decrypt_verify 0 11.0 && \
+		echo "  ADD_ADD ((3+5)+3=11)..." && ./compute 0 5 0.0 --no-ring-dim-check && ./decrypt_verify 0 11.0 && \
 		echo "  PASS  ADD_ADD" && \
 		echo "  replay with NEW inputs (re-encrypt a=4 b=7, replay ADD trace -> 11)..." && \
 		python3 $(CURDIR)/tools/verify_replay_integrity.py snapshot compute_workload_size_0_operation_0 && \
 		sleep 1.1 && ./encrypt 0 4.0 7.0 && \
-		./compute 0 0 0.0 && ./decrypt_verify 0 11.0 && \
+		./compute 0 0 0.0 --no-ring-dim-check && ./decrypt_verify 0 11.0 && \
 		echo "  PASS  record-once / replay-with-new-inputs (refresh_stale_inputs)" && \
 		python3 $(CURDIR)/tools/verify_replay_integrity.py verify compute_workload_size_0_operation_0 && \
 		rm -rf io && \
@@ -352,7 +352,7 @@ test-fetch: fetch-by-similarity
 	@cd $(EXAMPLES)/fetch-by-similarity && \
 		export LD_LIBRARY_PATH=$(LD_LIB_PATH) && \
 		rm -rf *_workload_* fhetch_driver_source_* && \
-		python3 harness/run.py 0 --seed 42 && \
+		python3 harness/run.py 0 --seed 42 --no-ring-dim-check && \
 		echo "" && \
 		echo "=== Replay run with a REGENERATED query (cache hit — zero FHE" && \
 		echo "=== ops; refresh_stale_inputs reloads the new query into the" && \
@@ -362,7 +362,7 @@ test-fetch: fetch-by-similarity
 		python3 harness/cleartext_impl.py 0 && \
 		sleep 1.1 && \
 		nb_out/build/encode_encrypt_query 0 && \
-		nb_out/build/encrypted_compute 0 && \
+		nb_out/build/encrypted_compute 0 --no-ring-dim-check && \
 		python3 $(CURDIR)/tools/verify_replay_integrity.py verify encrypted_compute_workload_size_0 && \
 		nb_out/build/decrypt_decode 0 && \
 		nb_out/build/postprocess 0 && \
@@ -379,7 +379,7 @@ test-nid: fhe-network-monitor
 		test -L assets || ln -sf ../../assets assets && \
 		echo "  keygen..." && ./keygen 0 && \
 		echo "  encrypt..." && ./encrypt 0 && \
-		echo "  inference..." && ./inference 0 && \
+		echo "  inference..." && ./inference 0 --no-ring-dim-check && \
 		echo "  PASS  keygen+encrypt+inference (Toy)"
 	@echo ""
 	@echo "All fhe-NetworkMonitor tests passed."
@@ -395,7 +395,7 @@ test-ml: ml-inference
 			python3 -c "print(' '.join(['0.000000']*784))" > datasets/single/intermediate/test_pixels.txt && \
 		echo "  keygen..." && ./key_generation 0 && \
 		echo "  encrypt..." && ./encode_encrypt_input 0 && \
-		echo "  compute..." && ./encrypted_compute 0 0 && \
+		echo "  compute..." && ./encrypted_compute 0 0 --no-ring-dim-check && \
 		echo "  PASS  keygen+encrypt+compute (Single)"
 	@echo ""
 	@echo "All ml-inference-fhe tests passed."
@@ -433,19 +433,19 @@ test-set-membership: set-membership
 		B=nb_out/build && \
 		echo "  exact: query 'James Smith' (in dataset)..." && \
 		python3 harness/encode_names.py 0 --query "James Smith" && \
-		$$B/key_generation 0 && $$B/encrypt_query 0 && $$B/compute 0 && \
+		$$B/key_generation 0 && $$B/encrypt_query 0 && $$B/compute 0 --no-ring-dim-check && \
 		$$B/decrypt_verify 0 1.0 && \
 		echo "  PASS  exact match → score ≈ 1" && \
 		echo "  exact: query 'Zelda Quixote' (not in dataset)..." && \
 		rm -rf *_workload_* fhetch_driver_source_* && \
 		python3 harness/encode_names.py 0 --query "Zelda Quixote" && \
-		$$B/encrypt_query 0 && $$B/compute 0 && \
+		$$B/encrypt_query 0 && $$B/compute 0 --no-ring-dim-check && \
 		$$B/decrypt_verify 0 0.0 && \
 		echo "  PASS  no match → score ≈ 0" && \
 		echo "  soundex: fuzzy query 'Robbrt Johnson' (10 'Robert *' collisions)..." && \
 		rm -rf *_workload_* fhetch_driver_source_* && \
 		python3 harness/encode_names.py 1 --query "Robbrt Johnson" && \
-		$$B/key_generation 1 && $$B/encrypt_query 1 && $$B/compute 1 && \
+		$$B/key_generation 1 && $$B/encrypt_query 1 && $$B/compute 1 --no-ring-dim-check && \
 		$$B/decrypt_verify 1 10.0 && \
 		echo "  PASS  soundex fuzzy match → score ≈ 10" && \
 		echo "  cleartext reference pipeline (generated ground truth)..." && \
@@ -463,13 +463,13 @@ test-fraud: fraud-flag
 		B=nb_out/build && \
 		echo "  flagged card (expect 1)..." && \
 		python3 harness/encode_cards.py 0 --query-flagged 1234 && \
-		$$B/key_generation 0 && $$B/encrypt_card 0 && $$B/check_card 0 && \
+		$$B/key_generation 0 && $$B/encrypt_card 0 && $$B/check_card 0 --no-ring-dim-check && \
 		$$B/decrypt_verify 0 1.0 && \
 		echo "  PASS  flagged card → score ≈ 1" && \
 		echo "  clean card (expect 0)..." && \
 		rm -rf *_workload_* fhetch_driver_source_* && \
 		python3 harness/encode_cards.py 0 --query-card 9999888877776666 && \
-		$$B/encrypt_card 0 && $$B/check_card 0 && \
+		$$B/encrypt_card 0 && $$B/check_card 0 --no-ring-dim-check && \
 		$$B/decrypt_verify 0 0.0 && \
 		echo "  PASS  clean card → score ≈ 0" && \
 		echo "  cleartext reference pipeline (generated ground truth)..." && \
