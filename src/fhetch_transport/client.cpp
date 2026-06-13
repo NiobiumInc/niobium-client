@@ -136,7 +136,7 @@ int main(int argc, char** argv) {
     // ---- POST and wait -------------------------------------------------
     auto [host, _unused_path] = origin_of(server_url);
     httplib::Client cli(host);
-    cli.set_read_timeout(60 * 30, 0);   // 30 min for long replays
+    cli.set_read_timeout(60 * 120, 0);  // 2 hr — FUNC_SIM_HW on large workloads can exceed 30 min
     cli.set_write_timeout(60, 0);
     cli.set_connection_timeout(10, 0);
 
