@@ -2227,11 +2227,20 @@ endforeach()
                     # Determine element type — prefer explicit cast type to avoid
                     # decltype referencing the loop variable before it's in scope
                     last_ast = last.expr if isinstance(last, ast.ExprStmt) else last
+                    # The element type is computed BEFORE the body is
+                    # generated, but the last expression may reference
+                    # body-local lets (`let acc3: enc<..> = zero()` ...
+                    # `acc3 + b3[j]`) — pre-register their annotated
+                    # enc-ness so _is_encrypted_expr can see them.
+                    self._prescan_enc_lets(body_stmts)
                     elem_type = None
                     if isinstance(last_ast, ast.CastExpr) and last_ast.target_type:
                         elem_type = self._type_to_cpp(last_ast.target_type)
                     elif self._is_encrypted_expr(last_ast):
-                        elem_type = "Ciphertext<DCRTPoly>"
+                        # Mode-aware: the ref twin's "ciphertext" is a
+                        # std::vector<double> slot vector, never the
+                        # OpenFHE type.
+                        elem_type = self._ct_type()
                     if elem_type:
                         self.wl(f"std::vector<{elem_type}> {name};")
                     else:
@@ -3007,7 +3016,11 @@ endforeach()
         self.out = io.StringIO()
         self.indent_level = 1
 
-        # Determine element type from body
+        # Determine element type from body. Pre-register the body's
+        # annotated lets first: the last expression may reference them,
+        # and they have not been generated yet (same ordering issue as
+        # the statement form).
+        self._prescan_enc_lets(body_stmts)
         last_expr_str = ""
         inner_is_for = False
         if body_stmts:
@@ -3737,6 +3750,28 @@ endforeach()
         elif state is False:
             self._plain_vars.add(stmt.name)
             self._enc_vars.discard(stmt.name)
+
+    def _prescan_enc_lets(self, stmts: list) -> None:
+        """Register the enc-ness of ANNOTATED lets before their statements
+        are generated.
+
+        Comprehension element types are computed from the body's last
+        expression before the body is emitted; that expression may
+        reference body-local lets. Only explicit annotations are scanned
+        (flow-based inference still happens at generation time); names are
+        re-registered identically when the lets are actually generated.
+        Recurses one level into nested loop bodies.
+        """
+        for s in stmts:
+            if isinstance(s, ast.LetStmt) and s.type_ann is not None:
+                if self._has_enc_type(s.type_ann):
+                    self._enc_vars.add(s.name)
+                    self._plain_vars.discard(s.name)
+                else:
+                    self._plain_vars.add(s.name)
+                    self._enc_vars.discard(s.name)
+            elif isinstance(s, ast.ForStmt) and s.body:
+                self._prescan_enc_lets(s.body.stmts)
 
     def _is_encrypted_expr(self, expr: ast.Expr | None) -> bool:
         """Heuristic: check if an expression is likely encrypted."""
