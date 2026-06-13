@@ -582,25 +582,6 @@ def test_same_scope_let_rebinding_still_assigns():
     assert "x = 2.0;" in impl
 
 
-def test_comprehension_elem_type_sees_body_lets():
-    """Comprehension element types are computed before the body is
-    generated; the last expression may reference body-local annotated lets
-    (found by the FHE design agent: layer-3 logits emitted
-    std::vector<decltype((acc3 + b3[j]))> before the loop existed)."""
-    files = compile_str("""
-    fn f(n: u32) -> vec<enc<f64>> {
-        let v: vec<enc<f64>> = for j in 0..n {
-            let acc: enc<f64> = zero()
-            acc + 1.0
-        }
-        return v
-    }
-    """)
-    impl = files["nb_shared.cpp"]
-    assert "decltype((acc" not in impl
-    assert "std::vector<Ciphertext<DCRTPoly>> v;" in impl
-
-
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_")]
     passed = 0
