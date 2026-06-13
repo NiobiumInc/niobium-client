@@ -267,7 +267,7 @@ int main(int argc, char** argv) {
     // the server closes the socket mid-upload and the client just sees a
     // "Failed to write connection" error.
     srv.set_payload_max_length((std::numeric_limits<size_t>::max)());
-    srv.set_read_timeout(60 * 30, 0);   // 30 min, matches the client's read timeout
+    srv.set_read_timeout(60 * 120, 0);  // 2 hr — matches client's read timeout
     std::signal(SIGINT,  shutdown_handler);
     std::signal(SIGTERM, shutdown_handler);
 
