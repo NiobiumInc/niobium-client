@@ -542,6 +542,46 @@ def test_closure_generation():
     assert "[&]" in impl
 
 
+def test_sibling_scope_let_redeclares():
+    """A let-name reused in a sibling loop must DECLARE again — its C++
+    declaration died with the previous block's brace. (Found by the FHE
+    design agent: 3-layer MLP accumulators emitted `acc = ...` with no
+    declaration in loops 2 and 3.)"""
+    files = compile_str("""
+    fn f(n: u32) -> vec<f64> {
+        let out: vec<f64> = []
+        for j in 0..n {
+            let acc: f64 = 0.0
+            acc = acc + 1.0
+            out.push(acc)
+        }
+        for j in 0..n {
+            let acc: f64 = 0.0
+            acc = acc + 2.0
+            out.push(acc)
+        }
+        return out
+    }
+    """)
+    impl = files["nb_shared.cpp"]
+    assert impl.count("double acc = ") == 2     # both siblings declare
+
+
+def test_same_scope_let_rebinding_still_assigns():
+    """Rebinding in the SAME scope remains an assignment (no C++
+    redeclaration)."""
+    files = compile_str("""
+    fn f() -> f64 {
+        let x: f64 = 1.0
+        let x: f64 = 2.0
+        return x
+    }
+    """)
+    impl = files["nb_shared.cpp"]
+    assert impl.count("double x = ") == 1
+    assert "x = 2.0;" in impl
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_")]
     passed = 0

@@ -124,12 +124,19 @@ class CodeGenerator:
         self._in_return_expr: bool = False  # set when generating return expression value
         self._keygen_vars: set[str] = set()  # variables assigned from keygen()
         self._local_var_cpp_types: dict[str, str] = {}  # track local variable C++ types
-        self._declared_vars: set[str] = set()  # track declared variable names for let-rebinding
+        # Lexical scope stack for let-rebinding. One set per active scope:
+        # a `let` whose name is visible in ANY active frame lowers as
+        # assignment (rebinding); otherwise it declares into the current
+        # frame. Frames are pushed/popped with each generated block, so a
+        # name declared inside a loop dies with the loop — re-`let`ing it
+        # in a sibling loop must DECLARE again (the C++ declaration went
+        # out of scope with the brace).
+        self._scope_stack: list[set[str]] = [set()]
         # Structurally-known encrypted/plaintext locals (from annotations,
         # builtin return kinds, and let-binding flow). Consulted by
         # _is_encrypted_expr BEFORE the name heuristic, so a plainly-named
         # ciphertext (or an encrypted-sounding plaintext) is still classified
-        # correctly. Cleared per generated function alongside _declared_vars.
+        # correctly. Cleared per generated function alongside the scope stack.
         self._enc_vars: set[str] = set()
         self._plain_vars: set[str] = set()
         # Locals holding a loaded wire struct: name -> wire type name, so
@@ -872,7 +879,7 @@ endforeach()
                 continue
             self._current_fn = fn
             self._local_var_cpp_types.clear()
-            self._declared_vars.clear()
+            self._reset_scopes()
             self._enc_vars.clear()
             self._plain_vars.clear()
             self._wire_vars.clear()
@@ -1007,7 +1014,7 @@ endforeach()
         self._current_fn = stage.fn
         self._current_stage_hardware = bool(stage.hardware)
         self._local_var_cpp_types.clear()
-        self._declared_vars.clear()
+        self._reset_scopes()
         self._enc_vars.clear()
         self._plain_vars.clear()
         self._wire_vars.clear()
@@ -1090,7 +1097,7 @@ endforeach()
             for fn in twin_fns:
                 self._current_fn = fn
                 self._local_var_cpp_types.clear()
-                self._declared_vars.clear()
+                self._reset_scopes()
                 self._enc_vars.clear()
                 self._plain_vars.clear()
                 self._wire_vars.clear()
@@ -1102,7 +1109,7 @@ endforeach()
             self._current_fn = stage.fn
             self._current_stage_hardware = False
             self._local_var_cpp_types.clear()
-            self._declared_vars.clear()
+            self._reset_scopes()
             self._enc_vars.clear()
             self._plain_vars.clear()
             self._wire_vars.clear()
@@ -1862,9 +1869,26 @@ endforeach()
         self.wl("}")
         self.blank()
 
+    # ===== Lexical scopes (let-rebinding vs. fresh declaration) =====
+
+    def _reset_scopes(self):
+        self._scope_stack = [set()]
+
+    def _var_declared(self, name: str) -> bool:
+        return any(name in frame for frame in self._scope_stack)
+
+    def _declare_var(self, name: str):
+        self._scope_stack[-1].add(name)
+
     def _gen_block_contents(self, block: ast.Block):
-        for stmt in block.stmts:
-            self._gen_stmt(stmt)
+        # Every generated block is a C++ scope: names let-bound inside it
+        # are not visible after it closes.
+        self._scope_stack.append(set())
+        try:
+            for stmt in block.stmts:
+                self._gen_stmt(stmt)
+        finally:
+            self._scope_stack.pop()
 
     # ===== Statement generation =====
 
@@ -1936,7 +1960,11 @@ endforeach()
             if isinstance(stmt.value, ast.CallExpr) and isinstance(stmt.value.func, ast.Ident):
                 if stmt.value.func.name == "zero":
                     if cpp_type == "Ciphertext<DCRTPoly>":
-                        self.wl(f"{cpp_type} {stmt.name};  // initialized to null")
+                        if self._var_declared(stmt.name):
+                            self.wl(f"{stmt.name} = nullptr;  // re-zeroed")
+                        else:
+                            self._declare_var(stmt.name)
+                            self.wl(f"{cpp_type} {stmt.name};  // initialized to null")
                         return
             # Destructured binding: let (a, b) = expr → auto [a, b] = expr
             if stmt.tuple_names and len(stmt.tuple_names) > 1:
@@ -1947,11 +1975,13 @@ endforeach()
             inferred_type = self._infer_expr_cpp_type(stmt.value)
             if inferred_type:
                 self._local_var_cpp_types[stmt.name] = inferred_type
-            # Let-rebinding: if variable already declared in this scope, use assignment
-            if stmt.name in self._declared_vars:
+            # Let-rebinding: assignment only if the name is visible from an
+            # ACTIVE scope; a name from a closed sibling scope must be
+            # re-declared (its C++ declaration died with that block).
+            if self._var_declared(stmt.name):
                 self.wl(f"{stmt.name} = {val};")
             else:
-                self._declared_vars.add(stmt.name)
+                self._declare_var(stmt.name)
                 self.wl(f"{cpp_type} {stmt.name} = {val};")
         else:
             self.wl(f"{cpp_type} {stmt.name};")
@@ -2123,19 +2153,25 @@ endforeach()
             self.indent()
             if isinstance(arm.body, ast.Block):
                 # For multi-statement blocks, emit all but last stmt normally,
-                # then emit the last ExprStmt as a return
+                # then emit the last ExprStmt as a return. Each arm is its
+                # own C++ scope — push a frame so sibling arms may reuse
+                # let-names.
                 stmts = arm.body.stmts
                 if stmts:
-                    for s in stmts[:-1]:
-                        self._gen_stmt(s)
-                    last = stmts[-1]
-                    if isinstance(last, ast.ExprStmt):
-                        val = self._expr_to_cpp(last.expr)
-                        self.wl(f"return {val};")
-                    elif isinstance(last, ast.ReturnStmt):
-                        self._gen_stmt(last)
-                    else:
-                        self._gen_stmt(last)
+                    self._scope_stack.append(set())
+                    try:
+                        for s in stmts[:-1]:
+                            self._gen_stmt(s)
+                        last = stmts[-1]
+                        if isinstance(last, ast.ExprStmt):
+                            val = self._expr_to_cpp(last.expr)
+                            self.wl(f"return {val};")
+                        elif isinstance(last, ast.ReturnStmt):
+                            self._gen_stmt(last)
+                        else:
+                            self._gen_stmt(last)
+                    finally:
+                        self._scope_stack.pop()
             elif isinstance(arm.body, ast.ReturnStmt):
                 self._gen_stmt(arm.body)
             else:
@@ -2158,9 +2194,14 @@ endforeach()
 
     def _gen_for_expr_as_stmt(self, name: str, cpp_type: str, expr: ast.ForExpr):
         saved = self._push_loop_bindings(expr.pattern.names, expr.iterable)
+        # The comprehension body emits inside a C++ for-block: names
+        # let-bound there die with the block (its statements are generated
+        # directly, not via _gen_block_contents, so push a frame here).
+        self._scope_stack.append(set())
         try:
             self._gen_for_expr_as_stmt_impl(name, cpp_type, expr)
         finally:
+            self._scope_stack.pop()
             self._pop_loop_bindings(saved)
 
     def _gen_for_expr_as_stmt_impl(self, name: str, cpp_type: str, expr: ast.ForExpr):
@@ -2940,9 +2981,12 @@ endforeach()
 
     def _gen_for_expr_inline(self, expr: ast.ForExpr) -> str:
         saved = self._push_loop_bindings(expr.pattern.names, expr.iterable)
+        # IIFE body is its own C++ scope (see _gen_block_contents).
+        self._scope_stack.append(set())
         try:
             return self._gen_for_expr_inline_impl(expr)
         finally:
+            self._scope_stack.pop()
             self._pop_loop_bindings(saved)
 
     def _gen_for_expr_inline_impl(self, expr: ast.ForExpr) -> str:
@@ -3115,16 +3159,22 @@ endforeach()
             if isinstance(arm.body, ast.Block):
                 stmts = arm.body.stmts
                 if stmts:
-                    for s in stmts[:-1]:
-                        self._gen_stmt(s)
-                    last = stmts[-1]
-                    if isinstance(last, ast.ExprStmt):
-                        val = self._expr_to_cpp(last.expr)
-                        self.wl(f"return {val};")
-                    elif isinstance(last, ast.ReturnStmt):
-                        self._gen_stmt(last)
-                    else:
-                        self._gen_stmt(last)
+                    # Each arm is its own C++ scope (sibling arms may
+                    # reuse let-names).
+                    self._scope_stack.append(set())
+                    try:
+                        for s in stmts[:-1]:
+                            self._gen_stmt(s)
+                        last = stmts[-1]
+                        if isinstance(last, ast.ExprStmt):
+                            val = self._expr_to_cpp(last.expr)
+                            self.wl(f"return {val};")
+                        elif isinstance(last, ast.ReturnStmt):
+                            self._gen_stmt(last)
+                        else:
+                            self._gen_stmt(last)
+                    finally:
+                        self._scope_stack.pop()
             elif isinstance(arm.body, ast.Expr):
                 self.wl(f"return {self._expr_to_cpp(arm.body)};")
             self.wl("break; }")
