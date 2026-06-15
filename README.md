@@ -359,7 +359,6 @@ Apache 2.0 — see [LICENSE](LICENSE).
 
 We are actively working on a contribution policy and Contributor License
 Agreement (CLA). Until that process is in place we are not yet able to accept
-external pull requests. If you have a bug report, a feature idea, or a
-question, please open an issue — we read them and they will inform the
-roadmap. Watch this repository to be notified when the contribution policy
-launches.
+external contributions. If you have a bug report, a feature request, or a
+question, please [contact us](https://niobiummicrosystems.com/contact) directly.
+Watch this repository to be notified when the contribution policy launches.
