@@ -357,5 +357,9 @@ Apache 2.0 — see [LICENSE](LICENSE).
 
 ## Contributing
 
-Contributions are welcome. Please open an issue to discuss proposed changes
-before submitting a pull request.
+We are actively working on a contribution policy and Contributor License
+Agreement (CLA). Until that process is in place we are not yet able to accept
+external pull requests. If you have a bug report, a feature idea, or a
+question, please open an issue — we read them and they will inform the
+roadmap. Watch this repository to be notified when the contribution policy
+launches.
