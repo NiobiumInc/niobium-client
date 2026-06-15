@@ -405,6 +405,28 @@ not yet needed.
 **Fix**: The generated CMakeLists.txt lists external libraries twice on the link line,
 giving the linker a second pass to resolve cross-references.
 
+### 11. Wire Output Routed to the Wrong Transfer Directory
+
+**Problem**: `_find_output_dir()` routed *every* stage's serialized wire output to
+`ctxtdowndir(inst)` whenever that helper existed, ignoring data-flow direction. In a
+design with distinct upload/download dirs (`ctxtupdir` = `ct_in`, `ctxtdowndir` =
+`ct_out`), the `@client` encrypt stage's output — which is the *server's input* — was
+written to `ct_out`, while the `@server` stage read it (correctly, via an explicit
+`from: ctxtupdir(inst)`) from `ct_in`. The consuming stage therefore loaded an **empty**
+input wire and the first `x[i]` walked off the end of the vector, crashing with a
+segfault (`exit -11`) — and identically on the symmetric `decrypt` hand-off. It only
+escaped notice because the shipped examples use a single shared `encdir`. `writes()` has
+no `to:` clause, so the design could not override the destination; the fix had to be in
+codegen.
+
+**Fix**: `_find_output_dir()` is now data-flow aware: a `@client` stage's output routes
+to `ctxtupdir` (the upload the server consumes) when that helper exists; a `@server`
+stage's output routes to `ctxtdowndir` (the result the client consumes). Producer and
+consumer dirs now match on both hand-offs. Key/context wires are unaffected (canonical
+cc/pk/mk/rk layout), an explicit `to:` path still overrides, and single-dir (`encdir`)
+designs are unchanged since the `ctxtupdir` branch is gated on that helper existing.
+Pinned by `test_client_output_routes_to_upload_dir`.
+
 ## File Structure
 
 ```

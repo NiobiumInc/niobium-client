@@ -1558,9 +1558,30 @@ endforeach()
                 self.wl("}")
 
     def _find_output_dir(self, stage: StageInfo) -> str:
-        """Find the output directory for a stage from writes io specs or shared functions."""
-        # Check if ctxtdowndir or encdir functions exist
+        """Find the output directory for a stage's serialized wire output.
+
+        Data-flow aware. A @client stage's wire output is the *upload* the
+        server consumes, so it must land in the upload dir (`ctxtupdir`); a
+        @server stage's output is the *result* the client consumes, so it
+        lands in the download dir (`ctxtdowndir`). Routing every output to
+        `ctxtdowndir` (the previous behavior) silently breaks any design that
+        declares distinct upload/download dirs: the @client encrypt stage
+        wrote the server's input into the download dir while the @server
+        stage read it from the upload dir, producing an empty input wire and
+        an out-of-bounds crash in the consuming stage (observed as the
+        reference twin segfaulting with exit -11).
+
+        Key/context wires never reach here — they use the canonical
+        cc/pk/mk/rk layout via `_gen_serialize_crypto_params`. An explicit
+        `to:` path on the `writes()` clause also overrides this default
+        upstream (see `_gen_serialize_io`). Single-dir designs (only `encdir`)
+        are unaffected: the `ctxtupdir` branch is gated on that helper
+        existing.
+        """
         fn_names = {f.name for f in self.shared_fns}
+        # Client uploads flow "up" to the server; server results flow "down".
+        if stage.domain == Domain.CLIENT and "ctxtupdir" in fn_names:
+            return "ctxtupdir(inst)"
         if "ctxtdowndir" in fn_names:
             return "ctxtdowndir(inst)"
         if "encdir" in fn_names:
