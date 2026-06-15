@@ -73,6 +73,45 @@ def test_stage_generates_cpp():
     assert "auto size = static_cast" in cpp
 
 
+def test_client_output_routes_to_upload_dir():
+    """A @client stage's wire output is the server's input — it must serialize
+    to the upload dir (ctxtupdir), not the download dir.
+
+    Regression for the dir-routing bug where _find_output_dir routed every
+    stage output to ctxtdowndir whenever that helper existed. With distinct
+    upload/download dirs, the @client encrypt stage wrote the server's input
+    into the download dir while the @server stage read it from the upload
+    dir, producing an empty input wire and an out-of-bounds crash in the
+    consuming stage. The producer dir must match the consumer's read dir:
+    @client -> ctxtupdir, @server -> ctxtdowndir.
+    """
+    files = compile_str("""
+    wire Payload { items: vec<enc<f64>> }
+    struct Instance { ring_dim: u32 }
+    enum InstanceSize { Dev }
+    fn instance(size: InstanceSize) -> Instance { match size { Dev => Instance { ring_dim: 2048 } } }
+    fn iodir(inst: Instance) -> path { root() / "io" }
+    fn ctxtupdir(inst: Instance) -> path { iodir(inst) / "ct_in" }
+    fn ctxtdowndir(inst: Instance) -> path { iodir(inst) / "ct_out" }
+    @client @stage(name: "upload")
+    fn upload(inst: Instance) -> writes(Payload) {
+        return Payload { items: [zero()] }
+    }
+    @server @stage(name: "compute")
+    fn compute(inst: Instance) -> reads(Payload), writes(Payload) {
+        let p = load(Payload, from: ctxtupdir(inst))
+        return Payload { items: [zero()] }
+    }
+    """)
+    # @client upload writes where the @server reads its input from.
+    up = files["upload.cpp"]
+    assert "ctxtupdir(inst)" in up
+    assert "ctxtdowndir(inst)" not in up
+    # @server compute writes its result where the @client decrypt reads from.
+    comp = files["compute.cpp"]
+    assert "ctxtdowndir(inst)" in comp
+
+
 def test_stage_with_hardware():
     files = compile_str("""
     struct Instance { ring_dim: u32 }
