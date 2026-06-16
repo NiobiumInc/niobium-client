@@ -1,10 +1,10 @@
 [submodule "vendor/niobium-fhetch"]
 	path = vendor/niobium-fhetch
-	url = git@github.com:NiobiumInc/niobium-fhetch.git
+	url = https://github.com/NiobiumInc/niobium-fhetch.git
 [submodule "vendor/niobium-haze"]
 	path = vendor/niobium-haze
-	url = git@github.com:NiobiumInc/niobium-haze.git
+	url = https://github.com/NiobiumInc/niobium-haze.git
 [submodule ".claude/skills/fhe-application-design"]
 	path = .claude/skills/fhe-application-design
-	url = git@github.com:NiobiumInc/fhe-application-design.git
+	url = https://github.com/NiobiumInc/fhe-application-design.git
 	branch = main
