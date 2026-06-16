@@ -1,4 +1,4 @@
-// server.nb — Server-side encrypted fraud-flag evaluation
+// server.niob — Server-side encrypted fraud-flag evaluation
 //============================================================================
 // Runs on the SERVER machine. NO access to the secret key. The flagged-card
 // list is the server's PRIVATE data — loaded as a plaintext matrix here and

@@ -146,7 +146,7 @@ conversation. The following prompts were used:
    > if I ask you to write a new application, does it help you?
 
    Claude confirmed that understanding the DSL compiler internals (parser, codegen,
-   built-in functions, type system) enables writing correct `.nb` programs.
+   built-in functions, type system) enables writing correct `.niob` programs.
 
 2. **Application specification**:
    > let's write a new example called PasswordRetrieval that has a database of 5
@@ -161,7 +161,7 @@ conversation. The following prompts were used:
    > prepare the PR
 
 Claude explored the existing examples and language reference, designed the FHE
-approach, wrote the three `.nb` files, iterated through compile-test cycles to fix
+approach, wrote the three `.niob` files, iterated through compile-test cycles to fix
 issues, added Makefile targets, and created the PR — all from these four prompts.
 
 ### Issues Encountered During Development

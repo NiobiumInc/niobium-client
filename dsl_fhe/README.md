@@ -1,7 +1,7 @@
 # Niobium DSL for FHE
 
 A domain-specific language and cross-compiler for writing Fully Homomorphic Encryption
-applications. The DSL compiles `.nb` source files to C++ with openFHE, producing
+applications. The DSL compiles `.niob` source files to C++ with openFHE, producing
 self-contained binaries for a client-server FHE pipeline.
 
 ## Motivation
@@ -15,7 +15,7 @@ instrumentation — that obscures the actual computation. Analysis of the
 hardware-instrumentation blocks, 25+ manual serialization calls, and logic
 duplicated across multiple server variants.
 
-The DSL replaces all of that with ~590 lines of `.nb` source that compiles to equivalent
+The DSL replaces all of that with ~590 lines of `.niob` source that compiles to equivalent
 C++ (~1,650 generated lines) producing functionally identical results.
 
 ### Enabling Agentic AI for FHE Development
@@ -65,7 +65,7 @@ expert would enforce during code review.
 ## Architecture
 
 ```
-.nb source files
+.niob source files
        |
        v
   +----------+     +--------+     +----------+     +---------+
@@ -89,7 +89,7 @@ expert would enforce during code review.
 
 | Module | Lines | Purpose |
 |---|---|---|
-| `xcomp/lexer.py` | 470 | Tokenizer for `.nb` syntax |
+| `xcomp/lexer.py` | 470 | Tokenizer for `.niob` syntax |
 | `xcomp/parser.py` | 1,061 | Recursive-descent parser producing AST |
 | `xcomp/ast_nodes.py` | 462 | AST node definitions (dataclasses) |
 | `xcomp/nb_types.py` | 208 | Type system definitions |
@@ -135,42 +135,42 @@ dsl_fhe/
     tests/                             # Unit tests per module
   examples/
     fetch-by-similarity/               # Full pipeline: DB similarity search (compilable)
-      shared.nb                        # Types, constants, wire formats (129 lines)
-      client.nb                        # Client operations: keygen, encrypt, decrypt (177 lines)
-      server.nb                        # Server computation: mat-vec, threshold, extract (285 lines)
+      shared.niob                        # Types, constants, wire formats (129 lines)
+      client.niob                        # Client operations: keygen, encrypt, decrypt (177 lines)
+      server.niob                        # Server computation: mat-vec, threshold, extract (285 lines)
       harness/run.py                   # Pipeline orchestration script
       nb_out/                          # Generated output (+ manual build files)
     fhe-NetworkMonitor/                # KitNET anomaly detection (compilable, runnable)
-      shared.nb                        # Model structs, constants, wire types (131 lines)
-      client.nb                        # Keygen, feature-column encryption, decryption (89 lines)
-      server.nb                        # Autoencoder ensemble + anomaly detector (188 lines)
+      shared.niob                        # Model structs, constants, wire types (131 lines)
+      client.niob                        # Keygen, feature-column encryption, decryption (89 lines)
+      server.niob                        # Autoencoder ensemble + anomaly detector (188 lines)
       nb_out/                          # Generated C++ + build
     ml-inference-fhe/                  # MNIST MLP inference (compilable, runnable)
-      shared.nb                        # Layer dims, instance sizes, wire types (96 lines)
-      client.nb                        # Keygen, per-image encryption, decrypt+argmax (108 lines)
-      server.nb                        # MLP inference via extern_call (78 lines)
+      shared.niob                        # Layer dims, instance sizes, wire types (96 lines)
+      client.niob                        # Keygen, per-image encryption, decrypt+argmax (108 lines)
+      server.niob                        # MLP inference via extern_call (78 lines)
       HOWTO.md                         # Example-specific implementation guide
       nb_out/                          # Generated C++ + build
     password-retrieval/                # FHE password retrieval via security questions
-      shared.nb                        # Wire types, instance sizes (73 lines)
-      client.nb                        # Keygen, setup record, submit query, decrypt (131 lines)
-      server.nb                        # Per-question Chebyshev match + password gate (84 lines)
+      shared.niob                        # Wire types, instance sizes (73 lines)
+      client.niob                        # Keygen, setup record, submit query, decrypt (131 lines)
+      server.niob                        # Per-question Chebyshev match + password gate (84 lines)
       README.md                        # Design rationale and usage guide
       nb_out/                          # Generated C++ + build
     set-membership/                    # Private name matching (compilable, runnable)
-      shared.nb                        # Profiles (exact/soundex), wire types
-      client.nb                        # Keygen, per-position query encryption, decrypt+threshold
-      server.nb                        # Squared-distance + iterated-squaring indicator
+      shared.niob                        # Profiles (exact/soundex), wire types
+      client.niob                        # Keygen, per-position query encryption, decrypt+threshold
+      server.niob                        # Squared-distance + iterated-squaring indicator
       harness/encode_names.py          # Plaintext name encoding (exact + Soundex)
       nb_out/                          # Generated C++ + build
     fraud-flag/                        # Private card-number checking (skill-eval dogfood)
-      shared.nb, client.nb, server.nb  # 8-stage design walkthrough in README.md
+      shared.niob, client.niob, server.niob  # 8-stage design walkthrough in README.md
       harness/encode_cards.py          # Plaintext ground truth (5,000-card list)
       nb_out/                          # Generated C++ + build
     simple/                            # Basic cipher operations (compilable, runnable)
-      shared.nb                        # Operation enum (25 ops), instance sizes
-      client.nb                        # Encrypt two scalars, decrypt+verify
-      server.nb                        # Operation dispatch via match
+      shared.niob                        # Operation enum (25 ops), instance sizes
+      client.niob                        # Encrypt two scalars, decrypt+verify
+      server.niob                        # Operation dispatch via match
       nb_out/                          # Generated C++ + build
 ```
 
@@ -218,7 +218,7 @@ make test-examples          # Run all end-to-end tests
 ```
 
 Each example runs three phases:
-1. **DSL compilation** (`nbc.py compile`): Parses `.nb` files and generates C++ in `nb_out/`.
+1. **DSL compilation** (`nbc.py compile`): Parses `.niob` files and generates C++ in `nb_out/`.
 2. **C++ compilation** (CMake + make): Builds binaries in `nb_out/build/`.
 3. **End-to-end testing**: Runs the binaries to verify correctness.
 
@@ -266,7 +266,7 @@ make clean    # Removes generated C++ and build artifacts, keeps CMakeLists.txt 
 
 ## Example: DSL vs Generated C++
 
-### DSL (server.nb)
+### DSL (server.niob)
 
 ```
 @server @stage("encrypted_compute")
@@ -418,7 +418,7 @@ mixed combinations, loops (LARGE_ADD_MUL), and low-level (MUL_MONOMIAL).
 The server dispatches via a `match` expression on the `Operation` enum — replacing the
 ~350-line if-else chain and ~25 separate C++ functions in the original.
 
-**DSL (server.nb excerpt):**
+**DSL (server.niob excerpt):**
 ```
 fn dispatch(op: Operation, ct1: enc<f64>, ct2: enc<f64>, imm: f64) -> enc<f64> {
     match op {

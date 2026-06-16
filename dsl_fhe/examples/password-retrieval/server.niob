@@ -1,4 +1,4 @@
-// server.nb — Server-side encrypted password verification
+// server.niob — Server-side encrypted password verification
 //============================================================================
 // Runs on the SERVER machine. NO access to secret key.
 // Compiles to:

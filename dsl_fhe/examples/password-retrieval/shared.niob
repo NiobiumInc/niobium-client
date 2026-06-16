@@ -1,4 +1,4 @@
-// shared.nb — Types and constants for password retrieval
+// shared.niob — Types and constants for password retrieval
 //============================================================================
 // FHE-based password retrieval using security questions.
 //

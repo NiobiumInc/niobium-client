@@ -1,4 +1,4 @@
-// shared.nb — Types and constants for ml-inference-fhe (MNIST digit classification)
+// shared.niob — Types and constants for ml-inference-fhe (MNIST digit classification)
 //============================================================================
 // Encrypted MLP inference on MNIST digits using CKKS.
 // 2-layer feedforward network: 784 -> 512 -> 10 (HEIR v2 model)
@@ -81,4 +81,4 @@ wire EncryptedResult {
 }
 
 // Model weights are loaded at runtime from submission/data/*.bin files
-// by the mlp_bridge.cpp wrapper (see server.nb extern_call("mlp", ...)).
+// by the mlp_bridge.cpp wrapper (see server.niob extern_call("mlp", ...)).

@@ -81,7 +81,7 @@ The combination is designed so an AI coding agent can take an application from
   selection, circuit design, parameter selection, implementation, protocol
   spec — and its Stage 7 "Track A" targets the DSL below.
 
-- **The nb DSL** ([`dsl_fhe/`](dsl_fhe/README.md)) compiles `.nb` source to
+- **The nb DSL** ([`dsl_fhe/`](dsl_fhe/README.md)) compiles `.niob` source to
   OpenFHE C++ that links this client. Trust boundaries (`@client`/`@server`,
   `@encryptors(independent)`) are compiler-enforced; serialization, key
   generation, and record/replay instrumentation are generated; encrypted-ness

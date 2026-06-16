@@ -1,4 +1,4 @@
-// shared.nb — Types and constants for simple cipher operations
+// shared.niob — Types and constants for simple cipher operations
 //============================================================================
 // A minimal FHE test harness demonstrating basic CKKS arithmetic.
 // Encrypts two scalar values and applies one of ~25 operations (add, mul,

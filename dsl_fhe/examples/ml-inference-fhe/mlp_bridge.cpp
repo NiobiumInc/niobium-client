@@ -1,4 +1,4 @@
-// DSL bridge: provides mlp(cc, ct) for extern_call("mlp", ...) in server.nb.
+// DSL bridge: provides mlp(cc, ct) for extern_call("mlp", ...) in server.niob.
 // Loads HEIR v2 weights at first call and delegates to mnist() from mlp_openfhe.cpp.
 // Requires ML_WEIGHT_DIR env var pointing to submission/data/.
 #include "mlp_openfhe.h"

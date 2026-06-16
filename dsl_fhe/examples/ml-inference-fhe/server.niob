@@ -1,4 +1,4 @@
-// server.nb — Server-side encrypted MLP inference
+// server.niob — Server-side encrypted MLP inference
 //============================================================================
 // Runs on the SERVER machine. NO access to secret key.
 // Compiles to:

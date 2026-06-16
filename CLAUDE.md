@@ -65,7 +65,7 @@ Build options (CMake): `NIOBIUM_CLIENT_WITH_AUTO_FACADE` (default ON),
 ## DSL for FHE (`dsl_fhe/`)
 
 `dsl_fhe/` is an optional domain-specific language and cross-compiler (`nbc`):
-`.nb` files compile to OpenFHE C++ that links this client, with trust
+`.niob` files compile to OpenFHE C++ that links this client, with trust
 boundaries (`@client`/`@server`), serialization, and Niobium record/replay
 instrumentation generated automatically. It targets the open-source client
 (`libnbfhetch`) via cooperative auto-tagging — no proprietary-compiler

@@ -1,4 +1,4 @@
-// shared.nb — Types and constants for private fraud-flag checking
+// shared.niob — Types and constants for private fraud-flag checking
 //============================================================================
 // A client holds a private 16-digit card number; a server holds a private
 // list of ~5,000 flagged card numbers. The client learns whether their card

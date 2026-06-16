@@ -1,4 +1,4 @@
-// shared.nb — Types and constants for private set-membership (name matching)
+// shared.niob — Types and constants for private set-membership (name matching)
 //============================================================================
 // Privacy-preserving name matching: given a client's private name and a
 // server's private dataset of names, determine whether the name appears in

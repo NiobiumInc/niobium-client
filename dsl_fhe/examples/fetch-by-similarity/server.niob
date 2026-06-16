@@ -1,4 +1,4 @@
-// server.nb — Server-side encrypted computation for fetch-by-similarity
+// server.niob — Server-side encrypted computation for fetch-by-similarity
 //============================================================================
 // Runs on the SERVER machine. NO access to secret key.
 // Compiles to:
