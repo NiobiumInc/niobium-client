@@ -19,6 +19,24 @@ on:
         description: 'Branch to track in the submodule repo (e.g. main)'
         required: true
         type: string
+  workflow_dispatch:
+    inputs:
+      submodule-path:
+        description: 'Path to the submodule (e.g. vendor/niobium-fhetch)'
+        required: true
+        type: string
+      submodule-name:
+        description: 'Short name of the submodule (e.g. niobium-fhetch, niobium-haze)'
+        required: true
+        type: string
+      submodule-org-repo:
+        description: 'GitHub org/repo slug (e.g. NiobiumInc/niobium-fhetch)'
+        required: true
+        type: string
+      target-branch:
+        description: 'Branch to track in the submodule repo (e.g. main)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -29,27 +47,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Generate token
-        id: app-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ steps.app-token.outputs.token }}
+          token: ${{ github.token }}
           ref: main
           persist-credentials: false
 
       - name: Configure git for HTTPS
         run: |
-          git remote set-url origin "https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/${{ github.repository }}.git"
-          git config --global url."https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/".insteadOf "git@github.com:"
-          git config --global --add url."https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/".insteadOf "ssh://git@github.com/"
-          git config --global --add url."https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/".insteadOf "https://github.com/"
+          git remote set-url origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "git@github.com:"
+          git config --global --add url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "ssh://git@github.com/"
+          git config --global --add url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "https://github.com/"
 
       - name: Sync submodule
         run: git submodule update --init ${{ inputs.submodule-path }}
@@ -64,7 +74,7 @@ jobs:
         run: |
           cd ${{ inputs.submodule-path }}
 
-          git remote set-url origin "https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/${{ inputs.submodule-org-repo }}.git"
+          git remote set-url origin "https://x-access-token:${{ github.token }}@github.com/${{ inputs.submodule-org-repo }}.git"
           git fetch origin ${{ inputs.target-branch }}
 
           CURRENT_COMMIT=$(git rev-parse HEAD)
@@ -100,7 +110,7 @@ jobs:
         id: create-pr
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ steps.app-token.outputs.token }}
+          token: ${{ github.token }}
           author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
           labels: |
             dependencies

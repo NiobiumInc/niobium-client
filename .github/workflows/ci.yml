@@ -33,18 +33,9 @@ jobs:
       # Checkout — niobium-fhetch is a submodule, and OpenFHE lives one
       # level deeper as a nested submodule. --recursive pulls both.
       # ------------------------------------------------------------
-      - name: Generate token
-        id: app-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ steps.app-token.outputs.token }}
           submodules: recursive
           fetch-depth: 1
 
@@ -232,8 +223,8 @@ jobs:
           retention-days: 7
 
   fhetch-test:
-    name: fhetch tests (self-hosted, Release)
-    runs-on: self-hosted
+    name: fhetch tests (ubuntu-latest, Release)
+    runs-on: ubuntu-latest
 
     env:
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
@@ -242,18 +233,9 @@ jobs:
       OPENFHE_ROOT: ${{ github.workspace }}/vendor/lib/openfhe
 
     steps:
-      - name: Generate token
-        id: app-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          token: ${{ steps.app-token.outputs.token }}
           submodules: recursive
           fetch-depth: 1
 
@@ -261,9 +243,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: self-hosted-ccache-release-${{ hashFiles('**/CMakeLists.txt', '**/*.cpp', '**/*.h', 'Makefile', 'vendor/niobium-fhetch/Makefile') }}
+          key: ubuntu-latest-ccache-release-${{ hashFiles('**/CMakeLists.txt', '**/*.cpp', '**/*.h', 'Makefile', 'vendor/niobium-fhetch/Makefile') }}
           restore-keys: |
-            self-hosted-ccache-release-
+            ubuntu-latest-ccache-release-
 
       - name: Prime ccache
         run: |
@@ -285,9 +267,9 @@ jobs:
           path: |
             vendor/lib/openfhe
             vendor/niobium-fhetch/vendor/openfhe/build
-          key: self-hosted-openfhe-release-${{ steps.openfhe_rev.outputs.rev }}
+          key: ubuntu-latest-openfhe-release-${{ steps.openfhe_rev.outputs.rev }}
           restore-keys: |
-            self-hosted-openfhe-release-
+            ubuntu-latest-openfhe-release-
 
       - name: Build OpenFHE
         run: |

@@ -25,24 +25,16 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
 
       - name: SCANOSS Delta Scan
         uses: scanoss/gha-code-scan@v1
         with:
           api.key: ${{ secrets.SCANOSS_API_KEY }}
-          github.token: ${{ steps.app-token.outputs.token }}
+          github.token: ${{ github.token }}
           policies: copyleft
           policies.halt_on_failure: false
           scanMode: delta
@@ -54,18 +46,10 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
 
       - name: Remove non-source files that crash SCANOSS
         run: |
@@ -90,43 +74,9 @@ jobs:
         uses: scanoss/gha-code-scan@v1
         with:
           api.key: ${{ secrets.SCANOSS_API_KEY }}
-          github.token: ${{ steps.app-token.outputs.token }}
+          github.token: ${{ github.token }}
           policies: copyleft
           policies.halt_on_failure: false
           scanMode: full
           dependencies.enabled: false
           output.filepath: scanoss-results.json
-
-  trigger-ort:
-    name: Trigger ORT Scan
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: self-hosted
-    steps:
-      - name: Check if ORT scan needed
-        id: check
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 2
-
-      - name: Skip if only NOTICE changed
-        id: filter
-        run: |
-          CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "FORCE_SCAN")
-          if [ "$(echo "$CHANGED" | grep -v '^NOTICE$' | grep -v '^$')" = "" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Trigger ORT scan via webhook
-        if: steps.filter.outputs.skip != 'true'
-        run: |
-          REPO_NAME="${GITHUB_REPOSITORY#*/}"
-          HTTP_CODE=$(curl -s -o /tmp/ort-response.json -w "%{http_code}" -X POST "${{ vars.ORT_WEBHOOK_URL }}/scan" -H "Authorization: Bearer ${{ secrets.ORT_WEBHOOK_TOKEN }}" -H "Content-Type: application/json" -d "{\"repo\": \"${REPO_NAME}\"}")
-          echo "HTTP $HTTP_CODE"
-          cat /tmp/ort-response.json
-          if [ "$HTTP_CODE" = "202" ]; then
-            echo "::notice::ORT scan triggered for $REPO_NAME"
-          else
-            echo "::warning::ORT webhook returned $HTTP_CODE — scan may not have started"
-          fi
