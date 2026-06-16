@@ -31,7 +31,7 @@ import struct
 import sys
 from pathlib import Path
 
-# profile -> (n_features, n_slots). Mirrors instance() in shared.nb.
+# profile -> (n_features, n_slots). Mirrors instance() in shared.niob.
 PROFILES = {
     "TOY":  (2, 1024),
     "MINI": (5, 32768),

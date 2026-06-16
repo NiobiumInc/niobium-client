@@ -1,4 +1,4 @@
-// server.nb — Server-side cipher operations
+// server.niob — Server-side cipher operations
 //============================================================================
 // Runs on the SERVER machine. NO access to secret key.
 // Compiles to:

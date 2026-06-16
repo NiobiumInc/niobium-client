@@ -1,4 +1,4 @@
-// client.nb — Client-side operations for simple cipher ops
+// client.niob — Client-side operations for simple cipher ops
 //============================================================================
 // Runs on the CLIENT machine. Has access to the secret key.
 // Compiles to separate binaries:

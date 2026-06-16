@@ -1,4 +1,4 @@
-// client.nb — Client-side operations for fhe-NetworkMonitor
+// client.niob — Client-side operations for fhe-NetworkMonitor
 //============================================================================
 // Runs on the CLIENT machine. Has access to the secret key.
 // Compiles to separate binaries:

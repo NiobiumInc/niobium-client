@@ -1,4 +1,4 @@
-// server.nb — Server-side encrypted set-membership evaluation
+// server.niob — Server-side encrypted set-membership evaluation
 //============================================================================
 // Runs on the SERVER machine. NO access to secret key. The dataset is the
 // server's PRIVATE data — loaded as a plaintext matrix here and folded into

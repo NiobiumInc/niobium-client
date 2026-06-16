@@ -1,4 +1,4 @@
-# Niobium `.nb` Language Reference
+# Niobium `.niob` Language Reference
 
 A practical guide to writing FHE applications in the Niobium DSL.
 For the formal grammar, see [GRAMMAR.md](GRAMMAR.md).
@@ -7,13 +7,13 @@ For the formal grammar, see [GRAMMAR.md](GRAMMAR.md).
 
 ## Program Structure
 
-An `.nb` program is split across three files by convention:
+An `.niob` program is split across three files by convention:
 
 | File | Contains | Domain |
 |---|---|---|
-| `shared.nb` | Constants, enums, structs, wire types, helper functions | Both |
-| `client.nb` | Key generation, encryption, decryption stages | Client |
-| `server.nb` | Encrypted computation stages | Server |
+| `shared.niob` | Constants, enums, structs, wire types, helper functions | Both |
+| `client.niob` | Key generation, encryption, decryption stages | Client |
+| `server.niob` | Encrypted computation stages | Server |
 
 Files reference each other with `use shared::*` at the top.
 
@@ -104,7 +104,7 @@ Wire types with a single `enc<T>` field get optimized serialization.
 
 ### Scheme Configuration
 
-Declares the FHE scheme parameters. Placed in `client.nb`:
+Declares the FHE scheme parameters. Placed in `client.niob`:
 
 ```nb
 scheme CKKS {
@@ -189,7 +189,7 @@ fn helper(x: f64, y: f64) -> f64 {
 }
 ```
 
-Functions in `shared.nb` (no domain annotation) are available to both client and server.
+Functions in `shared.niob` (no domain annotation) are available to both client and server.
 
 ### Default Parameters
 
@@ -205,7 +205,7 @@ Functions that operate on encrypted data need `CryptoContext`. The compiler auto
 functions with `enc<T>` parameters or return type and injects `cc` as the first parameter:
 
 ```nb
-// In .nb:
+// In .niob:
 fn dispatch(op: Operation, ct1: enc<f64>, ct2: enc<f64>, imm: f64) -> enc<f64> { ... }
 
 // Generated C++:
@@ -621,7 +621,7 @@ A `@stage("name")` function generates a `.cpp` file with:
 ### Encrypt two values and compute
 
 ```nb
-// client.nb
+// client.niob
 @client @stage("encrypt")
 fn encrypt_inputs(inst: Instance, a: f64 = 3.0, b: f64 = 5.0)
     -> reads(CryptoParams), writes(EncryptedInput)
@@ -633,7 +633,7 @@ fn encrypt_inputs(inst: Instance, a: f64 = 3.0, b: f64 = 5.0)
     save(EncryptedInput { ciphertext: ct_b }, to: iodir(inst) / "b.bin")
 }
 
-// server.nb
+// server.niob
 @server @stage("compute")
 @hardware(cache_key: ["workload_size"])
 fn compute(inst: Instance)
@@ -733,10 +733,10 @@ Use `extern_call` to invoke machine-generated or hand-written C++ functions.
 The crypto context `cc` is automatically prepended as the first argument.
 
 ```nb
-// In shared.nb: declare the external module
+// In shared.niob: declare the external module
 extern weights from "vector_constants"
 
-// In server.nb: wrapper function that delegates to external C++
+// In server.niob: wrapper function that delegates to external C++
 fn mlp(ct: enc<vec<f64>>) -> enc<vec<f64>> {
     extern_call("mlp", ct)
 }

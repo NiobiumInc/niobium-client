@@ -76,7 +76,7 @@ approximation degrees — without touching security.
 
 ## Stage 7 — Implementation (Track A)
 
-Three `.nb` files (`shared.nb`, `client.nb`, `server.nb`) plus the harness.
+Three `.niob` files (`shared.niob`, `client.niob`, `server.niob`) plus the harness.
 The compiler generates the four-program pipeline, all serialization, matched
 keygen, the Niobium record/replay instrumentation, and **cleartext reference
 twins** (`*_ref` binaries) of every stage.
@@ -109,7 +109,7 @@ cd dsl_fhe && make test-fraud
 
 | File | Role |
 |---|---|
-| `shared.nb` | Instance profiles, directory layout, wire types |
-| `client.nb` | scheme + keygen, per-digit encryption, decrypt + verify |
-| `server.nb` | `@hardware` squared-distance + iterated-squaring circuit |
+| `shared.niob` | Instance profiles, directory layout, wire types |
+| `client.niob` | scheme + keygen, per-digit encryption, decrypt + verify |
+| `server.niob` | `@hardware` squared-distance + iterated-squaring circuit |
 | `harness/encode_cards.py` | Plaintext ground truth: list generation, encoding, expected count |

@@ -1,18 +1,18 @@
 # HOWTO: Add a New Example to the Niobium DSL
 
-Step-by-step guide for porting an existing FHE C++ application to the `.nb` DSL.
+Step-by-step guide for porting an existing FHE C++ application to the `.niob` DSL.
 
 ---
 
 ## Overview
 
-The Niobium DSL compiles `.nb` source files into standalone C++ binaries using openFHE.
+The Niobium DSL compiles `.niob` source files into standalone C++ binaries using openFHE.
 Each example follows a client-server architecture:
 
 ```
-shared.nb   →  types, constants, wire types (both domains)
-client.nb   →  keygen, encrypt, decrypt stages
-server.nb   →  encrypted computation stages
+shared.niob   →  types, constants, wire types (both domains)
+client.niob   →  keygen, encrypt, decrypt stages
+server.niob   →  encrypted computation stages
 ```
 
 The compiler generates: `nb_shared.h`, `nb_shared.cpp`, one `.cpp` per stage, and
@@ -125,14 +125,14 @@ database computes the dot product contribution for every record simultaneously.
 
 Most real applications **combine** strategies: column-based for the database with
 replication for the query, or full SIMD with sparse padding for alignment. Document
-your packing choice in a comment at the top of `shared.nb` — future readers will
+your packing choice in a comment at the top of `shared.niob` — future readers will
 thank you.
 
 ---
 
 ## Step 1: Study the Reference C++ Implementation
 
-Before writing any `.nb` code, read the reference C++ to identify:
+Before writing any `.niob` code, read the reference C++ to identify:
 
 1. **Pipeline stages**: What binaries exist? What does each one do?
 2. **Scheme parameters**: Ring dimension, multiplicative depth, scaling mod size, security level
@@ -155,7 +155,7 @@ Before writing any `.nb` code, read the reference C++ to identify:
 
 ---
 
-## Step 2: Write `shared.nb`
+## Step 2: Write `shared.niob`
 
 This file contains everything shared between client and server.
 
@@ -240,7 +240,7 @@ and point `-DLOCAL_SRC_DIR=...` at it so the example stays self-contained.
 
 ---
 
-## Step 3: Write `client.nb`
+## Step 3: Write `client.niob`
 
 ### Scheme Configuration
 
@@ -339,7 +339,7 @@ fn decrypt_decode(inst: Instance)
 
 ---
 
-## Step 4: Write `server.nb`
+## Step 4: Write `server.niob`
 
 ### Computation Stage
 
@@ -391,9 +391,9 @@ my-example:
 	@echo "=== Compiling my-example (DSL → C++) ==="
 	@mkdir -p $(MY_NB_OUT)
 	@cd $(XCOMP) && python3 nbc.py compile \
-		../$(EXAMPLES)/my-example/shared.nb \
-		../$(EXAMPLES)/my-example/client.nb \
-		../$(EXAMPLES)/my-example/server.nb \
+		../$(EXAMPLES)/my-example/shared.niob \
+		../$(EXAMPLES)/my-example/client.niob \
+		../$(EXAMPLES)/my-example/server.niob \
 		--outdir ../$(MY_NB_OUT)
 	@echo ""
 	@echo "=== Building my-example (C++ → binaries) ==="

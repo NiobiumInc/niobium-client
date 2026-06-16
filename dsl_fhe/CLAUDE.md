@@ -74,7 +74,7 @@ spends ~80% of its code on plumbing:
 ## Compilation Pipeline
 
 ```
-.nb files  ->  Lexer  ->  Parser  ->  Semantic  ->  Codegen  ->  C++ files
+.niob files  ->  Lexer  ->  Parser  ->  Semantic  ->  Codegen  ->  C++ files
                                                                       |
                                                                CMake + make
                                                                       |
@@ -273,7 +273,7 @@ Each `@stage("name")` function generates a `.cpp` with:
 For every stage whose body avoids non-twinnable constructs (`extern_call`,
 `slot_replicator`/`replicate`, `running_sums`, `load_model`, `mul_monomial`,
 `load_all`, `keygen`), the codegen ALSO emits `<stage>_ref.cpp` — the same
-`.nb` code compiled with **plaintext semantics**:
+`.niob` code compiled with **plaintext semantics**:
 
 - `enc<T>` → `std::vector<double>` slot vectors;
 - FHE ops → `nb_plain::` elementwise helpers (add/sub/mul/rotate/slot_sum,
@@ -445,25 +445,25 @@ dsl_fhe/
     tests/                           # Unit tests (76 tests)
   examples/
     fetch-by-similarity/             # Full pipeline: DB search (compilable, runnable)
-      shared.nb, client.nb, server.nb
+      shared.niob, client.niob, server.niob
       nb_out/                        # Generated C++ + build
     simple/                          # Basic cipher operations (compilable, runnable)
-      shared.nb, client.nb, server.nb
+      shared.niob, client.niob, server.niob
       nb_out/                        # Generated C++ + build
     fhe-NetworkMonitor/              # KitNET anomaly detection (compilable, runnable)
-      shared.nb, client.nb, server.nb
+      shared.niob, client.niob, server.niob
       nb_out/                        # Generated C++ + build
     ml-inference-fhe/                # MNIST MLP inference (compilable, runnable)
-      shared.nb, client.nb, server.nb
+      shared.niob, client.niob, server.niob
       nb_out/                        # Generated C++ + build
       HOWTO.md                       # Example-specific implementation guide
     password-retrieval/              # FHE password retrieval via security questions
-      shared.nb, client.nb, server.nb
+      shared.niob, client.niob, server.niob
       nb_out/                        # Generated C++ + build
       README.md                      # Design rationale and usage guide
     fraud-flag/                      # Private card-number checking (skill dogfood; README = 8-stage walkthrough)
     set-membership/                  # Private name matching (exact + Soundex fuzzy)
-      shared.nb, client.nb, server.nb
+      shared.niob, client.niob, server.niob
       harness/encode_names.py        # Plaintext name encoding -> dataset.bin/query.bin
       nb_out/                        # Generated C++ + build
 ```
@@ -473,7 +473,7 @@ dsl_fhe/
 See [HOWTO.md](HOWTO.md) for a comprehensive step-by-step guide.
 
 Quick summary:
-1. Create `examples/<name>/shared.nb`, `client.nb`, `server.nb`
+1. Create `examples/<name>/shared.niob`, `client.niob`, `server.niob`
 2. Add Makefile targets (build + test)
 3. Run `make <name>` to compile DSL -> C++ -> binaries
 4. If the server uses external C++ code, use `extern ... from` and `extern_call()`

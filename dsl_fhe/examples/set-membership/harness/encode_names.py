@@ -43,7 +43,7 @@ import struct
 import sys
 from pathlib import Path
 
-# (profile_name, n_slots, name_len) per profile — must mirror shared.nb
+# (profile_name, n_slots, name_len) per profile — must mirror shared.niob
 PROFILES = {
     0: ("exact", 1024, 20),
     1: ("soundex", 1024, 4),

@@ -2,10 +2,10 @@
 """nbc — the nb FHE language cross-compiler.
 
 Usage:
-    nbc compile file1.nb [file2.nb ...] [--outdir DIR]
-    nbc check   file1.nb [file2.nb ...]
-    nbc lex     file1.nb
-    nbc parse   file1.nb
+    nbc compile file1.niob [file2.niob ...] [--outdir DIR]
+    nbc check   file1.niob [file2.niob ...]
+    nbc lex     file1.niob
+    nbc parse   file1.niob
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ def cmd_check(args):
 
 
 def cmd_compile(args):
-    """Compile .nb files to OpenFHE C++."""
+    """Compile .niob files to OpenFHE C++."""
     combined_source, tokens = _lex_all(args.files)
     if tokens is None:
         return 1
@@ -200,19 +200,19 @@ def main():
 
     # lex
     p_lex = subparsers.add_parser("lex", help="Tokenize and print tokens")
-    p_lex.add_argument("files", nargs="+", help="Input .nb files")
+    p_lex.add_argument("files", nargs="+", help="Input .niob files")
 
     # parse
     p_parse = subparsers.add_parser("parse", help="Parse and print AST")
-    p_parse.add_argument("files", nargs="+", help="Input .nb files")
+    p_parse.add_argument("files", nargs="+", help="Input .niob files")
 
     # check
     p_check = subparsers.add_parser("check", help="Semantic analysis only")
-    p_check.add_argument("files", nargs="+", help="Input .nb files")
+    p_check.add_argument("files", nargs="+", help="Input .niob files")
 
     # compile
     p_compile = subparsers.add_parser("compile", help="Compile to OpenFHE C++")
-    p_compile.add_argument("files", nargs="+", help="Input .nb files")
+    p_compile.add_argument("files", nargs="+", help="Input .niob files")
     p_compile.add_argument("--outdir", default="nb_out", help="Output directory")
 
     args = parser.parse_args()

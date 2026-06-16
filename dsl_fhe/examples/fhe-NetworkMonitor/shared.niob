@@ -1,4 +1,4 @@
-// shared.nb — Types and constants for fhe-NetworkMonitor (KitNET anomaly detection)
+// shared.niob — Types and constants for fhe-NetworkMonitor (KitNET anomaly detection)
 //============================================================================
 // Encrypted network intrusion detection using KitNET autoencoders.
 // Processes 32K network packets through an ensemble of autoencoders

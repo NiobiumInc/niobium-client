@@ -35,7 +35,7 @@ See `data/README.md`. The rest of this guide describes the real submission.
 
 ## DSL Files
 
-### shared.nb
+### shared.niob
 - **Constants**: INPUT_DIM=784, NORMALIZED_DIM=1024, NUM_CLASSES=10, RING_DIM=2048, N_SLOTS=1024
 - **Layer dims**: LAYER1_IN=784, LAYER1_OUT=512, LAYER2_IN=512, LAYER2_OUT=10
 - **Instance enum**: Single(1), Small(100), Medium(1000), Large(10000) batches
@@ -43,14 +43,14 @@ See `data/README.md`. The rest of this guide describes the real submission.
 - **Wire types**: CryptoParams, EncryptedInput (enc<vec<f64>>), EncryptedResult (enc<vec<f64>>)
 - **Model weights**: loaded at runtime from `submission/data/*.bin` via `mlp_bridge.cpp`
 
-### client.nb
+### client.niob
 - **Scheme**: CKKS, security=not_set, ring_dim=2048, depth=8
 - **Requires**: add, mul, rotate (indices 1..1023)
 - Stage 1: `generate_keys(inst)` -> keygen + save to pubkeydir/seckeydir
 - Stage 2: `encrypt_input(inst)` -> load_matrix, tile, encrypt, save per-batch
 - Stage 3: `decrypt_decode(inst)` -> decrypt, argmax, write predictions file
 
-### server.nb
+### server.niob
 - Stage: `encrypted_compute(inst, batch_id)` -> load params + input, call `mlp()`, save result
 - Hardware annotation: `@hardware(cache_key: ["workload_size", "batch_id"])`
 - `mlp()` uses `extern_call("mlp", ct)` — routed to `mlp_bridge.cpp` at link time

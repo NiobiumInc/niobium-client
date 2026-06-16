@@ -1,4 +1,4 @@
-// server.nb — Server-side encrypted KitNET inference
+// server.niob — Server-side encrypted KitNET inference
 //============================================================================
 // Runs on the SERVER machine. NO access to secret key.
 // Compiles to:

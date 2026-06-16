@@ -40,64 +40,64 @@ test-compiler:
 	@python3 $(XCOMP)/tests/test_codegen.py
 	@echo ""
 	@echo "=== End-to-end: parse examples ==="
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fetch-by-similarity/shared.nb  > /dev/null
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fetch-by-similarity/client.nb  > /dev/null
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fetch-by-similarity/server.nb  > /dev/null
-	@echo "  PASS  parse fetch-by-similarity/*.nb"
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/simple/shared.nb  > /dev/null
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/simple/server.nb  > /dev/null
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/simple/client.nb  > /dev/null
-	@echo "  PASS  parse simple/*.nb"
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fhe-NetworkMonitor/shared.nb  > /dev/null
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fhe-NetworkMonitor/client.nb  > /dev/null
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fhe-NetworkMonitor/server.nb  > /dev/null
-	@echo "  PASS  parse fhe-NetworkMonitor/*.nb"
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/ml-inference-fhe/shared.nb  > /dev/null
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/ml-inference-fhe/client.nb  > /dev/null
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/ml-inference-fhe/server.nb  > /dev/null
-	@echo "  PASS  parse ml-inference-fhe/*.nb"
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/password-retrieval/shared.nb  > /dev/null
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/password-retrieval/client.nb  > /dev/null
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/password-retrieval/server.nb  > /dev/null
-	@echo "  PASS  parse password-retrieval/*.nb"
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/set-membership/shared.nb  > /dev/null
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/set-membership/client.nb  > /dev/null
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/set-membership/server.nb  > /dev/null
-	@echo "  PASS  parse set-membership/*.nb"
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fraud-flag/shared.nb  > /dev/null
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fraud-flag/client.nb  > /dev/null
-	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fraud-flag/server.nb  > /dev/null
-	@echo "  PASS  parse fraud-flag/*.nb"
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fetch-by-similarity/shared.niob  > /dev/null
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fetch-by-similarity/client.niob  > /dev/null
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fetch-by-similarity/server.niob  > /dev/null
+	@echo "  PASS  parse fetch-by-similarity/*.niob"
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/simple/shared.niob  > /dev/null
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/simple/server.niob  > /dev/null
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/simple/client.niob  > /dev/null
+	@echo "  PASS  parse simple/*.niob"
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fhe-NetworkMonitor/shared.niob  > /dev/null
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fhe-NetworkMonitor/client.niob  > /dev/null
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fhe-NetworkMonitor/server.niob  > /dev/null
+	@echo "  PASS  parse fhe-NetworkMonitor/*.niob"
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/ml-inference-fhe/shared.niob  > /dev/null
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/ml-inference-fhe/client.niob  > /dev/null
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/ml-inference-fhe/server.niob  > /dev/null
+	@echo "  PASS  parse ml-inference-fhe/*.niob"
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/password-retrieval/shared.niob  > /dev/null
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/password-retrieval/client.niob  > /dev/null
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/password-retrieval/server.niob  > /dev/null
+	@echo "  PASS  parse password-retrieval/*.niob"
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/set-membership/shared.niob  > /dev/null
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/set-membership/client.niob  > /dev/null
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/set-membership/server.niob  > /dev/null
+	@echo "  PASS  parse set-membership/*.niob"
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fraud-flag/shared.niob  > /dev/null
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fraud-flag/client.niob  > /dev/null
+	@cd $(XCOMP) && python3 nbc.py parse ../$(EXAMPLES)/fraud-flag/server.niob  > /dev/null
+	@echo "  PASS  parse fraud-flag/*.niob"
 	@echo ""
 	@echo "=== End-to-end: semantic check ==="
 	@cd $(XCOMP) && python3 nbc.py check \
-		../$(EXAMPLES)/fetch-by-similarity/shared.nb \
-		../$(EXAMPLES)/fetch-by-similarity/client.nb \
-		../$(EXAMPLES)/fetch-by-similarity/server.nb
+		../$(EXAMPLES)/fetch-by-similarity/shared.niob \
+		../$(EXAMPLES)/fetch-by-similarity/client.niob \
+		../$(EXAMPLES)/fetch-by-similarity/server.niob
 	@cd $(XCOMP) && python3 nbc.py check \
-		../$(EXAMPLES)/simple/shared.nb \
-		../$(EXAMPLES)/simple/client.nb \
-		../$(EXAMPLES)/simple/server.nb
+		../$(EXAMPLES)/simple/shared.niob \
+		../$(EXAMPLES)/simple/client.niob \
+		../$(EXAMPLES)/simple/server.niob
 	@cd $(XCOMP) && python3 nbc.py check \
-		../$(EXAMPLES)/fhe-NetworkMonitor/shared.nb \
-		../$(EXAMPLES)/fhe-NetworkMonitor/client.nb \
-		../$(EXAMPLES)/fhe-NetworkMonitor/server.nb
+		../$(EXAMPLES)/fhe-NetworkMonitor/shared.niob \
+		../$(EXAMPLES)/fhe-NetworkMonitor/client.niob \
+		../$(EXAMPLES)/fhe-NetworkMonitor/server.niob
 	@cd $(XCOMP) && python3 nbc.py check \
-		../$(EXAMPLES)/ml-inference-fhe/shared.nb \
-		../$(EXAMPLES)/ml-inference-fhe/client.nb \
-		../$(EXAMPLES)/ml-inference-fhe/server.nb
+		../$(EXAMPLES)/ml-inference-fhe/shared.niob \
+		../$(EXAMPLES)/ml-inference-fhe/client.niob \
+		../$(EXAMPLES)/ml-inference-fhe/server.niob
 	@cd $(XCOMP) && python3 nbc.py check \
-		../$(EXAMPLES)/password-retrieval/shared.nb \
-		../$(EXAMPLES)/password-retrieval/client.nb \
-		../$(EXAMPLES)/password-retrieval/server.nb
+		../$(EXAMPLES)/password-retrieval/shared.niob \
+		../$(EXAMPLES)/password-retrieval/client.niob \
+		../$(EXAMPLES)/password-retrieval/server.niob
 	@cd $(XCOMP) && python3 nbc.py check \
-		../$(EXAMPLES)/set-membership/shared.nb \
-		../$(EXAMPLES)/set-membership/client.nb \
-		../$(EXAMPLES)/set-membership/server.nb
+		../$(EXAMPLES)/set-membership/shared.niob \
+		../$(EXAMPLES)/set-membership/client.niob \
+		../$(EXAMPLES)/set-membership/server.niob
 	@cd $(XCOMP) && python3 nbc.py check \
-		../$(EXAMPLES)/fraud-flag/shared.nb \
-		../$(EXAMPLES)/fraud-flag/client.nb \
-		../$(EXAMPLES)/fraud-flag/server.nb
+		../$(EXAMPLES)/fraud-flag/shared.niob \
+		../$(EXAMPLES)/fraud-flag/client.niob \
+		../$(EXAMPLES)/fraud-flag/server.niob
 	@echo ""
 	@echo "All tests passed."
 
@@ -123,9 +123,9 @@ fetch-by-similarity:
 	@echo "=== Compiling fetch-by-similarity (DSL → C++) ==="
 	@mkdir -p $(FETCH_NB_OUT)
 	@cd $(XCOMP) && python3 nbc.py compile \
-		../$(EXAMPLES)/fetch-by-similarity/shared.nb \
-		../$(EXAMPLES)/fetch-by-similarity/client.nb \
-		../$(EXAMPLES)/fetch-by-similarity/server.nb \
+		../$(EXAMPLES)/fetch-by-similarity/shared.niob \
+		../$(EXAMPLES)/fetch-by-similarity/client.niob \
+		../$(EXAMPLES)/fetch-by-similarity/server.niob \
 		--outdir ../$(FETCH_NB_OUT)
 	@echo ""
 	@echo "=== Staging local support libraries ==="
@@ -151,9 +151,9 @@ simple:
 	@echo "=== Compiling simple (DSL → C++) ==="
 	@mkdir -p $(SIMPLE_NB_OUT)
 	@cd $(XCOMP) && python3 nbc.py compile \
-		../$(EXAMPLES)/simple/shared.nb \
-		../$(EXAMPLES)/simple/client.nb \
-		../$(EXAMPLES)/simple/server.nb \
+		../$(EXAMPLES)/simple/shared.niob \
+		../$(EXAMPLES)/simple/client.niob \
+		../$(EXAMPLES)/simple/server.niob \
 		--outdir ../$(SIMPLE_NB_OUT)
 	@echo ""
 	@echo "=== Building simple (C++ → binaries) ==="
@@ -179,9 +179,9 @@ fhe-network-monitor:
 	@echo "=== Compiling fhe-NetworkMonitor (DSL → C++) ==="
 	@mkdir -p $(NID_NB_OUT)
 	@cd $(XCOMP) && python3 nbc.py compile \
-		../$(EXAMPLES)/fhe-NetworkMonitor/shared.nb \
-		../$(EXAMPLES)/fhe-NetworkMonitor/client.nb \
-		../$(EXAMPLES)/fhe-NetworkMonitor/server.nb \
+		../$(EXAMPLES)/fhe-NetworkMonitor/shared.niob \
+		../$(EXAMPLES)/fhe-NetworkMonitor/client.niob \
+		../$(EXAMPLES)/fhe-NetworkMonitor/server.niob \
 		--outdir ../$(NID_NB_OUT)
 	@echo ""
 ifeq ($(SUBMISSION_REPO),)
@@ -218,9 +218,9 @@ ml-inference:
 	@echo "=== Compiling ml-inference-fhe (DSL → C++) ==="
 	@mkdir -p $(ML_NB_OUT)
 	@cd $(XCOMP) && python3 nbc.py compile \
-		../$(EXAMPLES)/ml-inference-fhe/shared.nb \
-		../$(EXAMPLES)/ml-inference-fhe/client.nb \
-		../$(EXAMPLES)/ml-inference-fhe/server.nb \
+		../$(EXAMPLES)/ml-inference-fhe/shared.niob \
+		../$(EXAMPLES)/ml-inference-fhe/client.niob \
+		../$(EXAMPLES)/ml-inference-fhe/server.niob \
 		--outdir ../$(ML_NB_OUT)
 	@echo ""
 ifeq ($(SUBMISSION_REPO),)
@@ -250,9 +250,9 @@ set-membership:
 	@echo "=== Compiling set-membership (DSL → C++) ==="
 	@mkdir -p $(SETM_NB_OUT)
 	@cd $(XCOMP) && python3 nbc.py compile \
-		../$(EXAMPLES)/set-membership/shared.nb \
-		../$(EXAMPLES)/set-membership/client.nb \
-		../$(EXAMPLES)/set-membership/server.nb \
+		../$(EXAMPLES)/set-membership/shared.niob \
+		../$(EXAMPLES)/set-membership/client.niob \
+		../$(EXAMPLES)/set-membership/server.niob \
 		--outdir ../$(SETM_NB_OUT)
 	@echo ""
 	@echo "=== Building set-membership (C++ → binaries) ==="
@@ -271,9 +271,9 @@ fraud-flag:
 	@echo "=== Compiling fraud-flag (DSL → C++) ==="
 	@mkdir -p $(FRAUD_NB_OUT)
 	@cd $(XCOMP) && python3 nbc.py compile \
-		../$(EXAMPLES)/fraud-flag/shared.nb \
-		../$(EXAMPLES)/fraud-flag/client.nb \
-		../$(EXAMPLES)/fraud-flag/server.nb \
+		../$(EXAMPLES)/fraud-flag/shared.niob \
+		../$(EXAMPLES)/fraud-flag/client.niob \
+		../$(EXAMPLES)/fraud-flag/server.niob \
 		--outdir ../$(FRAUD_NB_OUT)
 	@echo ""
 	@echo "=== Building fraud-flag (C++ → binaries) ==="
@@ -288,9 +288,9 @@ password-retrieval:
 	@echo "=== Compiling password-retrieval (DSL → C++) ==="
 	@mkdir -p $(PWD_NB_OUT)
 	@cd $(XCOMP) && python3 nbc.py compile \
-		../$(EXAMPLES)/password-retrieval/shared.nb \
-		../$(EXAMPLES)/password-retrieval/client.nb \
-		../$(EXAMPLES)/password-retrieval/server.nb \
+		../$(EXAMPLES)/password-retrieval/shared.niob \
+		../$(EXAMPLES)/password-retrieval/client.niob \
+		../$(EXAMPLES)/password-retrieval/server.niob \
 		--outdir ../$(PWD_NB_OUT)
 	@echo ""
 	@echo "=== Building password-retrieval (C++ → binaries) ==="

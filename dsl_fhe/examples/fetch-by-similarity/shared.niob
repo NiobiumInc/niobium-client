@@ -1,4 +1,4 @@
-// shared.nb — Types and constants visible to both client and server domains
+// shared.niob — Types and constants visible to both client and server domains
 //============================================================================
 // This module defines the wire protocol between client and server.
 // Nothing in this file touches secret key material.
