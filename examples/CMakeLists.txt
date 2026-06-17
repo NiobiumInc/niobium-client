@@ -84,6 +84,42 @@ set_openfhe_rpath(plaintext_add_decrypt)
 # is injected entirely via the libnbclient_autofacade / NiobiumAutoScheme
 # path, driven by a YAML config file at run time (see docs/AUTO_FACADE.md).
 
+# ==============================================================================
+# Fraud MLP example (Track B: hand-written OpenFHE, no nb DSL)
+# ==============================================================================
+# Source lives in the sibling niobium-fraud-example repo (single home for the
+# prototype); built here so it inherits niobium_fhetch + OpenFHE linkage.
+set(FRAUD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../niobium-fraud-example/openfhe_direct")
+if(EXISTS "${FRAUD_DIR}/client.cpp")
+    add_executable(fraud_client       "${FRAUD_DIR}/client.cpp")
+    add_executable(fraud_server       "${FRAUD_DIR}/server.cpp")
+    add_executable(fraud_server_plain "${FRAUD_DIR}/server_plain.cpp")
+    add_executable(fraud_decrypt      "${FRAUD_DIR}/decrypt.cpp")
+    target_link_libraries(fraud_client       PRIVATE niobium_fhetch)
+    target_link_libraries(fraud_server       PRIVATE niobium_fhetch)
+    target_link_libraries(fraud_server_plain PRIVATE niobium_fhetch)
+    target_link_libraries(fraud_decrypt      PRIVATE niobium_fhetch)
+    set_openfhe_rpath(fraud_client)
+    set_openfhe_rpath(fraud_server)
+    set_openfhe_rpath(fraud_server_plain)
+    set_openfhe_rpath(fraud_decrypt)
+endif()
+
+# ==============================================================================
+# Generic MLP engine (Track B): fixed OpenFHE programs parameterized by arch.txt
+# ==============================================================================
+set(MLP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../fhe-design-agent/agent/templates/openfhe_ml")
+if(EXISTS "${MLP_DIR}/client.cpp")
+    add_executable(mlp_client       "${MLP_DIR}/client.cpp")
+    add_executable(mlp_server_plain "${MLP_DIR}/server_plain.cpp")
+    add_executable(mlp_decrypt      "${MLP_DIR}/decrypt.cpp")
+    foreach(t mlp_client mlp_server_plain mlp_decrypt)
+        target_link_libraries(${t} PRIVATE niobium_fhetch)
+        target_include_directories(${t} PRIVATE "${MLP_DIR}")   # arch.h
+        set_openfhe_rpath(${t})
+    endforeach()
+endif()
+
 if(TARGET niobium_client_autofacade)
     add_executable(ciphers_ops_cache_keys  auto/ciphers_ops_cache_keys.cpp)
     add_executable(ciphers_ops_client      auto/ciphers_ops_client.cpp)
