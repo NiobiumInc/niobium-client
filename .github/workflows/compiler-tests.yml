@@ -78,6 +78,8 @@ jobs:
           ln -sf "$SDK"/lib/* "$SHIM/build/"
           test -x "$SHIM/build/nbcc_fhetch_replay" || { echo "::error::SDK missing nbcc_fhetch_replay"; exit 1; }
           echo "NIOBIUM_COMPILER_ROOT=$SHIM" >> "$GITHUB_ENV"
+          echo "NIOBIUM_SPEC_DIR=$SDK/share/niobium/devices" >> "$GITHUB_ENV"
+          echo "$SHIM/build" >> "$GITHUB_PATH"
 
       - name: E2E mult — target + transport (PASS/FAIL only, compiler output suppressed)
         run: |
