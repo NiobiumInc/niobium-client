@@ -42,7 +42,7 @@ jobs:
   compiler-tests:
     name: Compiler tests (self-hosted, GCP)
     runs-on: [self-hosted, Linux, X64, gcp-ephemeral]
-    timeout-minutes: 30   # a hung SDK mount / stalled test must not hold the runner
+    timeout-minutes: 60   # OpenFHE cold-build ~15 min + mult E2E
     env:
       SDK: /mnt/niobium-sdk/sdk   # mounted RO at boot by runner-startup.sh
     steps:
@@ -55,24 +55,39 @@ jobs:
         run: |
           test -x "$SDK/bin/nbcc_fhetch_replay" || { echo "::error::SDK not mounted"; exit 1; }
 
-      - name: Compiler tests (exit status ONLY — all compiler output suppressed)
+      - name: Install build tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build
+
+      - name: Build client + fhetch (release)
+        # Public C++/OpenFHE output — OK to show; useful for diagnosing build breaks.
+        run: make build-release
+
+      - name: Map the SDK into the layout the Makefile expects
+        run: |
+          # test-mult-target-release and test-mult-transport-release look for
+          # $NIOBIUM_COMPILER_ROOT/build/nbcc_fhetch_replay[_server].
+          # The SDK ships bin/ + lib/. Bridge with a shim of symlinks so the
+          # replay binary's $ORIGIN rpath and the Makefile's LD_LIBRARY_PATH
+          # ($ROOT/build) both resolve correctly through the symlinks.
+          SHIM="$RUNNER_TEMP/nbcc-root"
+          mkdir -p "$SHIM/build"
+          ln -sf "$SDK"/bin/* "$SHIM/build/"
+          ln -sf "$SDK"/lib/* "$SHIM/build/"
+          test -x "$SHIM/build/nbcc_fhetch_replay" || { echo "::error::SDK missing nbcc_fhetch_replay"; exit 1; }
+          echo "NIOBIUM_COMPILER_ROOT=$SHIM" >> "$GITHUB_ENV"
+
+      - name: E2E mult — target + transport (PASS/FAIL only, compiler output suppressed)
         run: |
           set +x
-          export PATH="$SDK/bin:$PATH" LD_LIBRARY_PATH="$SDK/lib:${LD_LIBRARY_PATH:-}"
-          export NIOBIUM_SDK_DIR="$SDK" NIOBIUM_SPEC_DIR="$SDK/share/niobium/devices"
-          # TODO(wiring): replace the line below with the repo's real nbcc target(s)
-          # (e.g. the FHETCH replay e2e / `make test-...`). Keep the >/dev/null 2>&1.
-          if nbcc_fhetch_replay --help >/dev/null 2>&1; then
-            echo "compiler tests: PASS"
+          rc=0
+          make test-mult-target-release    TARGET=FUNC_SIM >/dev/null 2>&1 || rc=1
+          make test-mult-transport-release                 >/dev/null 2>&1 || rc=1
+          if [ $rc -eq 0 ]; then
+            echo "compiler E2E: PASS"
           else
-            echo "::error::compiler tests FAILED (output suppressed by policy; reproduce locally)"
-            exit 1
+            echo "::error::compiler E2E FAILED (output suppressed by policy; reproduce locally)"
           fi
-
-          # ---- OPTIONAL private trace (OFF by default) --------------------
-          # Only enable when you're ready for the trace to leave the runner. It
-          # ships to Cloud Logging in the ISOLATED project (still NOT public):
-          #   ./run-compiler-tests.sh > trace.log 2>&1; rc=$?
-          #   gcloud logging write niobium-ci "$(python3 -c 'import json;print(json.dumps(open("trace.log").read()))')" \
-          #     --payload-type=json --severity=INFO || true
-          #   exit $rc
+          exit $rc
