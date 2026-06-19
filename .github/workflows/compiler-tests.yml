@@ -63,7 +63,7 @@ jobs:
 
       - name: Build client + fhetch (release)
         # Public C++/OpenFHE output — OK to show; useful for diagnosing build breaks.
-        run: make build-release
+        run: make release
 
       - name: Map the SDK into the layout the Makefile expects
         run: |
