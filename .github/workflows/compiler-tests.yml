@@ -26,19 +26,28 @@ name: compiler-tests
 on:
   workflow_dispatch: {}
 
+# Least privilege: the job only needs to read the repo for checkout. Minimizes
+# the GITHUB_TOKEN scope on a public-repo self-hosted runner (don't widen this
+# without cause).
+permissions:
+  contents: read
+
 concurrency:
   group: compiler-tests-${{ github.ref }}
+  # Fine for workflow_dispatch. REVISIT when enabling `push: [main]` —
+  # cancel-in-progress: true would cancel in-flight main runs on rapid pushes.
   cancel-in-progress: true
 
 jobs:
   compiler-tests:
     name: Compiler tests (self-hosted, GCP)
     runs-on: [self-hosted, Linux, X64, gcp-ephemeral]
+    timeout-minutes: 30   # a hung SDK mount / stalled test must not hold the runner
     env:
       SDK: /mnt/niobium-sdk/sdk   # mounted RO at boot by runner-startup.sh
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           submodules: recursive
 
