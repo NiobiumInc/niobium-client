@@ -120,6 +120,22 @@ if(EXISTS "${MLP_DIR}/client.cpp")
     endforeach()
 endif()
 
+# ==============================================================================
+# KitNET (NID) engine (Track B): fixed OpenFHE autoencoder-ensemble anomaly
+# detector parameterized by arch.txt; reads the trained KitNET .bin model.
+# ==============================================================================
+set(KITNET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../fhe-design-agent/agent/templates/openfhe_kitnet")
+if(EXISTS "${KITNET_DIR}/client.cpp")
+    add_executable(kitnet_client       "${KITNET_DIR}/client.cpp")
+    add_executable(kitnet_server_plain "${KITNET_DIR}/server_plain.cpp")
+    add_executable(kitnet_decrypt      "${KITNET_DIR}/decrypt.cpp")
+    foreach(t kitnet_client kitnet_server_plain kitnet_decrypt)
+        target_link_libraries(${t} PRIVATE niobium_fhetch)
+        target_include_directories(${t} PRIVATE "${KITNET_DIR}")   # arch.h, kitnet_model.h
+        set_openfhe_rpath(${t})
+    endforeach()
+endif()
+
 if(TARGET niobium_client_autofacade)
     add_executable(ciphers_ops_cache_keys  auto/ciphers_ops_cache_keys.cpp)
     add_executable(ciphers_ops_client      auto/ciphers_ops_client.cpp)
