@@ -93,3 +93,15 @@ jobs:
             echo "::error::compiler E2E FAILED (output suppressed by policy; reproduce locally)"
           fi
           exit $rc
+
+      - name: Simple ops tests (PASS/FAIL only, compiler output suppressed)
+        run: |
+          set +x
+          rc=0
+          make test-simple-ops-release >/dev/null 2>&1 || rc=1
+          if [ $rc -eq 0 ]; then
+            echo "simple ops: PASS"
+          else
+            echo "::error::simple ops FAILED (output suppressed by policy; reproduce locally)"
+          fi
+          exit $rc
