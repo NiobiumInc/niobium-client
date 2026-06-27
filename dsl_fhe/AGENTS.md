@@ -17,7 +17,7 @@ make set-membership         # Build the private name-matching example
 
 | File | Purpose |
 |---|---|
-| `AGENTS.md` | This file — design rationale, codegen internals, known pitfalls (imported by `CLAUDE.md`) |
+| `AGENTS.md` | This file — design rationale, codegen internals, known pitfalls (imported by `CLAUDE.md`, or read directly by non-Claude agents) |
 | `HOWTO.md` | Step-by-step guide for adding a new example |
 | `NB_LANGUAGE.md` | Language reference — types, syntax, built-in functions, patterns |
 | `GRAMMAR.md` | Formal EBNF grammar |
