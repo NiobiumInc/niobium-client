@@ -93,6 +93,8 @@ niobium-client/
   dsl_fhe/                  # DSL + cross-compiler (nbc); see dsl_fhe/README.md
   .claude/skills/
     fhe-application-design/ # submodule: 8-stage FHE design skill (AI agents)
+  .agents/skills/
+    fhe-application-design/ # same skill, .agents/ convention (Codex / agentskills.io)
   vendor/
     niobium-fhetch/         # submodule: libnbfhetch + fhetch_sim + API headers
       vendor/openfhe/       # nested submodule: Niobium-instrumented OpenFHE
