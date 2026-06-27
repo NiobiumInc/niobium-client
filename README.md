@@ -14,7 +14,7 @@ There are four ways in, by audience:
 
 | You are… | Entry point | Start here |
 |---|---|---|
-| **An AI coding agent** (or pairing with one) | **nb DSL + design skill** — an 8-stage FHE design methodology that auto-loads in Claude Code sessions, paired with a compact DSL whose compiler generates all the plumbing | [`dsl_fhe/`](dsl_fhe/README.md), [`.claude/skills/fhe-application-design`](.claude/skills/fhe-application-design) |
+| **An AI coding agent** (or pairing with one) | **nb DSL + design skill** — an 8-stage FHE design methodology that auto-loads in Claude Code sessions, paired with a compact DSL whose compiler generates all the plumbing | [`dsl_fhe/`](dsl_fhe/README.md), [`.claude/skills/`](.claude/skills/fhe-application-design) & [`.agents/skills/`](.agents/skills/fhe-application-design) |
 | **An application developer** with OpenFHE C++ | **Instrumented OpenFHE** — write standard `EvalMult`/`EvalAdd`/… code, bracket it with `niobium::compiler()` calls; probes record everything | [Instrumenting an OpenFHE application](#entry-point-2--openfhe-for-application-developers), [`examples/`](examples/) |
 | **A compiler / code-generator author** | **FHETCH Polynomial IR** — emit the IR directly through the recording API (or the text trace format) and use the session, replay, and transport machinery as your backend | [`niobium-fhetch`](https://github.com/NiobiumInc/niobium-fhetch), [`src/fhetch_transport/`](src/fhetch_transport/) |
 | **An FHE library integrator** (GPU/accelerator back-ends) | **HAZE** — a CUDA-shaped C API (`hazeMalloc`/`hazeMemcpy`/`hazeNTT`/…): each call records one polynomial-level IR op, so CUDA-targeting FHE libraries port with minimal effort | [`vendor/niobium-haze`](https://github.com/NiobiumInc/niobium-haze) |
@@ -73,9 +73,10 @@ internals, see the companion repository:
 The combination is designed so an AI coding agent can take an application from
 *privacy model* to *verified encrypted pipeline* in one session:
 
-- **The design skill** ([`.claude/skills/fhe-application-design`](.claude/skills/fhe-application-design),
-  a vendored submodule of
-  [`fhe-application-design`](https://github.com/NiobiumInc/fhe-application-design))
+- **The design skill** (a vendored submodule of
+  [`fhe-application-design`](https://github.com/NiobiumInc/fhe-application-design),
+  checked out at both [`.claude/skills/fhe-application-design`](.claude/skills/fhe-application-design)
+  and [`.agents/skills/fhe-application-design`](.agents/skills/fhe-application-design))
   auto-loads in Claude Code sessions in this repository. It walks the 8-stage
   methodology — privacy model, feasibility, plaintext ground truth, scheme
   selection, circuit design, parameter selection, implementation, protocol
@@ -295,6 +296,8 @@ one tree.
 niobium-client/
   .claude/skills/
     fhe-application-design/   # submodule: the 8-stage FHE design skill (AI agents)
+  .agents/skills/
+    fhe-application-design/   # same skill, .agents/ convention (Codex / agentskills.io)
   dsl_fhe/                    # nb DSL + cross-compiler (nbc) — entry point 1
     xcomp/                    # the compiler: lexer, parser, semantic, codegen
     tools/                    # replay-integrity verifier, ...
