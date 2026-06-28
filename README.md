@@ -73,9 +73,9 @@ internals, see the companion repository:
 The combination is designed so an AI coding agent can take an application from
 *privacy model* to *verified encrypted pipeline* in one session:
 
-- **The design skill** (a vendored submodule of
-  [`fhe-application-design`](https://github.com/NiobiumInc/fhe-application-design),
-  checked out at both [`.claude/skills/fhe-application-design`](.claude/skills/fhe-application-design)
+- **The design skill** (vendored from the
+  [`fhe-application-design`](https://github.com/NiobiumInc/fhe-application-design)
+  catalog into both [`.claude/skills/fhe-application-design`](.claude/skills/fhe-application-design)
   and [`.agents/skills/fhe-application-design`](.agents/skills/fhe-application-design))
   auto-loads in this repository for Claude Code (from `.claude/skills/`), OpenAI
   Codex, and other agentskills.io-compatible agents (from `.agents/skills/`). It
@@ -296,7 +296,7 @@ one tree.
 ```
 niobium-client/
   .claude/skills/
-    fhe-application-design/   # submodule: the 8-stage FHE design skill (AI agents)
+    fhe-application-design/   # vendored: the 8-stage FHE design skill (AI agents)
   .agents/skills/
     fhe-application-design/   # same skill, .agents/ convention (Codex / agentskills.io)
   dsl_fhe/                    # nb DSL + cross-compiler (nbc) — entry point 1

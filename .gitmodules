@@ -4,11 +4,3 @@
 [submodule "vendor/niobium-haze"]
 	path = vendor/niobium-haze
 	url = https://github.com/NiobiumInc/niobium-haze.git
-[submodule ".claude/skills/fhe-application-design"]
-	path = .claude/skills/fhe-application-design
-	url = https://github.com/NiobiumInc/fhe-application-design.git
-	branch = main
-[submodule "fhe-application-design-agents"]
-	path = .agents/skills/fhe-application-design
-	url = https://github.com/NiobiumInc/fhe-application-design.git
-	branch = main
