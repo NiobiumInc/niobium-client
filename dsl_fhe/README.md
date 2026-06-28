@@ -222,6 +222,54 @@ Each example runs three phases:
 2. **C++ compilation** (CMake + make): Builds binaries in `nb_out/build/`.
 3. **End-to-end testing**: Runs the binaries to verify correctness.
 
+### Build a standalone app (outside the repo)
+
+The `make <example>` targets above are for examples that live inside
+`dsl_fhe/examples/`. You can also build a DSL app in **your own project
+directory**: `nbc.py compile` accepts arbitrary input paths and an `--outdir`,
+and the generated `nb_out/` is a self-contained CMake project
+(`project(nb_generated)`).
+
+**Prerequisites:** a niobium-client checkout that has been **built** (`make
+release` at the repo root, or `make build-release`) — the generated project
+links against its `vendor/lib/openfhe` and `build/` artifacts (`libnbfhetch`,
+`libniobium_client_autofacade`, `yaml-cpp`) — plus Python 3 and a C++17 compiler
+with CMake ≥ 3.14.
+
+```bash
+# Run from your project dir, alongside your shared.niob / client.niob / server.niob.
+NBROOT=/path/to/niobium-client          # a *built* checkout
+
+# 1. Compile the DSL to a self-contained C++ project in ./nb_out
+python3 "$NBROOT/dsl_fhe/xcomp/nbc.py" compile \
+    shared.niob client.niob server.niob --outdir nb_out
+
+# 2. Configure + build. -DNIOBIUM_CLIENT_ROOT is required outside the repo tree
+#    (nbc's auto-detect only locates the root when nb_out sits inside it).
+cmake -S nb_out -B nb_out/build -DNIOBIUM_CLIENT_ROOT="$NBROOT"
+cmake --build nb_out/build
+
+# 3. Run the stage binaries in order (which binaries exist depends on your
+#    stages). For the `simple` design — key_generation, encrypt, compute, decrypt:
+cd nb_out/build
+./key_generation 0 3
+./encrypt 0 3.0 5.0
+./compute 0 0 0.0 --no-ring-dim-check   # ADD: 3 + 5
+./decrypt_verify 0 8.0                   # asserts the decrypted result == 8
+```
+
+No extra `LD_LIBRARY_PATH` / `DYLD_LIBRARY_PATH` is needed at runtime — the build
+embeds an rpath to the client's OpenFHE / FHETCH / yaml-cpp libraries.
+
+For ground-truth checking, `nbc` also emits a `<stage>_ref` binary for each
+*twinnable* stage that runs the same logic in plaintext (coverage is per-stage —
+a server `@hardware` compute stage has no twin, so not every pipeline has a
+complete `_ref` run).
+
+To **contribute** an example back to this repo instead, add it under
+`dsl_fhe/examples/<name>/` with Makefile build/test targets — see
+[`HOWTO.md`](HOWTO.md).
+
 ### Run the Pipeline
 
 ```bash
