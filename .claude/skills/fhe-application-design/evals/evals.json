@@ -1,0 +1,35 @@
+{
+  "skill_name": "fhe-application-design",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I'm building a privacy-preserving credit scoring system. A bank wants to evaluate loan applications from customers without the bank seeing the customer's actual financial data (income, debt, credit history). The customer encrypts their data and the bank runs a credit scoring model on the encrypted data. Can you help me design this as an FHE application using OpenFHE? The scoring model is a logistic regression with about 15 features.",
+      "expected_output": "A structured design walkthrough covering: privacy model (customer = data owner, bank = semi-honest server, output is a single credit score which may reveal information), scheme selection (CKKS for real-valued features and logistic regression), SIMD packing strategy, circuit design for logistic regression (dot product + sigmoid approximation via Chebyshev), depth analysis, parameter selection, and discussion of output privacy concerns (the credit score itself reveals information about the inputs).",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "We want to build an encrypted search system where a user can check if their email address appears in a database of leaked credentials, without revealing their email to the server and without the server revealing its full database. The database has about 100,000 entries. How would I design this with FHE and OpenFHE?",
+      "expected_output": "A design walkthrough that starts with privacy model (user's email is private, database is private or semi-private), identifies this as a set membership problem, discusses feasibility (data-oblivious comparison needed, SIMD parallelism for batch comparison), selects CKKS scheme, describes column-major packing and squared-distance comparison circuit similar to the set-membership example, addresses the scale challenge (100K entries requires batching or protocol design), and discusses parameter selection with depth budget for the comparison circuit.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I need to compute encrypted averages and standard deviations over salary data from multiple departments, where each department encrypts its own data and a central HR office combines them to get company-wide statistics. No department should see another department's individual salaries. I'm new to FHE - what scheme should I use and how do I set this up with OpenFHE?",
+      "expected_output": "A design walkthrough that identifies this as a multi-party computation scenario, discusses the privacy model (multiple data owners, central aggregator), evaluates FHE feasibility (addition and multiplication are straightforward, standard deviation requires a square root or can be left as variance), recommends CKKS for real-valued salary data, discusses whether multi-party/threshold FHE is needed vs simpler approaches, describes the circuit (sum, count, sum-of-squares for variance), notes the low multiplicative depth required, and addresses the output privacy question (aggregate statistics may still leak information about small departments).",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "I'm working in the niobium-client repository. Design and implement a privacy-preserving fraud-flag checker: a client holds a private 16-digit card number and a server holds a private list of ~5,000 flagged card numbers; the client learns whether their card is flagged without revealing the number, and the server reveals nothing else about its list. Implement it as a runnable example.",
+      "expected_output": "A design walkthrough (privacy model: client = single encryptor of the query, server data stays plaintext server-side; CKKS; squared-distance + iterated-squaring set-membership circuit; column-major packing one ciphertext per digit position; depth = 2 + K with K derived from C = max_digit_distance^2 * 16) followed by a Stage 7 Track A implementation in the nb DSL: shared.niob (Instance with ring_dim/depth, wire types reusing CryptoParams/EncryptedResult and a fresh-named query wire), client.niob (scheme block, requires, keygen with scheme.override, per-position encryption via column slices, decrypt+threshold verify), server.niob (@server @hardware compute stage), a small Python harness for digit encoding and expected-count computation, and Makefile build/test targets. The implementation should follow references/implementing-with-nb-dsl.md, including the encrypted-variable naming conventions, and end with a passing end-to-end verification against the harness-computed expected value.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Using the niobium-client DSL, build an encrypted voting tally: 500 voters each independently encrypt a one-hot ballot (5 candidates) under the election key, and the tally server homomorphically sums them; only the election authority can decrypt the totals, and totals must be exact integers with no approximation error.",
+      "expected_output": "The response must identify two constraints that route this away from a naive DSL implementation: (1) exact integer results call for BFV, and the nb DSL is CKKS-only, so per references/implementing-with-nb-dsl.md this is Stage 7 Track B (raw OpenFHE) — or the design must explicitly accept CKKS approximate totals with rounding and justify the error bound; (2) voters are independent encryptors, so ballots cannot be packed across voters into shared ciphertexts (each ballot is its own ciphertext; SIMD slots may pack the 5 candidate positions of one ballot), and SIMD utilization will be low. A correct answer states the privacy model (independent encryptors, authority decrypts, output privacy of small tallies), the scheme tradeoff (BFV-exact via Track B vs CKKS-approximate via Track A with rounding), and the packing constraint, rather than blindly generating CKKS DSL code with cross-voter packing.",
+      "files": []
+    }
+  ]
+}

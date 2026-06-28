@@ -92,7 +92,7 @@ niobium-client/
   examples/                 # hand-written OpenFHE examples (bootstrap, mult, simple_ops, ...)
   dsl_fhe/                  # DSL + cross-compiler (nbc); see dsl_fhe/README.md
   .claude/skills/
-    fhe-application-design/ # submodule: 8-stage FHE design skill (AI agents)
+    fhe-application-design/ # vendored: 8-stage FHE design skill (AI agents)
   .agents/skills/
     fhe-application-design/ # same skill, .agents/ convention (Codex / agentskills.io)
   vendor/
