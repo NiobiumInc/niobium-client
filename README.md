@@ -291,6 +291,26 @@ one tree.
   `vendor/niobium-fhetch/vendor/openfhe`)
 - Python 3 (DSL compiler + example harnesses)
 
+### Updating the vendored design skill
+
+The FHE design skill is **vendored** (its files are committed into
+`.claude/skills/fhe-application-design/` and `.agents/skills/fhe-application-design/`),
+not mounted as a submodule — the skill lives in a `skills/<name>/` subdirectory
+of the upstream catalog, which a submodule can't mount, and committing the files
+keeps a plain `git clone` working on every platform. Each copy records the
+upstream commit it came from in a `.vendored-from` file.
+
+To bump the skill to a newer upstream commit, run the refresh script with a ref
+and commit the result:
+
+```bash
+scripts/update-fhe-skill.sh <git-ref>   # re-vendors both copies, updates .vendored-from
+git add .claude/skills/fhe-application-design .agents/skills/fhe-application-design
+git commit -m "chore: bump fhe-application-design skill to <git-ref>"
+```
+
+It is a manual step — nothing fetches the skill at build or clone time.
+
 ## Project structure
 
 ```
