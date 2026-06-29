@@ -19,11 +19,9 @@
 # refactor/skill-directory-layout branch, not main, so until it merges pass an
 # explicit ref:
 #   scripts/update-fhe-skill.sh refactor/skill-directory-layout
-# The repo is slated to be renamed to niobium-skills; the URL below keeps
-# working after that via GitHub's redirect (switch it to the new name later).
 set -euo pipefail
 
-REPO_URL="https://github.com/NiobiumInc/fhe-application-design"
+REPO_URL="https://github.com/NiobiumInc/niobium-skills"
 SKILL_SUBDIR="skills/fhe-application-design"
 SKILL_REF="${1:-main}"
 
