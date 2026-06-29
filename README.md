@@ -74,7 +74,7 @@ The combination is designed so an AI coding agent can take an application from
 *privacy model* to *verified encrypted pipeline* in one session:
 
 - **The design skill** (vendored from the
-  [`fhe-application-design`](https://github.com/NiobiumInc/fhe-application-design)
+  [`niobium-skills`](https://github.com/NiobiumInc/niobium-skills)
   catalog into both [`.claude/skills/fhe-application-design`](.claude/skills/fhe-application-design)
   and [`.agents/skills/fhe-application-design`](.agents/skills/fhe-application-design))
   auto-loads in this repository for Claude Code (from `.claude/skills/`), OpenAI
