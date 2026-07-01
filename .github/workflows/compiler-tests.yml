@@ -15,15 +15,21 @@
 # leaving the runner.)
 # ===========================================================================
 #
-# INITIAL trigger is workflow_dispatch ONLY (committing it satisfies the runner-
-# group pin without firing on every PR before we're ready). When ready, add:
-#     pull_request: { branches: [main] }     # PR runs are collaborator-gated
-#     push:         { branches: [main] }
+# Runs on pull_request + push to main, in addition to workflow_dispatch.
+# PR runs on a public-repo self-hosted runner are collaborator-gated by
+# GitHub itself: first-time contributors require maintainer approval before
+# any workflow touching self-hosted runners executes ("Require approval for
+# first-time contributors" under Settings > Actions > General). Do not
+# disable that setting as a side effect of this trigger.
 # Never use pull_request_target with a checkout of the PR head.
 
 name: compiler-tests
 
 on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
   workflow_dispatch: {}
 
 # Least privilege: the job only needs to read the repo for checkout. Minimizes
@@ -34,8 +40,8 @@ permissions:
 
 concurrency:
   group: compiler-tests-${{ github.ref }}
-  # Fine for workflow_dispatch. REVISIT when enabling `push: [main]` —
-  # cancel-in-progress: true would cancel in-flight main runs on rapid pushes.
+  # cancel-in-progress: true cancels in-flight runs on rapid PR pushes / rapid
+  # pushes to main. Acceptable here — each run is a from-scratch VM anyway.
   cancel-in-progress: true
 
 jobs:
