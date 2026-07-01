@@ -1,0 +1,162 @@
+# .github/workflows/fbs-consumer-check.yml
+#
+# Cross-repo consumer check: does the public fetch-by-similarity-submission
+# workload (a real downstream consumer of this client, vendored there as a
+# git submodule) still build and pass with THIS commit of niobium-client,
+# before that repo's own pin is bumped to it?
+#
+# Runs on the ephemeral GCP self-hosted runner group (gcp-ephemeral) — same
+# infra as compiler-tests.yml — since it also needs the mounted SDK to
+# exercise the compiler-backed replay path. See
+# https://github.com/NiobiumInc/gcp-github-runners (workflow-snippets/README.md).
+#
+# ===========================================================================
+# HARD REQUIREMENT: NO nbcc / compiler output in the public Actions log.
+# See compiler-tests.yml for the full rationale. The transport server and the
+# compiler-backed replay run send stdout+stderr to /dev/null; only PASS/FAIL
+# is surfaced. The local-replay steps are open-source-only and safe to show.
+# ===========================================================================
+#
+# Never use pull_request_target with a checkout of the PR head.
+
+name: fbs-consumer-check
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fbs-consumer-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fbs-consumer-check:
+    name: fbs-submission consumer check (self-hosted, GCP)
+    runs-on: [self-hosted, Linux, X64, gcp-ephemeral]
+    timeout-minutes: 60
+    env:
+      SDK: /mnt/niobium-sdk/sdk
+      PORT: "9443"
+    steps:
+      - name: Checkout fbs-submission (main)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: NiobiumInc/fetch-by-similarity-submission
+          submodules: recursive
+          path: fbs
+
+      - name: Point fbs's niobium-client submodule at this commit
+        working-directory: fbs/submission/niobium-client
+        run: |
+          # refs/pull/<N>/head always exists on the base repo, for PRs from
+          # forks too, so this works regardless of who opened the PR.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags --depth=1 origin "refs/pull/${{ github.event.pull_request.number }}/head"
+          else
+            git fetch --no-tags --depth=1 origin "${{ github.sha }}"
+          fi
+          git checkout --detach FETCH_HEAD
+          git submodule update --init --recursive
+
+      - name: Verify SDK is mounted (no version printed)
+        run: |
+          test -x "$SDK/bin/nbcc_fhetch_replay" || { echo "::error::SDK not mounted"; exit 1; }
+
+      - name: Install build tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build
+          python3 -m pip install --user --quiet -r fbs/requirements.txt
+
+      - name: Build niobium-client (this PR) + fhetch_driver + fbs submission
+        # Public C++/OpenFHE output — OK to show; useful for diagnosing build breaks.
+        working-directory: fbs
+        run: |
+          OPENFHE_PREFIX="$GITHUB_WORKSPACE/fbs/submission/niobium-client/vendor/lib/openfhe"
+          make -C submission/niobium-client release
+          make -C submission/niobium-client/vendor/niobium-fhetch config-fhetch-release \
+            OPENFHE_INSTALL_DIR="$OPENFHE_PREFIX" EXTERNAL_OPENFHE=1
+          cmake --build submission/niobium-client/vendor/niobium-fhetch/build \
+            -j"$(nproc)" --target fhetch_driver
+          scripts/build_task.sh ./submission "$OPENFHE_PREFIX"
+
+      - name: fbs sanity — record + replay via fhetch_driver (TOY, local, open-source only)
+        working-directory: fbs
+        run: |
+          python3 harness/run_submission.py 0 --seed 12345 --target local
+          python3 harness/run_submission.py 0 --seed 12345 --target local
+
+      - name: Map the SDK into the layout the transport server expects
+        run: |
+          SHIM="$RUNNER_TEMP/nbcc-root"
+          mkdir -p "$SHIM/build"
+          ln -sf "$SDK"/bin/* "$SHIM/build/"
+          ln -sf "$SDK"/lib/* "$SHIM/build/"
+          test -x "$SHIM/build/nbcc_fhetch_replay" || { echo "::error::SDK missing nbcc_fhetch_replay"; exit 1; }
+          echo "NIOBIUM_COMPILER_ROOT=$SHIM" >> "$GITHUB_ENV"
+
+      # RECORD never calls niobium::compiler().replay() (only a cache HIT
+      # does) — plain OpenFHE, safe to show. --opt-level O1: O2+ enables CSE,
+      # not yet correctness-preserving for the re-recorded replay.
+      - name: fbs sanity — record (TOY, --target FUNC_SIM_HW)
+        working-directory: fbs
+        run: python3 harness/run_submission.py 0 --seed 54321 --target FUNC_SIM_HW --opt-level O1
+
+      - name: Start the transport server (background, output suppressed)
+        run: |
+          set +x
+          CLIENT_ROOT="$GITHUB_WORKSPACE/fbs/submission/niobium-client"
+          SERVER_BIN="$CLIENT_ROOT/build/src/fhetch_transport/nbcc_fhetch_replay_server"
+          COMPILER_BIN="$NIOBIUM_COMPILER_ROOT/build/nbcc_fhetch_replay"
+          test -x "$SERVER_BIN" || { echo "::error::server binary not built: $SERVER_BIN"; exit 1; }
+
+          ENV_FILE="$CLIENT_ROOT/build/niobium_client.env"
+          [ -f "$ENV_FILE" ] && . "$ENV_FILE"
+          : "${OPENFHE_LIB:=$CLIENT_ROOT/vendor/lib/openfhe/lib}"
+
+          LD_LIBRARY_PATH="$OPENFHE_LIB:$NIOBIUM_COMPILER_ROOT/build" \
+            "$SERVER_BIN" --port "$PORT" --bind 127.0.0.1 --exec "$COMPILER_BIN" \
+            >/dev/null 2>&1 &
+          echo $! > "$RUNNER_TEMP/fhetch_server.pid"
+
+          ready=0
+          for i in $(seq 1 50); do
+            if curl -sf "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            kill -0 "$(cat "$RUNNER_TEMP/fhetch_server.pid")" 2>/dev/null || { echo "::error::server exited before healthz"; exit 1; }
+            sleep 0.2
+          done
+          [ "$ready" = "1" ] || { echo "::error::server did not become healthy"; exit 1; }
+
+      - name: fbs sanity — replay over transport (PASS/FAIL only, compiler output suppressed)
+        working-directory: fbs
+        run: |
+          set +x
+          export NBCC_FHETCH_SERVER="http://127.0.0.1:$PORT"
+          rc=0
+          python3 harness/run_submission.py 0 --seed 54321 --target FUNC_SIM_HW --opt-level O1 >/dev/null 2>&1 || rc=1
+          if [ $rc -eq 0 ]; then
+            echo "fbs consumer check (compiler E2E): PASS"
+          else
+            echo "::error::fbs consumer check FAILED (output suppressed by policy; reproduce locally)"
+          fi
+          exit $rc
+
+      - name: Stop the transport server
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/fhetch_server.pid" ]; then
+            pid="$(cat "$RUNNER_TEMP/fhetch_server.pid")"
+            kill -TERM "$pid" 2>/dev/null || true
+            for i in 1 2 3 4 5; do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+            kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null || true
+          fi
