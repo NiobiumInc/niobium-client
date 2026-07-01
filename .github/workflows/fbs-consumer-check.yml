@@ -24,8 +24,11 @@ name: fbs-consumer-check
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
+  # PROVISIONAL: unrestricted push trigger so this fires on every push to the
+  # working branch while it's being iterated on pre-PR. Narrow back to
+  # `branches: [main]` once the PR is open (this is what push: [main] on
+  # niobium-client's other GCP workflows uses).
+  push: {}
   workflow_dispatch: {}
 
 permissions:
