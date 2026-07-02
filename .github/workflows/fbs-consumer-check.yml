@@ -74,12 +74,11 @@ jobs:
       - name: Install build tooling
         run: |
           sudo apt-get update -qq
+          # python3-numpy via apt: this runner has no pip, and numpy isn't
+          # actually preinstalled on the image (verified — don't assume it is).
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build
-          # numpy (the harness's only dependency, per requirements.txt) ships
-          # preinstalled on the gha-runner-x86 image — this runner has no pip,
-          # so just verify it's there instead of trying to install anything.
-          python3 -c "import numpy" || { echo "::error::numpy not available on this runner image"; exit 1; }
+            build-essential cmake ninja-build python3-numpy
+          python3 -c "import numpy" || { echo "::error::numpy still not importable after apt install"; exit 1; }
 
       - name: Build niobium-client (this PR) + fhetch_driver + fbs submission
         # Public C++/OpenFHE output — OK to show; useful for diagnosing build breaks.
