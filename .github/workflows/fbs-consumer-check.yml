@@ -98,6 +98,18 @@ jobs:
           python3 harness/run_submission.py 0 --seed 12345 --target local
           python3 harness/run_submission.py 0 --seed 12345 --target local
 
+      # Trace/cache identity is keyed by workload size+mode, not by seed or
+      # --target (see NIOBIUM_INTEGRATION.md: "delete it to force a fresh
+      # record"). Without this, the transport phase's "record" step below
+      # would find the local phase's trace already cached and skip straight
+      # to replay — before the transport server is even up. Also reclaims
+      # the multi-GB keys/database/trace from the local phase, which is what
+      # was filling up the runner's disk. Same cleanup as niobium-compiler's
+      # own tests/run-fbs-client-server-test.sh.
+      - name: Clean up local-phase artifacts before the transport phase
+        working-directory: fbs
+        run: rm -rf server_encrypted_compute_wl_0_mode_full fhetch_driver_source_* io/toy datasets/toy measurements/toy
+
       - name: Map the SDK into the layout the transport server expects
         run: |
           SHIM="$RUNNER_TEMP/nbcc-root"
