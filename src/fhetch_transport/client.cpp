@@ -128,13 +128,27 @@ int main(int argc, char** argv) {
         return 2;
     }
 
+    // POST path: honor a path baked into NBCC_FHETCH_SERVER (the Fog wrapper
+    // points it at /jobs/<id>/run); a bare origin keeps the default /replay.
+    auto [host, url_path] = origin_of(server_url);
+    const std::string replay_path =
+        (url_path.empty() || url_path == "/") ? nft::kReplayPath : url_path;
+
+#ifndef CPPHTTPLIB_OPENSSL_SUPPORT
+    if (host.rfind("https://", 0) == 0) {
+        std::cerr << "[nbcc_fhetch_replay] built without TLS support — cannot POST to "
+                  << "an https URL (" << host << "). Rebuild with OpenSSL "
+                     "(see src/fhetch_transport/CMakeLists.txt).\n";
+        return 3;
+    }
+#endif
+
     std::cout << "[nbcc_fhetch_replay] POSTing " << request_body.size()
               << " bytes (project=" << project_dir.filename().string()
               << ", target=" << args.target
-              << ") → " << server_url << nft::kReplayPath << "\n";
+              << ") → " << host << replay_path << "\n";
 
     // ---- POST and wait -------------------------------------------------
-    auto [host, _unused_path] = origin_of(server_url);
     httplib::Client cli(host);
     cli.set_read_timeout(60 * 120, 0);  // 2 hr — FUNC_SIM_HW on large workloads can exceed 30 min
     cli.set_write_timeout(60, 0);
@@ -149,7 +163,11 @@ int main(int argc, char** argv) {
     if (!args.opt_level.empty())
         headers.emplace(nft::kOptLevelHeader, args.opt_level);
 
-    auto res = cli.Post(nft::kReplayPath, headers,
+    // Optional Fog per-job ticket. Absent → no header (local/offline path).
+    if (const char* tok = std::getenv(nft::kAuthTokenEnv); tok && *tok)
+        headers.emplace("Authorization", std::string("Bearer ") + tok);
+
+    auto res = cli.Post(replay_path, headers,
                         request_body, nft::kArchiveContentType);
     if (!res) {
         std::cerr << "[nbcc_fhetch_replay] HTTP POST failed: "

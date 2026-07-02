@@ -40,6 +40,12 @@ constexpr const char* kDefaultServerEnv  = "NBCC_FHETCH_SERVER";
 constexpr const char* kDefaultServerAddr = "http://127.0.0.1:9443";
 constexpr int         kDefaultPort       = 9443;
 
+// Optional bearer token (the Fog per-job ticket). When set, the client sends
+// it as `Authorization: Bearer <token>`. Absent → no auth header (the existing
+// local/offline direct-POST path is unchanged). Normally exported by the Fog
+// job wrapper (scripts/fog_replay.sh) alongside NBCC_FHETCH_SERVER.
+constexpr const char* kAuthTokenEnv = "NBCC_FHETCH_TOKEN";
+
 // Server-side override of the compiler binary it will exec.
 // Default is "nbcc_fhetch_replay" (resolved via PATH).
 constexpr const char* kServerCompilerBinEnv = "NBCC_FHETCH_COMPILER_BIN";
