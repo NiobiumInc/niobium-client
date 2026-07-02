@@ -80,6 +80,10 @@ jobs:
             build-essential cmake ninja-build python3-numpy
           python3 -c "import numpy" || { echo "::error::numpy still not importable after apt install"; exit 1; }
 
+      - name: Disk usage — before build
+        if: always()
+        run: df -h /
+
       - name: Build niobium-client (this PR) + fhetch_driver + fbs submission
         # Public C++/OpenFHE output — OK to show; useful for diagnosing build breaks.
         working-directory: fbs
@@ -92,11 +96,25 @@ jobs:
             -j"$(nproc)" --target fhetch_driver
           scripts/build_task.sh ./submission "$OPENFHE_PREFIX"
 
+      - name: Disk usage — after build
+        if: always()
+        working-directory: fbs
+        run: |
+          df -h /
+          du -sh --max-depth=2 . 2>/dev/null | sort -rh | head -20
+
       - name: fbs sanity — record + replay via fhetch_driver (TOY, local, open-source only)
         working-directory: fbs
         run: |
           python3 harness/run_submission.py 0 --seed 12345 --target local
           python3 harness/run_submission.py 0 --seed 12345 --target local
+
+      - name: Disk usage — after local phase, before cleanup
+        if: always()
+        working-directory: fbs
+        run: |
+          df -h /
+          du -sh --max-depth=1 . 2>/dev/null | sort -rh | head -20
 
       # Trace/cache identity is keyed by workload size+mode, not by seed or
       # --target (see NIOBIUM_INTEGRATION.md: "delete it to force a fresh
@@ -109,6 +127,10 @@ jobs:
       - name: Clean up local-phase artifacts before the transport phase
         working-directory: fbs
         run: rm -rf server_encrypted_compute_wl_0_mode_full fhetch_driver_source_* io/toy datasets/toy measurements/toy
+
+      - name: Disk usage — after cleanup
+        if: always()
+        run: df -h /
 
       - name: Map the SDK into the layout the transport server expects
         run: |
