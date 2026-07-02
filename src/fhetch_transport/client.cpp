@@ -78,8 +78,9 @@ Args parse(int argc, char** argv) {
 }
 
 // Split "http[s]://host[:port]" into what httplib's Client constructor wants.
-// Returns {scheme_host, path_prefix}. We only care about the origin; any path
-// component in the URL is ignored (we always POST to kReplayPath).
+// Returns {scheme_host, path_prefix}. The Fog wrapper bakes a per-job path
+// (/jobs/<id>/run) into the URL; a bare origin yields an empty path_prefix and
+// the caller falls back to kReplayPath.
 std::pair<std::string, std::string> origin_of(const std::string& url) {
     auto scheme_sep = url.find("://");
     if (scheme_sep == std::string::npos) {
@@ -134,13 +135,27 @@ int main(int argc, char** argv) {
     }
     const std::uint64_t body_len = nft::archive_content_length(entries);
 
+    // POST path: honor a path baked into NBCC_FHETCH_SERVER (the Fog wrapper
+    // points it at /jobs/<id>/run); a bare origin keeps the default /replay.
+    auto [host, url_path] = origin_of(server_url);
+    const std::string replay_path =
+        (url_path.empty() || url_path == "/") ? nft::kReplayPath : url_path;
+
+#ifndef CPPHTTPLIB_OPENSSL_SUPPORT
+    if (host.rfind("https://", 0) == 0) {
+        std::cerr << "[nbcc_fhetch_replay] built without TLS support — cannot POST to "
+                  << "an https URL (" << host << "). Rebuild with OpenSSL "
+                     "(see src/fhetch_transport/CMakeLists.txt).\n";
+        return 3;
+    }
+#endif
+
     std::cout << "[nbcc_fhetch_replay] POSTing " << body_len
               << " bytes (streamed, project=" << project_dir.filename().string()
               << ", target=" << args.target
-              << ") → " << server_url << nft::kReplayPath << "\n";
+              << ") → " << host << replay_path << "\n";
 
     // ---- POST and wait -------------------------------------------------
-    auto [host, _unused_path] = origin_of(server_url);
     httplib::Client cli(host);
     cli.set_read_timeout(60 * 120, 0);  // 2 hr — FUNC_SIM_HW on large workloads can exceed 30 min
     cli.set_write_timeout(60, 0);
@@ -155,12 +170,16 @@ int main(int argc, char** argv) {
     if (!args.opt_level.empty())
         headers.emplace(nft::kOptLevelHeader, args.opt_level);
 
+    // Optional Fog per-job ticket. Absent → no header (local/offline path).
+    if (const char* tok = std::getenv(nft::kAuthTokenEnv); tok && *tok)
+        headers.emplace("Authorization", std::string("Bearer ") + tok);
+
     // Stream the archive straight to the socket (chunked transfer encoding) so
     // the whole trace never sits in RAM — the archive dominates forwarder
     // memory. stream_archive() emits everything in one provider invocation,
     // then we signal completion via sink.done().
     auto res = cli.Post(
-        nft::kReplayPath, headers,
+        replay_path, headers,
         [&entries](std::size_t /*offset*/, httplib::DataSink& sink) -> bool {
             try {
                 if (!nft::stream_archive(entries,
