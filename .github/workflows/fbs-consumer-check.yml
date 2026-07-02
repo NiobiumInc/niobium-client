@@ -41,7 +41,7 @@ concurrency:
 jobs:
   fbs-consumer-check:
     name: fbs-submission consumer check (self-hosted, GCP)
-    runs-on: [self-hosted, Linux, X64, gcp-ephemeral]
+    runs-on: [self-hosted, gcp-ephemeral]
     timeout-minutes: 60
     env:
       SDK: /mnt/niobium-sdk/sdk

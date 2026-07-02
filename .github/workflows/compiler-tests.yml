@@ -47,7 +47,7 @@ concurrency:
 jobs:
   compiler-tests:
     name: Compiler tests (self-hosted, GCP)
-    runs-on: [self-hosted, Linux, X64, gcp-ephemeral]
+    runs-on: [self-hosted, gcp-ephemeral]
     timeout-minutes: 60   # OpenFHE cold-build ~15 min + mult E2E
     env:
       SDK: /mnt/niobium-sdk/sdk   # mounted RO at boot by runner-startup.sh
