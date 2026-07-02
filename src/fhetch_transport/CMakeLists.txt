@@ -29,6 +29,30 @@ target_include_directories(nbcc_fhetch_replay_transport_client PRIVATE
 target_link_libraries(nbcc_fhetch_replay_transport_client PRIVATE
     niobium_fhetch_archive Threads::Threads)
 
+# The forwarder POSTs to the assigned worker through HAProxy's TLS edge
+# (https://…), so cpp-httplib needs its OpenSSL backend — without it httplib
+# throws "'https' scheme is not supported". Optional: a local-only http build
+# (against the 127.0.0.1 replay server) still builds without OpenSSL headers.
+# On macOS, hint Homebrew's copy: -DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3).
+find_package(OpenSSL)
+if(OpenSSL_FOUND)
+    target_compile_definitions(nbcc_fhetch_replay_transport_client PRIVATE
+        CPPHTTPLIB_OPENSSL_SUPPORT)
+    target_link_libraries(nbcc_fhetch_replay_transport_client PRIVATE
+        OpenSSL::SSL OpenSSL::Crypto)
+    if(APPLE)
+        # httplib's load_system_certs() reads the macOS keychain via the
+        # Security / CoreFoundation frameworks — link them or the OpenSSL build
+        # fails with undefined _SecTrustCopyAnchorCertificates / _CF* symbols.
+        target_link_libraries(nbcc_fhetch_replay_transport_client PRIVATE
+            "-framework CoreFoundation" "-framework Security")
+    endif()
+    message(STATUS "fhetch_transport client: TLS enabled (OpenSSL ${OPENSSL_VERSION})")
+else()
+    message(WARNING "fhetch_transport client: OpenSSL not found — https worker "
+        "URLs (Fog) will fail; local http only")
+endif()
+
 # Server daemon that sits in front of the compiler-side nbcc_fhetch_replay.
 add_executable(nbcc_fhetch_replay_server server.cpp)
 target_include_directories(nbcc_fhetch_replay_server PRIVATE
