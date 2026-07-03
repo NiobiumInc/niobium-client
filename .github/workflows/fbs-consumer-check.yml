@@ -103,11 +103,15 @@ jobs:
           df -h /
           du -sh --max-depth=2 . 2>/dev/null | sort -rh | head -20
 
-      - name: fbs sanity — record + replay via fhetch_driver (TOY, local, open-source only)
+      # Since "Enable hollow-mode recording + always-replay in FBS server
+      # compute" (fetch-by-similarity-submission#11), server_encrypted_compute
+      # calls replay() unconditionally — a cache miss records in hollow mode
+      # first, but either way replay() runs right after via fhetch_driver.
+      # One invocation now exercises both the (hollow) record path and the
+      # replay path; a second invocation would just repeat the same replay.
+      - name: fbs sanity — record (hollow) + replay via fhetch_driver (TOY, local, open-source only)
         working-directory: fbs
-        run: |
-          python3 harness/run_submission.py 0 --seed 12345 --target local
-          python3 harness/run_submission.py 0 --seed 12345 --target local
+        run: python3 harness/run_submission.py 0 --seed 12345 --target local
 
       - name: Disk usage — after local phase, before cleanup
         if: always()
@@ -141,13 +145,11 @@ jobs:
           test -x "$SHIM/build/nbcc_fhetch_replay" || { echo "::error::SDK missing nbcc_fhetch_replay"; exit 1; }
           echo "NIOBIUM_COMPILER_ROOT=$SHIM" >> "$GITHUB_ENV"
 
-      # RECORD never calls niobium::compiler().replay() (only a cache HIT
-      # does) — plain OpenFHE, safe to show. --opt-level O1: O2+ enables CSE,
-      # not yet correctness-preserving for the re-recorded replay.
-      - name: fbs sanity — record (TOY, --target FUNC_SIM_HW)
-        working-directory: fbs
-        run: python3 harness/run_submission.py 0 --seed 54321 --target FUNC_SIM_HW --opt-level O1
-
+      # Since "Enable hollow-mode recording + always-replay in FBS server
+      # compute" (fetch-by-similarity-submission#11), server_encrypted_compute
+      # calls replay() unconditionally — for a non-local --target that means
+      # EVERY invocation dispatches over the transport, so the server must
+      # already be up before the first (and only) harness call, not after.
       - name: Start the transport server (background, output suppressed)
         run: |
           set +x
@@ -176,7 +178,10 @@ jobs:
           done
           [ "$ready" = "1" ] || { echo "::error::server did not become healthy"; exit 1; }
 
-      - name: fbs sanity — replay over transport (PASS/FAIL only, compiler output suppressed)
+      # --opt-level O1: O2+ enables CSE, not yet correctness-preserving for
+      # the re-recorded replay. Output suppressed: replay() always dispatches
+      # over the transport now, so this touches the compiler on every run.
+      - name: fbs sanity — record (hollow) + replay over transport (PASS/FAIL only, compiler output suppressed)
         working-directory: fbs
         run: |
           set +x
