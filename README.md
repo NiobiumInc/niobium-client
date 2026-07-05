@@ -273,16 +273,23 @@ Niobium hardware with minimal porting effort: swap the `cuda*` calls for
 
 ## Building
 
+### Fresh Build
+
 ```bash
 make sync                # git submodule update --init --recursive
 make release             # configure + build everything (Release)
+make config && make build # same, Debug (config once, then build)
 ```
 
-`make release` runs the CMake configure step (`config-release`) and then the
-build (`build-release`) — use it for a fresh clone. Once the tree is configured,
-`make build-release` rebuilds incrementally without re-configuring (running it on
-an unconfigured tree fails, since it only invokes `cmake --build`). For a Debug
-build, run `make config` once and then `make build`.
+### Incremental Build
+
+```bash
+make sync
+make build-release        # build OpenFHE + libnbfhetch + examples (Release)
+make build                # same, Debug
+```
+
+### Build Pipeline
 
 The top-level `Makefile` builds OpenFHE (vendored at
 `vendor/niobium-fhetch/vendor/openfhe`), installs it under
