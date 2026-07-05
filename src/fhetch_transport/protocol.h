@@ -35,6 +35,15 @@ constexpr const char* kProjectNameHeader = "X-Project-Name";
 // turns this into a native -O<n> flag on the nbcc_fhetch_replay command line.
 constexpr const char* kOptLevelHeader = "X-Opt-Level";
 
+// Optional opaque job id. When set (and the server has a timing root
+// configured, see kTimingRootEnv), the server points the compiler's
+// NB_TIMING_SUMMARY_DIR at <root>/<job-id> so its per-run telemetry
+// (timing_summary.json, replay.json, …) lands in a job-scoped directory the
+// caller can associate with the job. The caller supplies only the id — never a
+// path — so it can't steer the compiler's writes outside the server's root.
+// Absent → NB_TIMING_SUMMARY_DIR is left untouched (direct/local path unchanged).
+constexpr const char* kJobIdHeader = "X-Job-Id";
+
 // ---- Defaults ----------------------------------------------------------
 constexpr const char* kDefaultServerEnv  = "NBCC_FHETCH_SERVER";
 constexpr const char* kDefaultServerAddr = "http://127.0.0.1:9443";
@@ -49,5 +58,11 @@ constexpr const char* kAuthTokenEnv = "NBCC_FHETCH_TOKEN";
 // Server-side override of the compiler binary it will exec.
 // Default is "nbcc_fhetch_replay" (resolved via PATH).
 constexpr const char* kServerCompilerBinEnv = "NBCC_FHETCH_COMPILER_BIN";
+
+// Server-side root under which per-job timing dirs are placed. When set and a
+// request carries kJobIdHeader, the server exports
+// NB_TIMING_SUMMARY_DIR=<root>/<job-id> to the compiler. Empty/unset → the
+// timing-dir feature is off and the env var is left untouched.
+constexpr const char* kTimingRootEnv = "NBCC_FHETCH_TIMING_ROOT";
 
 }  // namespace niobium::fhetch_transport
