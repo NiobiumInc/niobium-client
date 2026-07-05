@@ -28,10 +28,14 @@ See [`README.md`](README.md) for the full narrative and diagrams.
 ## Development Commands
 
 ```bash
-git submodule update --init --recursive   # or: make sync-submodules
+make sync                 # git submodule update --init --recursive
 
-make build-release        # build OpenFHE + libnbfhetch + examples (Release)
-make build                # same, Debug
+make release              # configure + build OpenFHE + libnbfhetch + examples (Release)
+make config && make build # same, Debug (config once, then build)
+
+# On an already-configured tree you can rebuild without re-configuring:
+make build-release        # incremental Release build (requires a prior `make release`/config)
+make build                # incremental Debug build   (requires a prior `make config`)
 
 make test-release         # run the example/replay test sweep (Release)
 make test-mult-release    # CKKS EvalMult: record → replay → decrypt
