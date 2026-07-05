@@ -41,6 +41,7 @@ struct ServerArgs {
     std::string bind = "0.0.0.0";
     int         port = nft::kDefaultPort;
     std::string compiler_bin;
+    std::string timing_root;  // NBCC_FHETCH_TIMING_ROOT; empty → feature off
 };
 
 void print_usage() {
@@ -59,6 +60,9 @@ ServerArgs parse(int argc, char** argv) {
     ServerArgs out;
     if (const char* env = std::getenv(nft::kServerCompilerBinEnv)) {
         if (*env) out.compiler_bin = env;
+    }
+    if (const char* env = std::getenv(nft::kTimingRootEnv)) {
+        if (*env) out.timing_root = env;
     }
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
@@ -100,6 +104,21 @@ bool is_safe_cli_token(const std::string& s) {
     return true;
 }
 
+// A job id becomes a single path segment under the server's timing root, so it
+// must be strict: letters, digits, and hyphen only — no '/', '.', or anything
+// that could escape the root (a UUID satisfies this). Deliberately narrower
+// than is_safe_cli_token, which permits '/' and '.'.
+bool is_safe_job_id(const std::string& s) {
+    if (s.empty() || s.size() > 128) return false;
+    for (char c : s) {
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9') || c == '-')
+            continue;
+        return false;
+    }
+    return true;
+}
+
 // Translate an X-Opt-Level header value ("O0".."O3", or bare "0".."3") into the
 // native compiler flag "-O0".."-O3". Returns "" if empty or not a valid level,
 // so the caller can reject malformed values and fall back to the O0 default.
@@ -125,6 +144,7 @@ std::string unique_tempdir(const std::string& prefix) {
 
 struct Handler {
     std::string compiler_bin;
+    std::string timing_root;  // empty → per-job timing dir disabled
 
     void operator()(const httplib::Request& req, httplib::Response& res,
                     const httplib::ContentReader& content_reader) const {
@@ -141,6 +161,7 @@ struct Handler {
         auto target  = req.get_header_value(nft::kTargetHeader);
         auto project = req.get_header_value(nft::kProjectNameHeader);
         auto opt_in  = req.get_header_value(nft::kOptLevelHeader);
+        auto job_id  = req.get_header_value(nft::kJobIdHeader);
         if (target.empty()) {
             reject(400, "missing header " + std::string(nft::kTargetHeader) + "\n");
             return;
@@ -150,6 +171,19 @@ struct Handler {
             reject(400, "header values must match [A-Za-z0-9_.+=/,:-]+\n");
             return;
         }
+        if (!job_id.empty() && !is_safe_job_id(job_id)) {
+            res.status = 400;
+            res.set_content("header " + std::string(nft::kJobIdHeader) +
+                            " must match [A-Za-z0-9-]+\n", "text/plain");
+            return;
+        }
+
+        // Per-job timing dir: derived server-side from the (validated) job id
+        // under our own root — the caller never supplies a path. Empty unless
+        // both a root is configured and a job id was sent.
+        std::string timing_dir;
+        if (!timing_root.empty() && !job_id.empty())
+            timing_dir = timing_root + "/" + job_id;
         if (project.empty()) project = "niobium_fhetch_project";
 
         // Optional optimization level → native -O<n>. Absent means O0 (the
@@ -203,6 +237,20 @@ struct Handler {
         // capture stderr alongside stdout so failure diagnostics come
         // back to the client without a second round trip.
         std::ostringstream cmd;
+        // Optional per-job timing dir → NB_TIMING_SUMMARY_DIR for the compiler.
+        // Path is <root>/<job-id>, both server-controlled (root from env, job id
+        // validated to [A-Za-z0-9-]+), so it's safe to inline as a `sh` env
+        // assignment. Create it so the compiler can write; the caller (Fog
+        // worker) collects and removes it after the run.
+        if (!timing_dir.empty()) {
+            std::error_code ec;
+            fs::create_directories(timing_dir, ec);
+            if (ec)
+                std::cerr << "[nbcc_fhetch_replay_server] could not create timing dir "
+                          << timing_dir << ": " << ec.message() << " (skipping)\n";
+            else
+                cmd << "NB_TIMING_SUMMARY_DIR=" << timing_dir << " ";
+        }
         cmd << compiler_bin
             << " --project=" << tempdir
             << " --target="  << target;
@@ -294,7 +342,7 @@ int main(int argc, char** argv) {
     std::signal(SIGINT,  shutdown_handler);
     std::signal(SIGTERM, shutdown_handler);
 
-    Handler handler{args.compiler_bin};
+    Handler handler{args.compiler_bin, args.timing_root};
     srv.Post(nft::kReplayPath,
              [&handler](const httplib::Request& req, httplib::Response& res,
                         const httplib::ContentReader& content_reader) {
