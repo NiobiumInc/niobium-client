@@ -276,8 +276,8 @@ Niobium hardware with minimal porting effort: swap the `cuda*` calls for
 ### Fresh Build
 
 ```bash
-make sync                # git submodule update --init --recursive
-make release             # configure + build everything (Release)
+make sync                 # git submodule update --init --recursive
+make release              # configure + build everything (Release)
 make config && make build # same, Debug (config once, then build)
 ```
 
