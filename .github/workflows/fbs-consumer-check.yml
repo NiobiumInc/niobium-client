@@ -41,7 +41,12 @@ concurrency:
 jobs:
   fbs-consumer-check:
     name: fbs-submission consumer check (self-hosted, GCP)
-    runs-on: [self-hosted, gcp-ephemeral]
+    # n2-highmem-48 (384GB): fhetch_driver's replay of this TOY-size FBS
+    # trace peaks at ~311GB RSS (measured locally, uncapped). See
+    # fetch-by-similarity-submission's ci.yml for the full writeup — this
+    # is a stopgap for a known upstream memory issue in the replay path,
+    # not a CI config problem.
+    runs-on: [self-hosted, gcp-ephemeral, n2-highmem-48]
     timeout-minutes: 60
     env:
       SDK: /mnt/niobium-sdk/sdk
