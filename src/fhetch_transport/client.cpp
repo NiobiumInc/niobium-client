@@ -21,12 +21,14 @@
 
 #include "httplib.h"
 
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -118,18 +120,19 @@ int main(int argc, char** argv) {
     // ---- Pack the project ----------------------------------------------
     // serialized_probes/ is the response payload — don't ship whatever stale
     // content the client may already have there.
-    std::string request_body;
+    std::vector<nft::ArchiveEntry> entries;
     try {
-        request_body = nft::pack_directory(project_dir, [](const fs::path& rel) {
+        entries = nft::scan_directory(project_dir, [](const fs::path& rel) {
             return rel.empty() || *rel.begin() != "serialized_probes";
         });
     } catch (const std::exception& e) {
-        std::cerr << "[nbcc_fhetch_replay] pack failed: " << e.what() << "\n";
+        std::cerr << "[nbcc_fhetch_replay] scan failed: " << e.what() << "\n";
         return 2;
     }
+    const std::uint64_t body_len = nft::archive_content_length(entries);
 
-    std::cout << "[nbcc_fhetch_replay] POSTing " << request_body.size()
-              << " bytes (project=" << project_dir.filename().string()
+    std::cout << "[nbcc_fhetch_replay] POSTing " << body_len
+              << " bytes (streamed, project=" << project_dir.filename().string()
               << ", target=" << args.target
               << ") → " << server_url << nft::kReplayPath << "\n";
 
@@ -149,8 +152,29 @@ int main(int argc, char** argv) {
     if (!args.opt_level.empty())
         headers.emplace(nft::kOptLevelHeader, args.opt_level);
 
-    auto res = cli.Post(nft::kReplayPath, headers,
-                        request_body, nft::kArchiveContentType);
+    // Stream the archive straight to the socket (chunked transfer encoding) so
+    // the whole trace never sits in RAM — the archive dominates forwarder
+    // memory. stream_archive() emits everything in one provider invocation,
+    // then we signal completion via sink.done().
+    auto res = cli.Post(
+        nft::kReplayPath, headers,
+        [&entries](std::size_t /*offset*/, httplib::DataSink& sink) -> bool {
+            try {
+                if (!nft::stream_archive(entries,
+                        [&sink](const char* d, std::size_t n) {
+                            return sink.write(d, n);
+                        })) {
+                    return false;  // sink closed
+                }
+                sink.done();
+                return true;
+            } catch (const std::exception& e) {
+                std::cerr << "[nbcc_fhetch_replay] stream failed: "
+                          << e.what() << "\n";
+                return false;
+            }
+        },
+        nft::kArchiveContentType);
     if (!res) {
         std::cerr << "[nbcc_fhetch_replay] HTTP POST failed: "
                   << httplib::to_string(res.error()) << "\n";
