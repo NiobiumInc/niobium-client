@@ -126,22 +126,28 @@ std::string unique_tempdir(const std::string& prefix) {
 struct Handler {
     std::string compiler_bin;
 
-    void operator()(const httplib::Request& req, httplib::Response& res) const {
+    void operator()(const httplib::Request& req, httplib::Response& res,
+                    const httplib::ContentReader& content_reader) const {
+        // On any pre-body validation failure we must still consume the
+        // (possibly huge, still-streaming) request body, otherwise the client's
+        // in-flight upload sees a broken connection instead of our error status.
+        auto reject = [&](int status, const std::string& msg) {
+            res.status = status;
+            res.set_content(msg, "text/plain");
+            content_reader([](const char*, std::size_t) { return true; });
+        };
+
         // ---- Header validation ---------------------------------------
         auto target  = req.get_header_value(nft::kTargetHeader);
         auto project = req.get_header_value(nft::kProjectNameHeader);
         auto opt_in  = req.get_header_value(nft::kOptLevelHeader);
         if (target.empty()) {
-            res.status = 400;
-            res.set_content("missing header " + std::string(nft::kTargetHeader) + "\n",
-                            "text/plain");
+            reject(400, "missing header " + std::string(nft::kTargetHeader) + "\n");
             return;
         }
         if (!is_safe_cli_token(target) ||
             (!project.empty() && !is_safe_cli_token(project))) {
-            res.status = 400;
-            res.set_content("header values must match [A-Za-z0-9_.+=/,:-]+\n",
-                            "text/plain");
+            reject(400, "header values must match [A-Za-z0-9_.+=/,:-]+\n");
             return;
         }
         if (project.empty()) project = "niobium_fhetch_project";
@@ -153,18 +159,35 @@ struct Handler {
         if (!opt_in.empty()) {
             opt_flag = opt_level_to_flag(opt_in);
             if (opt_flag.empty()) {
-                res.status = 400;
-                res.set_content("header " + std::string(nft::kOptLevelHeader) +
-                                " must be one of O0,O1,O2,O3\n", "text/plain");
+                reject(400, "header " + std::string(nft::kOptLevelHeader) +
+                            " must be one of O0,O1,O2,O3\n");
                 return;
             }
         }
 
-        // ---- Unpack the request -------------------------------------
+        // ---- Unpack the request (streamed to disk) ------------------
+        // Feed the incoming body straight into the incremental unpacker so the
+        // whole archive never sits in RAM. feed() throwing on malformed input
+        // is caught inside the receiver (returning false stops the read) rather
+        // than propagating through cpp-httplib's read loop.
         std::string tempdir;
         try {
             tempdir = unique_tempdir("nbcc_fhetch_server");
-            auto n  = nft::unpack_into(req.body, tempdir);
+            nft::ArchiveUnpacker unpacker(tempdir);
+            std::string unpack_err;
+            bool read_ok = content_reader(
+                [&](const char* data, std::size_t len) {
+                    try {
+                        unpacker.feed(data, len);
+                        return true;
+                    } catch (const std::exception& e) {
+                        unpack_err = e.what();
+                        return false;
+                    }
+                });
+            if (!unpack_err.empty()) throw std::runtime_error(unpack_err);
+            if (!read_ok) throw std::runtime_error("failed reading request body");
+            auto n = unpacker.finish();
             std::cout << "[nbcc_fhetch_replay_server] unpacked " << n
                       << " files into " << tempdir
                       << " (target=" << target << ")\n";
@@ -273,8 +296,9 @@ int main(int argc, char** argv) {
 
     Handler handler{args.compiler_bin};
     srv.Post(nft::kReplayPath,
-             [&handler](const httplib::Request& req, httplib::Response& res) {
-                 handler(req, res);
+             [&handler](const httplib::Request& req, httplib::Response& res,
+                        const httplib::ContentReader& content_reader) {
+                 handler(req, res, content_reader);
              });
 
     srv.Get("/healthz",
