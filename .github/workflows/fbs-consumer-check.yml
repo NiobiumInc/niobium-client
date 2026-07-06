@@ -103,6 +103,15 @@ jobs:
           df -h /
           du -sh --max-depth=2 . 2>/dev/null | sort -rh | head -20
 
+      # DIAGNOSTIC: fhetch_driver has been dying with exit 137 (SIGKILL)
+      # seconds after "Recording started", with zero progress output —
+      # sample memory every second in the background so we can see whether
+      # it's actually an OOM kill or a hang with memory flat.
+      - name: Start memory monitor (background)
+        run: |
+          ( while true; do date -u +"%H:%M:%S"; free -h; echo "---"; sleep 1; done > "$RUNNER_TEMP/memlog.txt" ) &
+          echo $! > "$RUNNER_TEMP/memmon.pid"
+
       # Since "Enable hollow-mode recording + always-replay in FBS server
       # compute" (fetch-by-similarity-submission#11), server_encrypted_compute
       # calls replay() unconditionally — a cache miss records in hollow mode
@@ -112,6 +121,14 @@ jobs:
       - name: fbs sanity — record (hollow) + replay via fhetch_driver (TOY, local, open-source only)
         working-directory: fbs
         run: python3 harness/run_submission.py 0 --seed 12345 --target local
+
+      - name: Stop memory monitor and show log
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/memmon.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/memmon.pid")" 2>/dev/null || true
+          fi
+          tail -200 "$RUNNER_TEMP/memlog.txt" || true
 
       - name: Disk usage — after local phase, before cleanup
         if: always()
