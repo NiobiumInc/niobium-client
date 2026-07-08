@@ -9,14 +9,14 @@ from dataclasses import dataclass, field, fields, is_dataclass
 from typing import TextIO
 import io
 
-import ast_nodes as ast
-from builtins_registry import (
+from . import ast_nodes as ast
+from .builtins_registry import (
     ENCRYPTED_RETURN_FNS, PLAINTEXT_RETURN_FNS, VECTOR_RETURN_FNS,
 )
 # Backwards-compatible alias (pre-registry name).
 PLAINTEXT_ONLY_FNS = PLAINTEXT_RETURN_FNS
-from semantic import SemanticAnalyzer
-from nb_types import Domain
+from .semantic import SemanticAnalyzer
+from .nb_types import Domain
 
 
 # ---------------------------------------------------------------------------

@@ -15,14 +15,11 @@ import os
 import json
 from pathlib import Path
 
-# Add xcomp directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from lexer import lex, Token, TT
-from parser import parse
-from semantic import analyze as semantic_analyze
-from codegen import generate
-from errors import CompileError
+from .lexer import lex, Token, TT
+from .parser import parse
+from .semantic import analyze as semantic_analyze
+from .codegen import generate
+from .errors import CompileError
 
 # One-line pointer to the design skill. Printed to stderr by check/compile so an
 # agent that lands on `nbc` without having read the docs still gets nudged to the
@@ -150,7 +147,7 @@ def _lex_all(files: list[str]) -> tuple[str, list[Token] | None]:
     if all_tokens:
         all_tokens.append(Token(TT.EOF, "", all_tokens[-1].loc))
     else:
-        from errors import SourceLocation
+        from .errors import SourceLocation
         all_tokens.append(Token(TT.EOF, "", SourceLocation()))
 
     return "", all_tokens
@@ -162,7 +159,7 @@ def _print_ast(node, indent=0):
     name = type(node).__name__
 
     # Import to check types
-    import ast_nodes as ast
+    from . import ast_nodes as ast
 
     if isinstance(node, ast.Program):
         print(f"{prefix}Program ({len(node.items)} items)")

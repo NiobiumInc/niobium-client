@@ -2,11 +2,11 @@
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from lexer import lex
-from parser import parse
-from semantic import analyze
+from xcomp.lexer import lex
+from xcomp.parser import parse
+from xcomp.semantic import analyze
 
 
 def check(source: str):
