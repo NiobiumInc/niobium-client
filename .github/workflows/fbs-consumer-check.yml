@@ -223,12 +223,27 @@ jobs:
         if: failure()
         run: |
           set +x
-          DEST="gs://github-runner-499901-ci-debug/${{ github.repository }}/${{ github.run_id }}-${{ github.run_attempt }}"
+          BUCKET="github-runner-499901-ci-debug"
+          PREFIX="${{ github.repository }}/${{ github.run_id }}-${{ github.run_attempt }}"
+          # Upload via the GCS JSON API (objects.insert) using the VM's metadata
+          # token — needs ONLY storage.objects.create, so the runner SA stays
+          # write-only (gcloud storage cp would also do an objects.get and 403).
+          TOKEN="$(curl -sf -H 'Metadata-Flavor: Google' \
+            'http://metadata/computeMetadata/v1/instance/service-accounts/default/token' \
+            | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])')"
           for f in fbs-replay.log fhetch_server.log memlog.txt; do
-            if [ -f "$RUNNER_TEMP/$f" ]; then
-              gcloud storage cp "$RUNNER_TEMP/$f" "$DEST/$f" --quiet || echo "::warning::failed to upload $f"
+            [ -f "$RUNNER_TEMP/$f" ] || continue
+            obj="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$PREFIX/$f")"
+            if curl -sf -X POST \
+                 -H "Authorization: Bearer $TOKEN" -H 'Content-Type: text/plain' \
+                 --data-binary @"$RUNNER_TEMP/$f" \
+                 "https://storage.googleapis.com/upload/storage/v1/b/$BUCKET/o?uploadType=media&name=$obj" \
+                 >/dev/null; then
+              echo "uploaded $f"
+            else
+              echo "::warning::failed to upload $f"
             fi
           done
           echo "Suppressed logs uploaded to private bucket (team-only read):"
-          echo "  $DEST/"
-          echo "Retrieve with:  gcloud storage cp -r \"$DEST\" ."
+          echo "  gs://$BUCKET/$PREFIX/"
+          echo "Retrieve with:  gcloud storage cp -r \"gs://$BUCKET/$PREFIX\" ."
