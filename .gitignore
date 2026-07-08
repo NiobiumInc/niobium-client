@@ -48,6 +48,10 @@ vendor/lib/
 # Release artifacts (source tarball output)
 dist/
 
+# Python bytecode
+__pycache__/
+*.pyc
+
 # Auto-facade test artifacts
 ciphers_auto/
 bootstrap_auto_keys/

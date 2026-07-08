@@ -96,7 +96,8 @@ NATIVEOPT ?= OFF
 # Targets
 # ==============================================================================
 
-.PHONY: help sync sync-submodules update-openfhe update-niobium-fhetch \
+.PHONY: config-python-release build-python-release test-submit-python-release \
+        help sync sync-submodules update-openfhe update-niobium-fhetch \
         config config-release build build-release release \
         config-openfhe config-openfhe-release build-openfhe build-openfhe-release \
         config-client config-client-release \
@@ -575,6 +576,28 @@ test-client-release: test-simple-ops-release test-mult-release test-auto-ciphers
 
 ## Run all currently-passing Release tests (client + fhetch submodule) — internal server only, do not run in CI
 test-release: test-client-release test-fhetch-release
+
+##@ Python package (submit client + _archive binding; needs pybind11)
+
+# The _archive binding is pure C++ stdlib (no OpenFHE), so it builds standalone
+# via python/CMakeLists.txt. During full wheel assembly this folds into a
+# NIOBIUM_CLIENT_WITH_PYTHON option that also pulls in niobium-fhetch's modules.
+PYTHON       ?= python3
+PYBIND11_DIR := $(shell $(PYTHON) -m pybind11 --cmakedir 2>/dev/null)
+PY_EXE       := $(shell command -v $(PYTHON))
+
+config-python-release: ## Configure the Python package (_archive binding). Needs pybind11.
+	@if [ -z "$(PYBIND11_DIR)" ]; then \
+		echo "pybind11 CMake dir not found for '$(PYTHON)'. Install: $(PYTHON) -m pip install pybind11"; \
+		exit 1; \
+	fi
+	cmake -S python -B build/python -Dpybind11_DIR=$(PYBIND11_DIR) -DPython_EXECUTABLE=$(PY_EXE)
+
+build-python-release: config-python-release ## Build the Python package (_archive)
+	cmake --build build/python -j $(NUM_CPUS)
+
+test-submit-python-release: build-python-release ## submit() + _archive smoke (mock server; no OpenFHE)
+	PYTHONPATH=$(CURDIR)/build/python $(PY_EXE) python/tests/submit_smoke.py
 
 ##@ Cleanup
 
