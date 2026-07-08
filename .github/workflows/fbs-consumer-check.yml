@@ -10,11 +10,20 @@
 # the compiler-backed replay path. See
 # https://github.com/NiobiumInc/gcp-github-runners (workflow-snippets/README.md).
 #
-# Only tests --target FUNC_SIM_HW (via the transport). There used to also be
-# a --target local (fhetch_driver) phase here, removed per Robert: FUNC_SIM_HW
-# is the correct/supported target for FBS, not local fhetch_driver replay —
-# which was also the source of an unrelated ~311GB RSS upstream memory bug in
-# fhetch_driver itself, not a CI config issue.
+# Only tests --target FHE_SIM (via the transport). There used to also be
+# a --target local (fhetch_driver) phase here, removed: local fhetch_driver
+# replay is unsupported for FBS — it was also the source of an unrelated
+# ~311GB RSS upstream memory bug in fhetch_driver itself, not a CI config
+# issue.
+#
+# TEMPORARY: using FHE_SIM instead of FUNC_SIM_HW. Confirmed FUNC_SIM_HW is
+# broken specifically in SDK/NIOBIUM_DIST_BUILD builds — replay_iss.cpp
+# silently substitutes the FHE_SIM/OpenFHE executor with Montgomery forced
+# off, while the rest of the pipeline still assumes HW mode is on (the
+# device spec's montgomery_enabled: true), corrupting ciphertext state and
+# failing CKKS decode ("approximation error too high"). FHE_SIM doesn't hit
+# this mismatch and is confirmed passing via the SDK. Revert to FUNC_SIM_HW
+# once niobium-compiler fixes the DIST_BUILD executor path.
 #
 # ===========================================================================
 # HARD REQUIREMENT: NO nbcc / compiler output in the public Actions log.
@@ -49,11 +58,10 @@ jobs:
     name: fbs-submission consumer check (self-hosted, GCP)
     # Still on n2-highmem-48 (384GB) — left over from sizing for
     # fhetch_driver's local replay (~311GB RSS, now removed from this
-    # workflow). NOT yet right-sized for FUNC_SIM_HW specifically: its
-    # device spec (niobium-compiler/devices/func_sim_hw/spec.yaml) declares
-    # `max_memory_gb: 32`, but we haven't measured this workflow's actual
-    # peak RSS yet — see the memory monitor step below. Downsize once we
-    # have a real number.
+    # workflow). NOT yet right-sized for FHE_SIM specifically (measured peak
+    # is in the same ballpark as FUNC_SIM_HW's, ~57-59GB, since both
+    # ultimately run the same OpenFHE executor). Downsize once we have more
+    # data points.
     runs-on: [self-hosted, gcp-ephemeral, n2-highmem-48]
     timeout-minutes: 60
     env:
@@ -158,7 +166,7 @@ jobs:
           done
           [ "$ready" = "1" ] || { echo "::error::server did not become healthy"; exit 1; }
 
-      # DIAGNOSTIC: measuring actual peak RAM for FUNC_SIM_HW specifically
+      # DIAGNOSTIC: measuring actual peak RAM for this target specifically
       # before we decide on a runner size. Sample free -h every second in
       # the background around the harness call.
       - name: Start memory monitor (background)
@@ -175,7 +183,7 @@ jobs:
           set +x
           export NBCC_FHETCH_SERVER="http://127.0.0.1:$PORT"
           rc=0
-          python3 harness/run_submission.py 0 --seed 54321 --target FUNC_SIM_HW --opt-level O1 >/dev/null 2>&1 || rc=1
+          python3 harness/run_submission.py 0 --seed 54321 --target FHE_SIM --opt-level O1 >/dev/null 2>&1 || rc=1
           if [ $rc -eq 0 ]; then
             echo "fbs consumer check (compiler E2E): PASS"
           else
