@@ -39,11 +39,8 @@ name: fbs-consumer-check
 on:
   pull_request:
     branches: [main]
-  # PROVISIONAL: unrestricted push trigger so this fires on every push to the
-  # working branch while it's being iterated on pre-PR. Narrow back to
-  # `branches: [main]` once the PR is open (this is what push: [main] on
-  # niobium-client's other GCP workflows uses).
-  push: {}
+  push:
+    branches: [main]
   workflow_dispatch: {}
 
 permissions:
@@ -56,13 +53,10 @@ concurrency:
 jobs:
   fbs-consumer-check:
     name: fbs-submission consumer check (self-hosted, GCP)
-    # Still on n2-highmem-48 (384GB) — left over from sizing for
-    # fhetch_driver's local replay (~311GB RSS, now removed from this
-    # workflow). NOT yet right-sized for FHE_SIM specifically (measured peak
-    # is in the same ballpark as FUNC_SIM_HW's, ~57-59GB, since both
-    # ultimately run the same OpenFHE executor). Downsize once we have more
-    # data points.
-    runs-on: [self-hosted, gcp-ephemeral, n2-highmem-48]
+    # Downsized from n2-highmem-48 (384GB, sized for fhetch_driver's local
+    # replay, now removed) to n2-highmem-16 (128GB) — measured peak with
+    # FHE_SIM is ~57-59GB, so this keeps ~2x headroom.
+    runs-on: [self-hosted, gcp-ephemeral, n2-highmem-16]
     timeout-minutes: 60
     env:
       SDK: /mnt/niobium-sdk/sdk
