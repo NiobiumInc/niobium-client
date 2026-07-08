@@ -3,7 +3,7 @@
 from __future__ import annotations
 from enum import Enum, auto
 from dataclasses import dataclass
-from errors import SourceLocation, LexError
+from .errors import SourceLocation, LexError
 
 
 class TT(Enum):

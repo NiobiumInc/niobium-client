@@ -2,11 +2,11 @@
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from lexer import lex
-from parser import parse
-import ast_nodes as ast
+from xcomp.lexer import lex
+from xcomp.parser import parse
+import xcomp.ast_nodes as ast
 
 
 def parse_str(source: str) -> ast.Program:

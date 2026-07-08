@@ -1,9 +1,9 @@
 """Recursive descent parser for the nb FHE language."""
 
 from __future__ import annotations
-from lexer import Token, TT
-from errors import ParseError, SourceLocation
-import ast_nodes as ast
+from .lexer import Token, TT
+from .errors import ParseError, SourceLocation
+from . import ast_nodes as ast
 
 
 # Type constructor keywords that disambiguate from comparison operators

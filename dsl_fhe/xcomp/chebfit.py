@@ -29,7 +29,7 @@ charge the implied depth) and by codegen (to emit the selected degree).
 
 from __future__ import annotations
 import math
-import ast_nodes as ast
+from . import ast_nodes as ast
 
 
 class Unevaluable(Exception):

@@ -2,12 +2,12 @@
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from lexer import lex
-from parser import parse
-from semantic import analyze
-from codegen import generate
+from xcomp.lexer import lex
+from xcomp.parser import parse
+from xcomp.semantic import analyze
+from xcomp.codegen import generate
 
 
 def compile_str(source: str) -> dict[str, str]:
@@ -181,8 +181,8 @@ def test_key_loading_for_server():
 
 def _make_gen(source: str):
     """Build a CodeGenerator over `source` (for testing internals directly)."""
-    import ast_nodes as ast
-    from codegen import CodeGenerator
+    import xcomp.ast_nodes as ast
+    from xcomp.codegen import CodeGenerator
     program = parse(lex(source))
     sa = analyze(program)
     gen = CodeGenerator(program, sa)
@@ -248,7 +248,7 @@ def test_no_name_heuristic():
     # Names that the old prefix heuristic classified as encrypted (including
     # its known false positives) are all plaintext when unresolvable, and the
     # ALL_CAPS rule is gone with it.
-    import ast_nodes as ast
+    import xcomp.ast_nodes as ast
     gen, _ = _make_gen(KEYGEN_SRC.format(ring=""))
     enc = lambda n: gen._is_encrypted_expr(ast.Ident(name=n))
     for name in ("ct", "acc", "result", "eqry", "result_index",

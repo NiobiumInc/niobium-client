@@ -9,15 +9,15 @@ Performs:
 """
 
 from __future__ import annotations
-import ast_nodes as ast
-from nb_types import (
+from . import ast_nodes as ast
+from .nb_types import (
     NbType, TypeKind, Domain, SymbolTable, Symbol,
     PRIMITIVE_MAP, VOID, BOOL, U32, I64, F64, STRING, PATH, UNKNOWN,
     enc_of, vec_of, mat_of, is_numeric, is_encrypted, common_type,
     CLIENT_ONLY_FNS, SERVER_FORBIDDEN_TYPES,
 )
-from builtins_registry import BUILTINS, DEPTH_OPAQUE_FNS
-from errors import (
+from .builtins_registry import BUILTINS, DEPTH_OPAQUE_FNS
+from .errors import (
     ErrorCollector, SemanticError, DomainError, TypeError_, DepthError,
     SourceLocation,
 )
@@ -209,7 +209,7 @@ class SemanticAnalyzer:
         target = self._resolve_float_arg(expr, "max_error")
         if target is None:
             return None
-        import chebfit
+        from . import chebfit
         positional = [a for a in expr.args if not a.name]
         closure = positional[0].value if positional else None
         if not isinstance(closure, ast.Closure):

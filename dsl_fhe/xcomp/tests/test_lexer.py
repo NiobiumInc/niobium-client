@@ -2,10 +2,10 @@
 
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from lexer import lex, TT
-from errors import LexError
+from xcomp.lexer import lex, TT
+from xcomp.errors import LexError
 
 
 def test_basic_tokens():
