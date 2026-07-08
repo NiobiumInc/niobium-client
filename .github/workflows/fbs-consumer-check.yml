@@ -156,7 +156,15 @@ jobs:
 
           # Output still kept out of the public log; captured to a file that is
           # only shipped to a PRIVATE bucket on failure (see upload step below).
+          #
+          # PATH must include the compiler root's build/ dir: the compiler's
+          # "secondary replay" step execs a small `replay` helper binary by
+          # bare name, not by full path. The SDK ships it at bin/replay (the
+          # shim symlinks it into build/ alongside nbcc_fhetch_replay), but
+          # without PATH the server can't find it and replay fails with
+          # "Could not find replay executable in PATH".
           LD_LIBRARY_PATH="$OPENFHE_LIB:$NIOBIUM_COMPILER_ROOT/build" \
+            PATH="$NIOBIUM_COMPILER_ROOT/build:$PATH" \
             "$SERVER_BIN" --port "$PORT" --bind 127.0.0.1 --exec "$COMPILER_BIN" \
             >"$RUNNER_TEMP/fhetch_server.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/fhetch_server.pid"
