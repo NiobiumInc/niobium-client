@@ -132,6 +132,10 @@ jobs:
           ln -sf "$SDK"/lib/* "$SHIM/build/"
           test -x "$SHIM/build/nbcc_fhetch_replay" || { echo "::error::SDK missing nbcc_fhetch_replay"; exit 1; }
           echo "NIOBIUM_COMPILER_ROOT=$SHIM" >> "$GITHUB_ENV"
+          # The compiler (run server-side by the transport) needs the SDK device
+          # specs for a non-trivial --target like FHE_SIM; without this it aborts
+          # with "Cannot find devices directory". Mirrors compiler-tests.yml.
+          echo "NIOBIUM_SPEC_DIR=$SDK/share/niobium/devices" >> "$GITHUB_ENV"
 
       # Since "Enable hollow-mode recording + always-replay in FBS server
       # compute" (fetch-by-similarity-submission#11), server_encrypted_compute
