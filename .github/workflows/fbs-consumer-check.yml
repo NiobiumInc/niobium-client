@@ -150,9 +150,11 @@ jobs:
           [ -f "$ENV_FILE" ] && . "$ENV_FILE"
           : "${OPENFHE_LIB:=$CLIENT_ROOT/vendor/lib/openfhe/lib}"
 
+          # Output still kept out of the public log; captured to a file that is
+          # only shipped to a PRIVATE bucket on failure (see upload step below).
           LD_LIBRARY_PATH="$OPENFHE_LIB:$NIOBIUM_COMPILER_ROOT/build" \
             "$SERVER_BIN" --port "$PORT" --bind 127.0.0.1 --exec "$COMPILER_BIN" \
-            >/dev/null 2>&1 &
+            >"$RUNNER_TEMP/fhetch_server.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/fhetch_server.pid"
 
           ready=0
@@ -183,11 +185,13 @@ jobs:
           set +x
           export NBCC_FHETCH_SERVER="http://127.0.0.1:$PORT"
           rc=0
-          python3 harness/run_submission.py 0 --seed 54321 --target FHE_SIM --opt-level O1 >/dev/null 2>&1 || rc=1
+          # Output captured to a file (kept out of the public log); shipped to a
+          # PRIVATE bucket only on failure (see upload step below).
+          python3 harness/run_submission.py 0 --seed 54321 --target FHE_SIM --opt-level O1 >"$RUNNER_TEMP/fbs-replay.log" 2>&1 || rc=1
           if [ $rc -eq 0 ]; then
             echo "fbs consumer check (compiler E2E): PASS"
           else
-            echo "::error::fbs consumer check FAILED (output suppressed by policy; reproduce locally)"
+            echo "::error::fbs consumer check FAILED (output suppressed by policy; see private debug logs — reproduce locally)"
           fi
           exit $rc
 
@@ -208,3 +212,23 @@ jobs:
             for i in 1 2 3 4 5; do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
             kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null || true
           fi
+
+      # DEBUG (temporary): on failure, ship the suppressed logs to a PRIVATE,
+      # access-controlled bucket in the runner project — never to the public log.
+      # Bucket github-runner-499901-ci-debug has public-access-prevention enforced
+      # + a 14-day auto-delete lifecycle; the runner SA has write-only access. The
+      # public log shows only the gs:// pointer, not the contents. Remove this step
+      # (and restore /dev/null above) once the FHE_SIM/O1 failure is diagnosed.
+      - name: Upload suppressed logs to private bucket (on failure)
+        if: failure()
+        run: |
+          set +x
+          DEST="gs://github-runner-499901-ci-debug/${{ github.repository }}/${{ github.run_id }}-${{ github.run_attempt }}"
+          for f in fbs-replay.log fhetch_server.log memlog.txt; do
+            if [ -f "$RUNNER_TEMP/$f" ]; then
+              gcloud storage cp "$RUNNER_TEMP/$f" "$DEST/$f" --quiet || echo "::warning::failed to upload $f"
+            fi
+          done
+          echo "Suppressed logs uploaded to private bucket (team-only read):"
+          echo "  $DEST/"
+          echo "Retrieve with:  gcloud storage cp -r \"$DEST\" ."
