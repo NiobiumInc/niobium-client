@@ -61,11 +61,11 @@ test-command = "python {project}/python/tests/wheel_smoke.py"
 [tool.cibuildwheel.linux]
 manylinux-x86_64-image = "manylinux_2_28"
 manylinux-aarch64-image = "manylinux_2_28"
-# auditwheel vendors the extensions' external deps (OpenFHE + libnbfhetch) into the
-# wheel. libnbfhetch is bundled in the package (found via the extension's $ORIGIN),
-# but the OpenFHE libs live in the substrate install dir — put it on LD_LIBRARY_PATH
-# so auditwheel can locate them. (/project is cibuildwheel's in-container mount.)
-repair-wheel-command = "LD_LIBRARY_PATH=/project/vendor/lib/openfhe/lib:$LD_LIBRARY_PATH auditwheel repair -w {dest_dir} {wheel}"
+# Self-contained repair (see scripts/repair_wheel.sh): bundle OpenFHE + libnbfhetch
+# next to the extensions + fhetch_sim with $ORIGIN rpaths, then auditwheel only retags
+# manylinux (excluding the bundled libs). Sidesteps auditwheel's inability to resolve
+# the in-wheel companion lib or repair the fhetch_sim executable.
+repair-wheel-command = "bash /project/scripts/repair_wheel.sh {wheel} {dest_dir}"
 # Build the OpenFHE substrate once per platform, inside the container, from source.
 # Clean any stale (e.g. host-built) substrate/build dirs copied in first. The wheel
 # build (scikit-build-core) then compiles libnbfhetch/openfhe-python/session against
