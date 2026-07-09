@@ -42,6 +42,7 @@
 
 # Build directories
 build/
+build-wheel/
 dbuild/
 vendor/lib/
 
