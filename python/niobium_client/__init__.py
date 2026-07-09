@@ -18,8 +18,24 @@ the native stack to load.
 import ctypes
 import glob
 import os
+import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _lib_dirs():
+    """Dirs that hold the bundled native libs: the package itself + the vendored-lib
+    dir that auditwheel (``niobium_client.libs``, a sibling) / delocate (``.dylibs``)
+    create during wheel repair. Only existing dirs, package dir first."""
+    dirs = [_HERE]
+    for sub in (".dylibs", os.path.join(os.pardir, "niobium_client.libs")):
+        d = os.path.normpath(os.path.join(_HERE, sub))
+        if os.path.isdir(d):
+            dirs.append(d)
+    return dirs
+
+
+_LIBDIRS = _lib_dirs()
 
 
 def _preload_libnbfhetch():
@@ -32,13 +48,21 @@ def _preload_libnbfhetch():
     to delocate/auditwheel, hence the explicit preload. No-op in a source tree
     where the bundled lib isn't present (e.g. the standalone _archive build).
     """
-    for sub in ("", ".dylibs", os.path.join(os.pardir, "niobium_client.libs")):
-        for lib in sorted(glob.glob(os.path.join(_HERE, sub, "libnbfhetch*"))):
+    for d in _LIBDIRS:
+        for lib in sorted(glob.glob(os.path.join(d, "libnbfhetch*"))):
             return ctypes.CDLL(lib, mode=ctypes.RTLD_GLOBAL)
     return None
 
 
 _preload_libnbfhetch()
+
+# fhetch_sim runs as a *subprocess* (spawned by replay()), so the RTLD_GLOBAL
+# preload above doesn't help it — point the dynamic loader at our lib dirs so it
+# resolves libnbfhetch + the bundled OpenFHE. Prepend; keep any caller value.
+if len(_LIBDIRS) > 0:
+    _var = "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
+    _existing = os.environ.get(_var)
+    os.environ[_var] = os.pathsep.join(_LIBDIRS + ([_existing] if _existing else []))
 
 # Point replay() at the bundled fhetch_sim unless the caller overrode it.
 _SIM = os.path.join(_HERE, "fhetch_sim")

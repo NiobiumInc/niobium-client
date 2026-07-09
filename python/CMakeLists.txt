@@ -65,10 +65,14 @@ add_custom_command(TARGET niobium_client_pkg POST_BUILD
             ${CMAKE_BINARY_DIR}/python/openfhe*.so
             ${CMAKE_BINARY_DIR}/python/niobium_session*.so
             ${NB_PKG}/)
-# Runtime lib (preloaded) + local simulator.
+# Runtime lib (preloaded) + local simulator. Copy BOTH the versioned file and the
+# soname (libnbfhetch.so.1) — niobium_session's DT_NEEDED is the soname, which is
+# what auditwheel resolves (and the loader/preload) at repair/runtime.
 add_custom_command(TARGET niobium_client_pkg POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
-            $<TARGET_FILE:niobium_fhetch> $<TARGET_FILE:fhetch_sim> ${NB_PKG}/)
+            $<TARGET_FILE:niobium_fhetch>
+            $<TARGET_SONAME_FILE:niobium_fhetch>
+            $<TARGET_FILE:fhetch_sim> ${NB_PKG}/)
 # Vendored DSL compiler (pure Python). Drop dev-only tests + stale bytecode.
 add_custom_command(TARGET niobium_client_pkg POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
