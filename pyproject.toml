@@ -44,3 +44,36 @@ wheel.packages = []
 provider = "scikit_build_core.metadata.regex"
 input = "python/niobium_client/VERSION"
 regex = "^(?P<value>.+)$"
+
+[tool.cibuildwheel]
+build = "cp311-* cp312-* cp313-* cp314-*"
+skip = "*-musllinux*"          # glibc manylinux only for now
+build-verbosity = 1
+# Cap compile parallelism: the OpenFHE-template TUs (openfhe.so bindings, libnbfhetch)
+# each use ~2GB in cc1plus, so full -j OOM-kills the compiler on memory-constrained
+# containers. NUM_CPUS caps the substrate build (Makefile), CMAKE_BUILD_PARALLEL_LEVEL
+# the wheel build. Raise on high-memory runners for speed.
+environment = { NUM_CPUS = "2", CMAKE_BUILD_PARALLEL_LEVEL = "2" }
+# Primary-only smoke against the freshly installed wheel (auditwheel/delocate have
+# vendored the OpenFHE dylibs by now, so no external lib path is needed).
+test-command = "python {project}/python/tests/wheel_smoke.py"
+
+[tool.cibuildwheel.linux]
+manylinux-x86_64-image = "manylinux_2_28"
+manylinux-aarch64-image = "manylinux_2_28"
+# auditwheel vendors the extensions' external deps (OpenFHE + libnbfhetch) into the
+# wheel. libnbfhetch is bundled in the package (found via the extension's $ORIGIN),
+# but the OpenFHE libs live in the substrate install dir — put it on LD_LIBRARY_PATH
+# so auditwheel can locate them. (/project is cibuildwheel's in-container mount.)
+repair-wheel-command = "LD_LIBRARY_PATH=/project/vendor/lib/openfhe/lib:$LD_LIBRARY_PATH auditwheel repair -w {dest_dir} {wheel}"
+# Build the OpenFHE substrate once per platform, inside the container, from source.
+# Clean any stale (e.g. host-built) substrate/build dirs copied in first. The wheel
+# build (scikit-build-core) then compiles libnbfhetch/openfhe-python/session against
+# it. cmake/gcc/make ship in the image; scikit-build-core pulls ninja itself.
+before-all = [
+    "rm -rf vendor/lib vendor/niobium-fhetch/vendor/openfhe/build build build-wheel",
+    "make config-openfhe-release build-openfhe-release",
+]
+
+[tool.cibuildwheel.macos]
+# delocate runs automatically; substrate built by the dev/CI step before invoking.
