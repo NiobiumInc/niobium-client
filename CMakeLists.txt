@@ -163,4 +163,11 @@ if(NIOBIUM_CLIENT_WITH_PYTHON)
                 ${CMAKE_CURRENT_SOURCE_DIR}/dsl_fhe/xcomp ${NB_PKG}/nbc
         COMMAND ${CMAKE_COMMAND} -E rm -rf
                 ${NB_PKG}/nbc/tests ${NB_PKG}/nbc/__pycache__ ${NB_PKG}/__pycache__)
+
+    # Wheel packaging (scikit-build-core). The assembled tree above becomes the
+    # wheel's `niobium_client/` package. Tagged as a dedicated component so the
+    # wheel build installs ONLY this — niobium-fhetch's lib/header install rules
+    # (default component) stay out of the wheel. delocate/auditwheel then graft
+    # the OpenFHE dylibs next to the extensions.
+    install(DIRECTORY ${NB_PKG}/ DESTINATION niobium_client COMPONENT python_wheel)
 endif()

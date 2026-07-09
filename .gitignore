@@ -46,8 +46,10 @@ build-wheel/
 dbuild/
 vendor/lib/
 
-# Release artifacts (source tarball output)
+# Python wheel build output + release artifacts (source tarball output)
 dist/
+wheelhouse/
+*.egg-info/
 
 # Python bytecode
 __pycache__/

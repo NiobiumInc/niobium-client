@@ -97,7 +97,7 @@ NATIVEOPT ?= OFF
 # ==============================================================================
 
 .PHONY: config-python-release build-python-release test-submit-python-release \
-        config-wheel-release build-wheel-release test-wheel-smoke-release \
+        config-wheel-release build-wheel-release test-wheel-smoke-release wheel \
         help sync sync-submodules update-openfhe update-niobium-fhetch \
         config config-release build build-release release \
         config-openfhe config-openfhe-release build-openfhe build-openfhe-release \
@@ -627,6 +627,13 @@ test-wheel-smoke-release: build-wheel-release ## Primary-only smoke against the 
 	DYLD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib:$(CURDIR)/build-wheel/niobium_client \
 	LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib:$(CURDIR)/build-wheel/niobium_client \
 	$(PY_EXE) python/tests/wheel_smoke.py
+
+# Build the distributable wheel via PEP 517 (scikit-build-core). Uses build
+# isolation, so it fetches scikit-build-core + pybind11 itself; needs `build`
+# (pip install build) and the OpenFHE substrate installed. CI (cibuildwheel) runs
+# the per-version × platform matrix + delocate/auditwheel; this is the local path.
+wheel: ## Build the niobium_client wheel into dist/ (python -m build)
+	$(PY_EXE) -m build --wheel
 
 ##@ Cleanup
 

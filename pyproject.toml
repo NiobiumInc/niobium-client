@@ -1,0 +1,46 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=3,<4"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "niobium_client"
+dynamic = ["version"]
+description = "Niobium FHE client — record OpenFHE computations for the Mistic accelerator"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Niobium Microsystems" }]
+# No runtime dependencies: the crypto/session/archive natives are bundled, the
+# submit client and nbc DSL compiler are pure stdlib.
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C++",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Topic :: Security :: Cryptography",
+]
+
+[tool.scikit-build]
+cmake.version = ">=3.16"
+# Build only the Python package; the crypto/session extensions come from
+# niobium-fhetch's WITH_PYTHON (flipped by NIOBIUM_CLIENT_WITH_PYTHON). The C++
+# transport binaries, auto-facade, and examples are not part of the wheel.
+cmake.args = [
+    "-DNIOBIUM_CLIENT_WITH_PYTHON=ON",
+    "-DNIOBIUM_CLIENT_WITH_AUTO_FACADE=OFF",
+    "-DNIOBIUM_CLIENT_WITH_FHETCH_TRANSPORT=OFF",
+    "-DNIOBIUM_CLIENT_WITH_EXAMPLES=OFF",
+]
+# The wheel content comes solely from the CMake `python_wheel` install component
+# (the assembled niobium_client/ tree). Disable pure-Python auto-discovery so the
+# in-tree python/niobium_client sources aren't packaged a second time.
+install.components = ["python_wheel"]
+wheel.packages = []
+
+# Single source of truth: the wheel version is read from the VERSION file that the
+# package also exposes as niobium_client.__version__.
+[tool.scikit-build.metadata.version]
+provider = "scikit_build_core.metadata.regex"
+input = "python/niobium_client/VERSION"
+regex = "^(?P<value>.+)$"
