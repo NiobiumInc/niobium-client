@@ -1,0 +1,97 @@
+name: Wheels
+
+# Manual-only for now: pushing a branch with this file will NOT trigger a run.
+# Add `push`/`pull_request`/tag triggers when the matrix is ready to run
+# automatically. NOTE: a workflow_dispatch workflow is only runnable (Actions tab
+# "Run workflow" / `gh workflow run`) once this file exists on the default branch.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ------------------------------------------------------------------
+  # Linux manylinux wheels — one native runner per arch (no emulation).
+  #
+  # cibuildwheel does everything inside the manylinux_2_28 container: the
+  # CIBW before-all builds the OpenFHE substrate, then scikit-build-core builds
+  # openfhe-python + libnbfhetch + niobium_session, and scripts/repair_wheel.sh
+  # self-bundles the native deps (+ $ORIGIN rpaths) and retags manylinux. All
+  # config lives in pyproject.toml [tool.cibuildwheel]; the host only needs Docker
+  # (preinstalled on the runners).
+  # ------------------------------------------------------------------
+  wheels-linux:
+    name: Wheels (${{ matrix.arch }}, manylinux)
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest      # native x86_64
+          - arch: aarch64
+            runner: ubuntu-24.04-arm   # native arm64 (GitHub-hosted ARM runner)
+
+    steps:
+      # niobium-fhetch is a submodule; OpenFHE + openfhe-python are nested one
+      # level deeper. --recursive pulls all of them (the in-container build needs
+      # the sources).
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean
+          df -h
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v3
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-${{ matrix.arch }}
+          path: ./wheelhouse/*.whl
+          if-no-files-found: error
+          retention-days: 7
+
+  # ------------------------------------------------------------------
+  # macOS arm64 wheels — cibuildwheel builds on the host (no container) with the
+  # python.org framework Pythons it installs. [tool.cibuildwheel.macos] builds the
+  # substrate with MACOSX_DEPLOYMENT_TARGET=11.0 and repairs via
+  # scripts/repair_wheel_macos.sh (delocate + @loader_path self-bundle).
+  # (Intel macs: add a macos-13 runner for x86_64 wheels when needed.)
+  # ------------------------------------------------------------------
+  wheels-macos:
+    name: Wheels (arm64, macOS)
+    runs-on: macos-14   # Apple Silicon
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v3
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-arm64
+          path: ./wheelhouse/*.whl
+          if-no-files-found: error
+          retention-days: 7
