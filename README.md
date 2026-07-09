@@ -250,7 +250,10 @@ If you are building an FHE compiler, transpiler, or code generator, target the
   the API as a round-trip check.
 - **Transport** — [`src/fhetch_transport/`](src/fhetch_transport/) ships a
   client/server pair + archive format for delivering traces (with inputs and
-  metadata) to a compilation target.
+  metadata) to a compilation target. Pass `--target FOG` to run on Niobium's
+  stable FPGA device: the server resolves the alias to its currently pinned
+  hardware id, so clients never depend on internal device names. Any other
+  target id is forwarded verbatim.
 
 The trace records FHETCH operation names, not hardware instructions — the
 server-side compiler does the lowering (NTT splitting, load/store insertion,
