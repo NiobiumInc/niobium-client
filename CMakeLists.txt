@@ -39,6 +39,16 @@ option(NIOBIUM_CLIENT_WITH_AUTO_FACADE
 option(NIOBIUM_CLIENT_WITH_FHETCH_TRANSPORT
     "Build the HTTP-based FHETCH transport (client forwarder + server daemon). Requires pthreads."
     ON)
+option(NIOBIUM_CLIENT_WITH_PYTHON
+    "Build + assemble the niobium_client Python package: openfhe + niobium_session (via niobium-fhetch WITH_PYTHON) + _archive + vendored nbc + fhetch_sim. Requires pybind11 + Python dev headers (pass -Dpybind11_DIR and -DPython_EXECUTABLE)."
+    OFF)
+
+# The crypto/session extensions come from niobium-fhetch's own WITH_PYTHON build;
+# turn it on before add_subdirectory() below so its openfhe/niobium_session targets
+# land in ${CMAKE_BINARY_DIR}/python.
+if(NIOBIUM_CLIENT_WITH_PYTHON)
+    set(WITH_PYTHON ON CACHE BOOL "niobium-fhetch: build the Python bindings" FORCE)
+endif()
 
 # Threads are a hard dep for the transport (cpp-httplib spawns worker threads).
 find_package(Threads)
@@ -98,4 +108,59 @@ option(NIOBIUM_CLIENT_WITH_EXAMPLES "Build examples" OFF)
 
 if(NIOBIUM_CLIENT_WITH_EXAMPLES)
     add_subdirectory(examples)
+endif()
+
+# ==============================================================================
+# Python package assembly (optional; see docs, PYTHON_WHEEL_PLAN)
+# ==============================================================================
+# niobium-fhetch (above, WITH_PYTHON) already built openfhe + niobium_session into
+# ${CMAKE_BINARY_DIR}/python. Here we add the _archive binding (TLV pack/unpack;
+# pure stdlib, no OpenFHE) and assemble the importable package tree:
+#   ${CMAKE_BINARY_DIR}/niobium_client/
+#     __init__.py client.py session.py VERSION       (python/niobium_client/)
+#     openfhe*.so niobium_session*.so                 (from ${CMAKE_BINARY_DIR}/python)
+#     _archive*.so                                    (built here)
+#     libnbfhetch.*                                   (RTLD_GLOBAL-preloaded by __init__)
+#     fhetch_sim                                       (bundled; local replay())
+#     nbc/                                            (vendored dsl_fhe/xcomp)
+
+if(NIOBIUM_CLIENT_WITH_PYTHON)
+    find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
+    find_package(pybind11 CONFIG REQUIRED)
+
+    set(NB_PKG "${CMAKE_BINARY_DIR}/niobium_client")
+
+    pybind11_add_module(_archive
+        python/archive_binding.cpp
+        src/fhetch_transport/archive.cpp)
+    target_include_directories(_archive PRIVATE src/fhetch_transport)
+    set_target_properties(_archive PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${NB_PKG}")
+
+    # Assemble once the natives exist. openfhe is an ExternalProject (not a normal
+    # target), so depend on the openfhe_python step and copy its installed .so.
+    add_custom_target(niobium_client_pkg ALL
+        DEPENDS _archive niobium_session openfhe_python fhetch_sim
+        COMMENT "Assembling niobium_client package -> ${NB_PKG}")
+
+    # Pure-Python sources + VERSION.
+    add_custom_command(TARGET niobium_client_pkg POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                ${CMAKE_CURRENT_SOURCE_DIR}/python/niobium_client ${NB_PKG})
+    # Crypto + session extensions (both installed to ${CMAKE_BINARY_DIR}/python).
+    add_custom_command(TARGET niobium_client_pkg POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_BINARY_DIR}/python/openfhe*.so
+                ${CMAKE_BINARY_DIR}/python/niobium_session*.so
+                ${NB_PKG}/)
+    # Runtime lib (preloaded) + local simulator.
+    add_custom_command(TARGET niobium_client_pkg POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+                $<TARGET_FILE:niobium_fhetch> $<TARGET_FILE:fhetch_sim> ${NB_PKG}/)
+    # Vendored DSL compiler (pure Python). Drop its dev-only unit tests and any
+    # stale bytecode so the wheel ships only the compiler runtime.
+    add_custom_command(TARGET niobium_client_pkg POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                ${CMAKE_CURRENT_SOURCE_DIR}/dsl_fhe/xcomp ${NB_PKG}/nbc
+        COMMAND ${CMAKE_COMMAND} -E rm -rf
+                ${NB_PKG}/nbc/tests ${NB_PKG}/nbc/__pycache__ ${NB_PKG}/__pycache__)
 endif()

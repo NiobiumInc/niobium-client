@@ -97,6 +97,7 @@ NATIVEOPT ?= OFF
 # ==============================================================================
 
 .PHONY: config-python-release build-python-release test-submit-python-release \
+        config-wheel-release build-wheel-release test-wheel-smoke-release \
         help sync sync-submodules update-openfhe update-niobium-fhetch \
         config config-release build build-release release \
         config-openfhe config-openfhe-release build-openfhe build-openfhe-release \
@@ -598,6 +599,34 @@ build-python-release: config-python-release ## Build the Python package (_archiv
 
 test-submit-python-release: build-python-release ## submit() + _archive smoke (mock server; no OpenFHE)
 	PYTHONPATH=$(CURDIR)/build/python $(PY_EXE) python/tests/submit_smoke.py
+
+# --- Full wheel assembly -------------------------------------------------------
+# Drives the top-level CMake with NIOBIUM_CLIENT_WITH_PYTHON: builds openfhe +
+# niobium_session (via niobium-fhetch WITH_PYTHON) + _archive and assembles the
+# importable package at build-wheel/niobium_client/. Separate build dir from the
+# client build (build/) and the standalone submit build (build/python). Needs the
+# OpenFHE substrate installed (make install-release) + pybind11.
+config-wheel-release: ## Configure the full niobium_client package assembly
+	@if [ -z "$(PYBIND11_DIR)" ]; then \
+		echo "pybind11 CMake dir not found for '$(PYTHON)'. Install: $(PYTHON) -m pip install pybind11"; \
+		exit 1; \
+	fi
+	cmake -S . -B build-wheel -DCMAKE_BUILD_TYPE=Release \
+		-DNIOBIUM_CLIENT_WITH_PYTHON=ON \
+		-DNIOBIUM_CLIENT_WITH_AUTO_FACADE=OFF \
+		-DNIOBIUM_CLIENT_WITH_FHETCH_TRANSPORT=OFF \
+		-DNIOBIUM_CLIENT_WITH_EXAMPLES=OFF \
+		-DOPENFHE_INSTALL_DIR=$(OPENFHE_INSTALL_DIR) \
+		-Dpybind11_DIR=$(PYBIND11_DIR) -DPython_EXECUTABLE=$(PY_EXE)
+
+build-wheel-release: config-wheel-release ## Build + assemble build-wheel/niobium_client/
+	cmake --build build-wheel -j $(NUM_CPUS)
+
+test-wheel-smoke-release: build-wheel-release ## Primary-only smoke against the assembled package
+	PYTHONPATH=$(CURDIR)/build-wheel \
+	DYLD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib:$(CURDIR)/build-wheel/niobium_client \
+	LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib:$(CURDIR)/build-wheel/niobium_client \
+	$(PY_EXE) python/tests/wheel_smoke.py
 
 ##@ Cleanup
 
