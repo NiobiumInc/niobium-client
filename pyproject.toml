@@ -76,4 +76,16 @@ before-all = [
 ]
 
 [tool.cibuildwheel.macos]
-# delocate runs automatically; substrate built by the dev/CI step before invoking.
+# Same self-bundle relocatability as Linux, macOS tooling (delocate + @loader_path):
+# scripts/repair_wheel_macos.sh bundles OpenFHE + libnbfhetch next to the extensions +
+# fhetch_sim and ensures @loader_path is on each rpath, then delocate only verifies/tags
+# (--exclude the bundled libs). MACOSX_DEPLOYMENT_TARGET=11.0 on the substrate build keeps
+# the bundled dylibs' min-OS low so delocate tags a portable macosx_11_0 wheel.
+# NOTE: the repair logic is proven locally (python -m build + the script); the
+# cibuildwheel-macos flow is CI-validated (it needs python.org framework Pythons).
+environment = { NUM_CPUS = "2", CMAKE_BUILD_PARALLEL_LEVEL = "2", MACOSX_DEPLOYMENT_TARGET = "11.0" }
+before-all = [
+    "rm -rf vendor/lib vendor/niobium-fhetch/vendor/openfhe/build build build-wheel",
+    "make config-openfhe-release build-openfhe-release",
+]
+repair-wheel-command = "bash scripts/repair_wheel_macos.sh {wheel} {dest_dir}"
