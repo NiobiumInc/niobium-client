@@ -224,7 +224,7 @@ make test-examples          # Run all end-to-end tests
 ```
 
 Each example runs three phases:
-1. **DSL compilation** (`nbc.py compile`): Parses `.niob` files and generates C++ in `nb_out/`.
+1. **DSL compilation** (`nbc compile`): Parses `.niob` files and generates C++ in `nb_out/`.
 2. **C++ compilation** (CMake + make): Builds binaries in `nb_out/build/`.
 3. **End-to-end testing**: Runs the binaries to verify correctness.
 
@@ -232,7 +232,7 @@ Each example runs three phases:
 
 The `make <example>` targets above are for examples that live inside
 `dsl_fhe/examples/`. You can also build a DSL app in **your own project
-directory**: `nbc.py compile` accepts arbitrary input paths and an `--outdir`,
+directory**: `nbc compile` accepts arbitrary input paths and an `--outdir`,
 and the generated `nb_out/` is a self-contained CMake project
 (`project(nb_generated)`).
 
@@ -247,7 +247,9 @@ with CMake ≥ 3.14.
 NBROOT=/path/to/niobium-client          # a *built* checkout
 
 # 1. Compile the DSL to a self-contained C++ project in ./nb_out
-python3 "$NBROOT/dsl_fhe/xcomp/nbc.py" compile \
+#    nbc is a package (relative imports) — run it as a module with dsl_fhe on
+#    PYTHONPATH, not as a loose script.
+PYTHONPATH="$NBROOT/dsl_fhe" python3 -m xcomp.nbc compile \
     shared.niob client.niob server.niob --outdir nb_out
 
 # 2. Configure + build. -DNIOBIUM_CLIENT_ROOT is required outside the repo tree
