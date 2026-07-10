@@ -8,7 +8,7 @@
         config-wheel-release build-wheel-release test-wheel-smoke-release wheel \
         test-mult-python-release test-simple-ops-python-release test-op-python-release \
         test-plaintext-add-python-release test-bootstrap-python-release \
-        test-examples-python-release
+        test-examples-python-release test-fhetch-python-release
 
 PYTHON       ?= python3
 PYBIND11_DIR := $(shell $(PYTHON) -m pybind11 --cmakedir 2>/dev/null)
@@ -131,6 +131,15 @@ test-bootstrap-python-release: build-wheel-release ## Python bootstrap example: 
 # Sweep of every applicable Python example scenario (analog of test-client-release,
 # minus the not-applicable auto-facade / ring-dim-check tests).
 test-examples-python-release: test-mult-python-release test-simple-ops-python-release test-plaintext-add-python-release test-bootstrap-python-release ## Run all Python example scenarios (assembled wheel)
+
+# Python analog of test-fhetch-release: delegate to the niobium-fhetch submodule's
+# own Python roundtrip sweep (simple_ops + plaintext-add + bootstrap, each primary +
+# secondary via fhetch_driver). Forwards the same OpenFHE/JSON flags plus PYTHON, so
+# the submodule builds its bindings against this repo's OpenFHE install with the same
+# interpreter (needs pybind11 in that PYTHON). No analog for the C++-only simple_fhetch
+# / fhetch_driver mechanics in fhetch's test-release.
+test-fhetch-python-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Run the fhetch submodule's Python roundtrip sweep (simple_ops + plaintext-add + bootstrap)
+	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) PYTHON="$(PYTHON)" test-roundtrip-python-release
 
 # Build the distributable wheel via PEP 517 (scikit-build-core). Uses build
 # isolation, so it fetches scikit-build-core + pybind11 itself; needs `build`
