@@ -31,6 +31,9 @@
 #include <sstream>
 #include <string>
 #include <system_error>
+#include <vector>
+
+#include <unistd.h>  // mkdtemp (macOS/BSD), getpid
 
 namespace {
 
@@ -130,16 +133,13 @@ std::string opt_level_to_flag(const std::string& v) {
 }
 
 std::string unique_tempdir(const std::string& prefix) {
-    auto base = fs::temp_directory_path();
-    for (int attempt = 0; attempt < 64; ++attempt) {
-        auto candidate = base / (prefix + "_" +
-                                 std::to_string(::getpid()) + "_" +
-                                 std::to_string(attempt) + "_" +
-                                 std::to_string(std::rand()));
-        std::error_code ec;
-        if (fs::create_directory(candidate, ec) && !ec) return candidate.string();
-    }
-    throw std::runtime_error("could not create temp directory");
+    // mkdtemp() creates the dir atomically with good entropy — no seeding, no
+    // retry loop, collision-free across concurrent request threads by design.
+    auto tmpl = (fs::temp_directory_path() / (prefix + "_XXXXXX")).string();
+    std::vector<char> buf(tmpl.begin(), tmpl.end());
+    buf.push_back('\0');
+    if (!::mkdtemp(buf.data())) throw std::runtime_error("could not create temp directory");
+    return buf.data();
 }
 
 struct Handler {
@@ -172,9 +172,8 @@ struct Handler {
             return;
         }
         if (!job_id.empty() && !is_safe_job_id(job_id)) {
-            res.status = 400;
-            res.set_content("header " + std::string(nft::kJobIdHeader) +
-                            " must match [A-Za-z0-9-]+\n", "text/plain");
+            reject(400, "header " + std::string(nft::kJobIdHeader) +
+                        " must match [A-Za-z0-9-]+\n");
             return;
         }
 
