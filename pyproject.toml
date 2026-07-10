@@ -21,6 +21,11 @@ classifiers = [
     "Topic :: Security :: Cryptography",
 ]
 
+[project.urls]
+Homepage = "https://github.com/NiobiumInc/niobium-client"
+"nb DSL reference" = "https://github.com/NiobiumInc/niobium-client/tree/main/dsl_fhe"
+"FHE design skill" = "https://github.com/NiobiumInc/niobium-skills"
+
 [tool.scikit-build]
 cmake.version = ">=3.16"
 # Build only the Python package; the crypto/session extensions come from
