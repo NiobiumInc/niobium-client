@@ -52,7 +52,7 @@ constexpr int         kDefaultPort       = 9443;
 // Optional bearer token (the Fog per-job ticket). When set, the client sends
 // it as `Authorization: Bearer <token>`. Absent → no auth header (the existing
 // local/offline direct-POST path is unchanged). Normally exported by the Fog
-// job wrapper (scripts/fog_replay.sh) alongside NBCC_FHETCH_SERVER.
+// job wrapper (`fog submit`, scripts/fog) alongside NBCC_FHETCH_SERVER.
 constexpr const char* kAuthTokenEnv = "NBCC_FHETCH_TOKEN";
 
 // Server-side override of the compiler binary it will exec.

@@ -1,0 +1,492 @@
+#!/usr/bin/env python3
+# Copyright 2024-present Niobium Microsystems, Inc.
+# Licensed under the Apache License, Version 2.0.
+#
+# fog — one CLI for the Niobium Fog "jobs-as-a-service" replay path.
+# Replaces the former fog_token.py / fog_replay.py / fog_jobs.py trio.
+#
+#   fog login [-u me@example.com]      # provision a named API key, save it (§creds below)
+#   fog submit ./app --target=<t> […]  # provision a job, then run your OpenFHE app against it
+#   fog submit --target=<t> [args…]    # (no app) exec the transport client directly
+#   fog list                          # all your jobs (table)
+#   fog get <id> [<id>…]              # full details for specific jobs
+#   fog cancel <id> [<id>…]           # cancel/release specific jobs
+#   fog cancel --pending              # cancel every in-flight job (frees workers)
+#
+# `submit` has two shapes. Given a leading program — `fog submit ./app
+# --target=T …` (outer/wrapper mode) — it POSTs {mode,target} to fog-api, waits
+# for a worker, sets NBCC_FHETCH_SERVER + NBCC_FHETCH_TOKEN, and exec()s your
+# OpenFHE app. It also sets NBCC_FHETCH_REPLAY to the resolved transport client
+# (NBCC_FHETCH_REPLAY_BIN / PATH / build dir) so the app's replay() spawns that
+# client — finding it even when it's only in build/, and never re-entering fog —
+# and the client inherits the worker env. With no leading program fog exec()s
+# the transport client itself (bare `fog submit …`, or via Driver mode below).
+#
+# Driver mode: set NBCC_FHETCH_REPLAY=fog so fhetch's Compiler::replay() spawns
+# this tool directly — as `fog --project=<dir> --target=<t> …`, with no
+# subcommand word. A leading option is therefore treated as an implicit
+# `submit`. fog then exec()s the real nbcc_fhetch_replay transport client, which
+# is a *different* binary (NBCC_FHETCH_REPLAY_BIN / PATH), so there's no
+# recursion. NBCC_FHETCH_REPLAY selects fog; NBCC_FHETCH_REPLAY_BIN selects the
+# client fog hands off to — keep them pointing at different binaries.
+#
+# stdlib only — no requests/httpx/curl. TLS uses certifi's CA bundle when it is
+# installed (python.org builds ship no CA store, so the default context can
+# verify nothing); otherwise it falls back to the default context, which still
+# honors a working OS store and $SSL_CERT_FILE. `pip install certifi` fixes a
+# bare host.
+#
+# Config (INI, all optional; precedence: env var > config file > built-in):
+#   ~/.fog/config       [fog] api_url, mode, wait, maxwait   (hand-edited)
+#   ~/.fog/credentials  [fog] api_token                      (written by `login`, 0600)
+#   Override the dir with $FOG_HOME.
+#
+# Env (each overrides the config file):
+#   FOG_API_URL      base URL of fog-api                    [default https://api.niobium.co]
+#   FOG_API_TOKEN    API token (sent as X-Api-Token)        [else read from credentials]
+#   FOG_JOB_MODE     batch | persistent                     [default batch]
+#   FOG_JOB_WAIT     per-request long-poll seconds          [default 20]
+#   FOG_JOB_MAXWAIT  total seconds to keep polling a queue   [default 600]
+#   NBCC_FHETCH_REPLAY_BIN  path to nbcc_fhetch_replay       [default: PATH / build dir]
+import argparse
+import configparser
+import getpass
+import json
+import os
+import shutil
+import socket
+import ssl
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+DEFAULT_API_URL = "https://api.niobium.co"
+
+# Built-in fallbacks, and exactly what `fog init` writes into the config file.
+# Single source of truth so the resolver and the scaffold can't drift.
+DEFAULTS = {
+    "api_url": DEFAULT_API_URL,
+    "mode": "batch",
+    "wait": "20",
+    "maxwait": "600",
+}
+
+# In-flight = fog-api's IN_FLIGHT_STATUSES; these are what DELETE can act on.
+CANCELLABLE = ("queued", "assigned", "running", "reserved")
+
+try:
+    import certifi
+    _TLS = ssl.create_default_context(cafile=certifi.where())
+except ImportError:
+    _TLS = None
+
+
+def die(msg):
+    sys.exit(f"[fog] {msg}")
+
+
+# ---- config / credentials (INI) ---------------------------------------------
+def _home():
+    return Path(os.environ.get("FOG_HOME") or (Path.home() / ".fog"))
+
+
+def _config_file():
+    return _home() / "config"
+
+
+def _creds_file():
+    return _home() / "credentials"
+
+
+def _read_ini(path):
+    cp = configparser.ConfigParser()
+    if path.exists():
+        cp.read(path)
+    return cp
+
+
+def cfg(key, env, default):
+    """Resolve a scalar: env var > [fog] section of the config file > default."""
+    v = os.environ.get(env)
+    if v:
+        return v
+    return _read_ini(_config_file()).get("fog", key, fallback=default)
+
+
+def load_token():
+    v = os.environ.get("FOG_API_TOKEN")
+    if v:
+        return v
+    return _read_ini(_creds_file()).get("fog", "api_token", fallback=None)
+
+
+def save_token(token):
+    """Write the token to ~/.fog/credentials, dir 0700 / file 0600."""
+    home = _home()
+    home.mkdir(mode=0o700, parents=True, exist_ok=True)
+    creds = _creds_file()
+    cp = _read_ini(creds)  # preserve any other keys already there
+    if not cp.has_section("fog"):
+        cp.add_section("fog")
+    cp.set("fog", "api_token", token)
+    # Create restricted from the start, then enforce 0600 even if it pre-existed.
+    fd = os.open(creds, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        cp.write(f)
+    os.chmod(creds, 0o600)
+
+
+def _api():
+    return cfg("api_url", "FOG_API_URL", DEFAULTS["api_url"]).rstrip("/")
+
+
+def _require_token():
+    t = load_token()
+    if not t:
+        die("no API token — run `fog login` (or set FOG_API_TOKEN)")
+    return t
+
+
+# ---- HTTP -------------------------------------------------------------------
+def request(method, url, token=None, json_body=None, form=None, bearer=None):
+    """Return (http_status, parsed_json|{}). Never raises on HTTP >=400."""
+    headers, data = {}, None
+    if json_body is not None:
+        data = json.dumps(json_body).encode()
+        headers["Content-Type"] = "application/json"
+    elif form is not None:
+        data = urllib.parse.urlencode(form).encode()
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
+    if token:
+        headers["X-Api-Token"] = token
+    if bearer:
+        headers["Authorization"] = f"Bearer {bearer}"
+    req = urllib.request.Request(url, data=data, method=method, headers=headers)
+    try:
+        resp = urllib.request.urlopen(req, timeout=60, context=_TLS)
+    except urllib.error.HTTPError as e:
+        resp = e  # HTTPError is itself a readable response
+    except urllib.error.URLError as e:
+        die(f"cannot reach {url}: {e.reason}")
+    raw = resp.read()
+    try:
+        return resp.status, (json.loads(raw) if raw else {})
+    except json.JSONDecodeError:
+        return resp.status, {}
+
+
+def _detail(body):
+    return body.get("detail") if isinstance(body, dict) else body
+
+
+# ---- login ------------------------------------------------------------------
+def cmd_login(rest):
+    p = argparse.ArgumentParser(prog="fog login",
+                                description="Log in and provision a named Fog API key.")
+    p.add_argument("-u", "--username", help="account email (else prompt)")
+    p.add_argument("-n", "--name", help="label for the new key (else fog@<hostname>)")
+    args = p.parse_args(rest)
+
+    api = _api()
+    email = args.username
+    if not email:
+        print("Username (email): ", end="", file=sys.stderr, flush=True)
+        email = sys.stdin.readline().strip()
+    password = getpass.getpass("Password: ")  # prompt goes to the tty, not stdout
+    if not (email and password):
+        die("username and password are required")
+
+    # 1. OAuth2 password flow -> access token (form-encoded, no trailing slash).
+    status, body = request("POST", f"{api}/auth/token",
+                           form={"username": email, "password": password})
+    if status != 200:
+        die(f"login failed (HTTP {status}): {_detail(body)}")
+    access = body.get("access_token") or die("login: no access_token in response")
+
+    # 2. provision a named API key (Bearer-authed). Server returns the raw token
+    # once, in api_token, on 201. Unlike the old reset, this adds a key rather
+    # than rotating — old keys stay valid until revoked (DELETE /users/me/keys).
+    name = (args.name or f"fog@{socket.gethostname()}")[:64]
+    status, body = request("POST", f"{api}/users/me/keys",
+                           bearer=access, json_body={"name": name})
+    if status != 201:
+        die(f"key creation failed (HTTP {status}): {_detail(body)}")
+    token = body.get("api_token") or die("create key: no api_token in response")
+
+    save_token(token)
+    print(f"[fog] created key '{body.get('name', name)}'"
+          f" (prefix {body.get('prefix', '?')}); wrote token to {_creds_file()}",
+          file=sys.stderr)
+    print(token)  # stdout only -> `export FOG_API_TOKEN=$(fog login)` still works
+
+
+# ---- submit -----------------------------------------------------------------
+def _extract_target(argv):
+    for i, a in enumerate(argv):
+        if a.startswith("--target="):
+            return a[len("--target="):]
+        if a == "--target" and i + 1 < len(argv):
+            return argv[i + 1]
+    return ""
+
+
+def _split_program(rest):
+    """(program, app_args) in outer mode, else (None, rest).
+
+    A leading non-option token is the user's app to run (outer/wrapper mode);
+    otherwise fog execs the transport client itself (bare `fog submit …`, or the
+    `NBCC_FHETCH_REPLAY=fog` driver, whose argv starts with --project)."""
+    if rest and not rest[0].startswith("-"):
+        return rest[0], rest[1:]
+    return None, rest
+
+
+def _resolve_replay_bin():
+    b = os.environ.get("NBCC_FHETCH_REPLAY_BIN") or shutil.which("nbcc_fhetch_replay")
+    if not b:
+        local = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "../build/src/fhetch_transport/nbcc_fhetch_replay")
+        if os.access(local, os.X_OK):
+            b = local
+    if not b or not os.access(b, os.X_OK):
+        die("nbcc_fhetch_replay not found (set NBCC_FHETCH_REPLAY_BIN)")
+    return b
+
+
+def cmd_submit(rest):
+    api = _api()
+    api_token = _require_token()
+    mode = cfg("mode", "FOG_JOB_MODE", DEFAULTS["mode"])
+    wait = int(cfg("wait", "FOG_JOB_WAIT", DEFAULTS["wait"]))
+    maxwait = int(cfg("maxwait", "FOG_JOB_MAXWAIT", DEFAULTS["maxwait"]))
+
+    # Outer/wrapper mode: a leading program (`fog submit ./app …`) is the user's
+    # OpenFHE app to run with the job env set; without one we exec the transport
+    # client ourselves (bare `fog submit …`, or the NBCC_FHETCH_REPLAY=fog driver).
+    program, app_args = _split_program(rest)
+    outer = program is not None
+
+    # target is the one arg we must read (fog-api needs it); the rest pass through.
+    target = _extract_target(rest)
+    if not target:
+        die("--target is required")
+    binary = _resolve_replay_bin()  # fail fast in both modes if the client is missing
+
+    # ---- 1. submit ----------------------------------------------------------
+    # Trailing slash required: fog-api's route is POST /jobs/ and its default
+    # redirect_slashes would 307 /jobs -> /jobs/, which urllib won't re-POST.
+    print(f"[fog] POST {api}/jobs/ {{mode:{mode}, target:{target}}}", file=sys.stderr)
+    status, body = request("POST", f"{api}/jobs/", token=api_token,
+                           json_body={"mode": mode, "target": target})
+
+    if status == 202:  # queued -> long-poll
+        jid = body.get("job_id") or die("queued but no job_id in response")
+        print(f"[fog] queued as {jid}; long-polling for a worker…", file=sys.stderr)
+        waited = 0
+        while not body.get("server_url"):
+            if waited >= maxwait:
+                die(f"job {jid} still queued after {maxwait}s")
+            status, body = request("GET", f"{api}/jobs/{jid}?wait={wait}", token=api_token)
+            if status != 200:
+                die(f"GET /jobs/{jid} returned HTTP {status}")
+            waited += wait
+    elif status not in (200, 201):
+        # FastAPI puts the reason in {"detail": ...} — surface it.
+        hint = {429: "over quota", 401: "unauthorized", 403: "forbidden"}.get(status, "")
+        detail = _detail(body)
+        die(f"POST /jobs/ returned HTTP {status}{f' ({hint})' if hint else ''}"
+            f"{f': {detail}' if detail else ''}")
+
+    server_url, token, jid = body.get("server_url"), body.get("token"), body.get("job_id")
+    if not (server_url and token and jid):
+        die("assigned response missing server_url/token/job_id")
+
+    # ---- 2 & 3. point the child at the worker run endpoint and exec ---------
+    os.environ["NBCC_FHETCH_SERVER"] = f"{server_url.rstrip('/')}/jobs/{jid}/run"
+    os.environ["NBCC_FHETCH_TOKEN"] = token
+    print(f"[fog] assigned {jid} -> {os.environ['NBCC_FHETCH_SERVER']}", file=sys.stderr)
+
+    if outer:
+        # The app's replay() spawns $NBCC_FHETCH_REPLAY (PATH-only lookup — the
+        # lib has no build-dir fallback). Point it at the client we resolved, as
+        # an absolute path (the app may change cwd), so replay() finds it even
+        # when it's only in build/ — and never re-enters fog.
+        os.environ["NBCC_FHETCH_REPLAY"] = os.path.abspath(binary)
+        print(f"[fog] NBCC_FHETCH_REPLAY={os.environ['NBCC_FHETCH_REPLAY']}", file=sys.stderr)
+        print(f"[fog] exec {' '.join([program] + app_args)}", file=sys.stderr)
+        try:
+            os.execvp(program, [program] + app_args)
+        except OSError as e:
+            die(f"cannot exec {program}: {e}")
+    else:
+        os.execv(binary, [binary] + app_args)
+
+
+# ---- list / get / cancel ----------------------------------------------------
+def _get_all(api, token):
+    status, body = request("GET", f"{api}/jobs/", token=token)  # trailing slash: avoid 307
+    if status != 200 or not isinstance(body, list):
+        die(f"GET /jobs/ returned HTTP {status}: {body}")
+    return body
+
+
+def _row(j):
+    return (f"{j['job_id']}  {j.get('status',''):<10} {j.get('mode',''):<10} "
+            f"{j.get('target',''):<14} {(j.get('worker_hostname') or '-'):<20} "
+            f"{j.get('enqueued_at') or ''}")
+
+
+def cmd_list(rest):
+    api, token = _api(), _require_token()
+    jobs = _get_all(api, token)
+    if not jobs:
+        print("no jobs")
+        return
+    print(f"{'JOB_ID':<38}{'STATUS':<11}{'MODE':<11}{'TARGET':<15}{'WORKER':<21}ENQUEUED")
+    for j in jobs:
+        print(_row(j))
+    print(f"\n{len(jobs)} job(s); "
+          f"{sum(j.get('status') in CANCELLABLE for j in jobs)} in-flight")
+
+
+def cmd_get(rest):
+    if not rest:
+        die("get: give one or more job ids")
+    api, token = _api(), _require_token()
+    for jid in rest:
+        status, body = request("GET", f"{api}/jobs/{jid}", token=token)
+        if status != 200:
+            print(f"[{jid}] HTTP {status}: {_detail(body)}", file=sys.stderr)
+            continue
+        print(json.dumps(body, indent=2))
+
+
+def cmd_cancel(rest):
+    api, token = _api(), _require_token()
+    if "--pending" in rest:
+        ids = [j["job_id"] for j in _get_all(api, token) if j.get("status") in CANCELLABLE]
+        if not ids:
+            print("no in-flight jobs to cancel")
+            return
+    elif rest:
+        ids = rest
+    else:
+        die("cancel: give job ids or --pending")
+
+    for jid in ids:
+        status, body = request("DELETE", f"{api}/jobs/{jid}", token=token)
+        if status == 200:
+            print(f"[{jid}] -> {body.get('status')}")
+        else:  # 409 already terminal, 403 not owner, 404 unknown
+            print(f"[{jid}] HTTP {status}: {_detail(body)}", file=sys.stderr)
+
+
+# ---- init -------------------------------------------------------------------
+def cmd_init(rest):
+    p = argparse.ArgumentParser(prog="fog init",
+                                description="Create ~/.fog/config with default values.")
+    p.add_argument("-f", "--force", action="store_true",
+                   help="overwrite an existing config file")
+    args = p.parse_args(rest)
+
+    _home().mkdir(mode=0o700, parents=True, exist_ok=True)
+    path = _config_file()
+    if path.exists() and not args.force:
+        die(f"{path} already exists (use --force to overwrite)")
+    cp = configparser.ConfigParser()
+    cp["fog"] = dict(DEFAULTS)  # not secret → default perms; login writes creds separately
+    with open(path, "w") as f:
+        cp.write(f)
+    print(f"[fog] wrote {path}", file=sys.stderr)
+
+
+# ---- dispatch ---------------------------------------------------------------
+COMMANDS = {
+    "init": cmd_init,
+    "login": cmd_login,
+    "submit": cmd_submit,
+    "list": cmd_list,
+    "get": cmd_get,
+    "cancel": cmd_cancel,
+}
+
+USAGE = """usage: fog <command> [args]
+
+  init                    write ~/.fog/config with default values (edit to taste)
+  login [-u EMAIL] [-n NAME]  provision a named API key, save it to ~/.fog/credentials
+  submit ./app --target=T […] provision a job, then run your OpenFHE app against it
+  submit --target=T […]       (no app) exec the transport client directly
+  list                    list all your jobs
+  get ID [ID…]            full JSON for specific job(s)
+  cancel ID [ID…]         cancel/release specific job(s)
+  cancel --pending        cancel every in-flight job
+
+Config: ~/.fog/config + ~/.fog/credentials (INI). See `head -40 $(command -v fog)`.
+"""
+
+
+def selftest():
+    import tempfile
+    # in-flight filter
+    got = [s for s in ("queued", "running", "completed", "reserved", "cancelled", "assigned")
+           if s in CANCELLABLE]
+    assert got == ["queued", "running", "reserved", "assigned"], got
+    # assigned-response contract
+    j = json.loads('{"job_id":"j1","server_url":"https://h/w3","token":"tok"}')
+    assert j["server_url"] == "https://h/w3"
+    assert json.loads('{"job_id":"j1"}').get("token") is None
+    # create-key (POST /users/me/keys) returns the raw token once, in api_token
+    k = json.loads('{"id":1,"name":"fog@h","prefix":"ab12","api_token":"tok"}')
+    assert k["api_token"] == "tok"
+    # submit mode split: leading program = outer/wrapper; leading option = driver
+    assert _split_program(["./app", "--target=T"]) == ("./app", ["--target=T"])
+    assert _split_program(["--project=d", "--target=T"]) == (None, ["--project=d", "--target=T"])
+    assert _split_program([]) == (None, [])
+    # config precedence + credential round-trip, isolated under a temp FOG_HOME
+    with tempfile.TemporaryDirectory() as d:
+        os.environ["FOG_HOME"] = d
+        os.environ.pop("FOG_API_TOKEN", None)
+        os.environ.pop("FOG_API_URL", None)
+        assert load_token() is None
+        save_token("secret-123")
+        assert load_token() == "secret-123"
+        assert (_creds_file().stat().st_mode & 0o777) == 0o600
+        assert cfg("api_url", "FOG_API_URL", DEFAULT_API_URL) == DEFAULT_API_URL
+        # `init` scaffolds the config; values then resolve from the file
+        assert not _config_file().exists()
+        cmd_init([])
+        assert _config_file().exists()
+        assert cfg("mode", "FOG_JOB_MODE", "x") == "batch"    # read from file, not arg
+        try:
+            cmd_init([])                                       # refuses to clobber
+            assert False, "init should not overwrite without --force"
+        except SystemExit:
+            pass
+        cmd_init(["--force"])                                  # ...unless forced
+        os.environ["FOG_API_TOKEN"] = "env-tok"        # env beats file
+        assert load_token() == "env-tok"
+        os.environ["FOG_API_URL"] = "https://x"        # env beats default
+        assert _api() == "https://x"
+    print("[fog] selftest OK")
+
+
+def main(argv):
+    if argv[:1] == ["--selftest"]:
+        return selftest()
+    if not argv or argv[0] in ("-h", "--help"):
+        print(USAGE, file=sys.stderr)
+        return
+    cmd = argv[0]
+    if cmd in COMMANDS:
+        return COMMANDS[cmd](argv[1:])
+    # Driver mode: Compiler::replay() spawns `$NBCC_FHETCH_REPLAY --project=… …`
+    # with no subcommand, so a leading option means "submit these driver args".
+    if cmd.startswith("-"):
+        return cmd_submit(argv)
+    die(f"unknown command {cmd!r}\n\n{USAGE}")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
