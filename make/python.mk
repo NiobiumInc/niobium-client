@@ -9,7 +9,7 @@
         test-mult-python-release test-simple-ops-python-release test-op-python-release \
         test-plaintext-add-python-release test-bootstrap-python-release \
         test-ring-dim-check-python-release test-fhetch-python-release \
-        test-client-python-release test-python-release
+        test-client-python-release test-python-release clean-python
 
 PYTHON       ?= python3
 PYBIND11_DIR := $(shell $(PYTHON) -m pybind11 --cmakedir 2>/dev/null)
@@ -159,3 +159,17 @@ test-python-release: test-client-python-release test-fhetch-python-release ## Fu
 # the per-version × platform matrix + delocate/auditwheel; this is the local path.
 wheel: ## Build the niobium_client wheel into dist/ (python -m build)
 	$(PY_EXE) -m build --wheel
+
+##@ Python cleanup
+
+# Remove all Python build artifacts + any virtualenv + bytecode/egg-info. Virtualenvs
+# are found generically by their `pyvenv.cfg` marker (so custom-named envs are caught,
+# not just `.venv`). Leaves the C++ `build/` and the OpenFHE substrate (`vendor/lib`) —
+# use `make clean` / `make clean-all` for those.
+clean-python: ## Remove Python build artifacts, virtualenvs, and bytecode
+	-rm -rf build-wheel build/python dist wheelhouse
+	@# virtualenvs: any dir containing pyvenv.cfg, name-agnostic; skip submodules
+	@find . -name pyvenv.cfg -not -path './vendor/*' 2>/dev/null | while read -r cfg; do \
+		d=$$(dirname "$$cfg"); echo "  rm venv $$d"; rm -rf "$$d"; done
+	@find . -type d -name __pycache__     -not -path './vendor/*' -exec rm -rf {} + 2>/dev/null || true
+	@find . -type d -name '*.egg-info'    -not -path './vendor/*' -exec rm -rf {} + 2>/dev/null || true
