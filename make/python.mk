@@ -5,7 +5,10 @@
 # (shares its variable namespace: OPENFHE_INSTALL_DIR, NUM_CPUS, CURDIR come from there).
 
 .PHONY: config-python-release build-python-release test-submit-python-release \
-        config-wheel-release build-wheel-release test-wheel-smoke-release wheel
+        config-wheel-release build-wheel-release test-wheel-smoke-release wheel \
+        test-mult-python-release test-simple-ops-python-release test-op-python-release \
+        test-plaintext-add-python-release test-bootstrap-python-release \
+        test-examples-python-release
 
 PYTHON       ?= python3
 PYBIND11_DIR := $(shell $(PYTHON) -m pybind11 --cmakedir 2>/dev/null)
@@ -50,11 +53,84 @@ config-wheel-release: ## Configure the full niobium_client package assembly
 build-wheel-release: config-wheel-release ## Build + assemble build-wheel/niobium_client/
 	cmake --build build-wheel -j $(NUM_CPUS)
 
-test-wheel-smoke-release: build-wheel-release ## Primary-only smoke against the assembled package
-	PYTHONPATH=$(CURDIR)/build-wheel \
+# Env for importing + running the assembled package tree (build-wheel/niobium_client):
+# import from build-wheel, resolve the OpenFHE dylibs + bundled natives at runtime.
+# Shared by the wheel smoke and the example-scenario tests below.
+WHEEL_RUN_ENV = PYTHONPATH=$(CURDIR)/build-wheel \
 	DYLD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib:$(CURDIR)/build-wheel/niobium_client \
-	LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib:$(CURDIR)/build-wheel/niobium_client \
-	$(PY_EXE) python/tests/wheel_smoke.py
+	LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib:$(CURDIR)/build-wheel/niobium_client
+
+test-wheel-smoke-release: build-wheel-release ## Primary-only smoke against the assembled package
+	$(WHEEL_RUN_ENV) $(PY_EXE) python/tests/wheel_smoke.py
+
+# --- Example-scenario tests against the assembled package ----------------------
+# The Python analogs of the C++ test-<scenario>-release targets: run the
+# examples/python/<scenario> client → server → decrypt ports against the assembled
+# niobium_client tree, each printing the example's own PASS/FAIL line. (The example
+# servers auto-add --no-ring-dim-check.) auto-facade and the ring-dim-check negative
+# test have no analog here — the wheel is built WITH_AUTO_FACADE=OFF and there is no
+# Python ring-dim scenario; the compiler/transport C++ targets are out of scope for
+# the open-source client (submit() is covered by test-submit-python-release).
+NB_PY_EX := examples/python
+
+test-mult-python-release: build-wheel-release ## Python mult example: client → server → decrypt (assembled wheel)
+	@rm -rf mult_keys mult_server_workload_*
+	@echo "=== mult client (python) ==="
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/mult/client.py mult_keys 7 13
+	@echo "=== mult server (python) ==="
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/mult/server.py mult_keys
+	@echo "=== mult decrypt (python) ==="
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/mult/decrypt.py mult_keys
+
+# simple_ops op sweep — Python analog of run-simple-op (client/server quiet; only
+# the per-op decrypt PASS/FAIL is shown, Python tracebacks still surface on stderr).
+define run-simple-op-python
+	@echo "=== $(1) ($(2) $(3)) (python) ==="
+	@rm -rf simple_ops_keys simple_ops_server_workload_*
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/simple_ops/client.py simple_ops_keys $(2) $(3) >/dev/null
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/simple_ops/server.py simple_ops_keys $(1) >/dev/null
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/simple_ops/decrypt.py simple_ops_keys $(1) 2>&1 | grep -E "PASS|FAIL"
+endef
+
+test-simple-ops-python-release: build-wheel-release ## Python simple_ops sweep: all ops (assembled wheel)
+	$(call run-simple-op-python,ADD,5,6)
+	$(call run-simple-op-python,SUB,5,6)
+	$(call run-simple-op-python,NEG,5,6)
+	$(call run-simple-op-python,ADDI,5,6)
+	$(call run-simple-op-python,SUBI,5,6)
+	$(call run-simple-op-python,MULI,5,6)
+	$(call run-simple-op-python,ADD_ADD,5,6)
+	$(call run-simple-op-python,ADD_SUB,5,6)
+	$(call run-simple-op-python,MUL,5,6)
+	$(call run-simple-op-python,MUL_ADD,5,6)
+	$(call run-simple-op-python,ADD_MUL,5,6)
+	$(call run-simple-op-python,MUL_MUL,5,6)
+	$(call run-simple-op-python,MORPH,5,6)
+
+test-op-python-release: build-wheel-release ## Single python simple_ops op: make test-op-python-release OP=ADD A=5 B=6
+	$(call run-simple-op-python,$(OP),$(A),$(B))
+
+test-plaintext-add-python-release: build-wheel-release ## Python plaintext-add example: client → server → decrypt (assembled wheel)
+	@rm -rf plaintext_add_keys plaintext_add_server_workload_*
+	@echo "=== plaintext_add client (python) ==="
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/plaintext_add/client.py plaintext_add_keys
+	@echo "=== plaintext_add server (python) ==="
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/plaintext_add/server.py plaintext_add_keys
+	@echo "=== plaintext_add decrypt (python) ==="
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/plaintext_add/decrypt.py plaintext_add_keys
+
+test-bootstrap-python-release: build-wheel-release ## Python bootstrap example: client → server → decrypt (assembled wheel)
+	@rm -rf bootstrap_keys bootstrap_server_workload_*
+	@echo "=== bootstrap client (python) ==="
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/bootstrap/client.py bootstrap_keys
+	@echo "=== bootstrap server (python) ==="
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/bootstrap/server.py bootstrap_keys
+	@echo "=== bootstrap decrypt (python) ==="
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/bootstrap/decrypt.py bootstrap_keys
+
+# Sweep of every applicable Python example scenario (analog of test-client-release,
+# minus the not-applicable auto-facade / ring-dim-check tests).
+test-examples-python-release: test-mult-python-release test-simple-ops-python-release test-plaintext-add-python-release test-bootstrap-python-release ## Run all Python example scenarios (assembled wheel)
 
 # Build the distributable wheel via PEP 517 (scikit-build-core). Uses build
 # isolation, so it fetches scikit-build-core + pybind11 itself; needs `build`
