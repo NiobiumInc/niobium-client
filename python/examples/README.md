@@ -1,6 +1,6 @@
 # Python examples (pip-installed `niobium_client`)
 
-Python ports of the C++ examples in [`examples/`](../), using the installed
+Python ports of the C++ examples in [`examples/`](../../examples/), using the installed
 `niobium_client` wheel instead of a source build. Same **client → server →
 decrypt** split as the C++ versions:
 

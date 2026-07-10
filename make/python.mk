@@ -65,13 +65,13 @@ test-wheel-smoke-release: build-wheel-release ## Primary-only smoke against the 
 
 # --- Example-scenario tests against the assembled package ----------------------
 # The Python analogs of the C++ test-<scenario>-release targets: run the
-# examples/python/<scenario> client → server → decrypt ports against the assembled
+# python/examples/<scenario> client → server → decrypt ports against the assembled
 # niobium_client tree, each printing the example's own PASS/FAIL line. (The example
 # servers auto-add --no-ring-dim-check.) auto-facade and the ring-dim-check negative
 # test have no analog here — the wheel is built WITH_AUTO_FACADE=OFF and there is no
 # Python ring-dim scenario; the compiler/transport C++ targets are out of scope for
 # the open-source client (submit() is covered by test-submit-python-release).
-NB_PY_EX := examples/python
+NB_PY_EX := python/examples
 
 test-mult-python-release: build-wheel-release ## Python mult example: client → server → decrypt (assembled wheel)
 	@rm -rf mult_keys mult_server_workload_*
