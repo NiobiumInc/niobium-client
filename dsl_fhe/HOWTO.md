@@ -390,7 +390,7 @@ MY_LOCAL_SRCS := $(realpath $(CURDIR)/$(EXAMPLES)/my-example)
 my-example:
 	@echo "=== Compiling my-example (DSL → C++) ==="
 	@mkdir -p $(MY_NB_OUT)
-	@cd $(XCOMP) && python3 nbc.py compile \
+	@cd $(XCOMP) && PYTHONPATH=.. python3 -m xcomp.nbc compile \
 		../$(EXAMPLES)/my-example/shared.niob \
 		../$(EXAMPLES)/my-example/client.niob \
 		../$(EXAMPLES)/my-example/server.niob \
