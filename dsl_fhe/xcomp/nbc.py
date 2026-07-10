@@ -36,6 +36,21 @@ def _print_design_banner():
     )
 
 
+# One-line pointer to the nb language reference. Printed to stderr by check/compile
+# so someone who lands on `nbc` without having read the docs gets nudged to it. Uses
+# the canonical URL (not a repo-relative path) so it resolves from an installed
+# package too. See discoverability notes in dsl_fhe/AGENTS.md.
+_DSL_REFERENCE_URL = "https://github.com/NiobiumInc/niobium-client/tree/main/dsl_fhe"
+
+
+def _print_dsl_banner():
+    print(
+        f"nbc: writing nb DSL? See the language reference — {_DSL_REFERENCE_URL} "
+        f"(NB_LANGUAGE.md, GRAMMAR.md, HOWTO.md).",
+        file=sys.stderr,
+    )
+
+
 def cmd_lex(args):
     """Tokenize input files and print tokens."""
     for path in args.files:
@@ -68,7 +83,7 @@ def cmd_parse(args):
 
 def cmd_check(args):
     """Parse and run semantic analysis on input files."""
-    _print_design_banner()
+    _print_dsl_banner()
     combined_source, tokens = _lex_all(args.files)
     if tokens is None:
         return 1
@@ -93,7 +108,7 @@ def cmd_check(args):
 
 def cmd_compile(args):
     """Compile .niob files to OpenFHE C++."""
-    _print_design_banner()
+    _print_dsl_banner()
     combined_source, tokens = _lex_all(args.files)
     if tokens is None:
         return 1
