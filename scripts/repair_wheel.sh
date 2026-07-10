@@ -11,16 +11,25 @@
 # bundled so it doesn't try to graft/rename them.
 #
 # Invoked from cibuildwheel's repair-wheel-command:  repair_wheel.sh {wheel} {dest_dir}
+if [[ $# -lt 2 ]]; then
+    echo "usage: $(basename "$0") {wheel} {dest_dir}" >&2
+    exit 2
+fi
 set -euxo pipefail
 
 wheel="$1"
 dest="$2"
 ofhe_lib="/project/vendor/lib/openfhe/lib"   # cibuildwheel mounts the project at /project
 
-pip install -q wheel   # the `wheel` CLI unpack/pack regenerates RECORD after patchelf
+# Interpreter: cibuildwheel puts the target python on PATH; honor $PYTHON if set.
+# (No .venv fallback here — this runs inside the manylinux container, where a mounted
+# host venv would be the wrong architecture. patchelf + auditwheel come from the image.)
+PY="${PYTHON:-python}"
+
+"$PY" -m pip install -q wheel   # the `wheel` CLI unpack/pack regenerates RECORD after patchelf
 
 work="$(mktemp -d)"
-python -m wheel unpack -d "$work" "$wheel"
+"$PY" -m wheel unpack -d "$work" "$wheel"
 pkg="$(echo "$work"/niobium_client-*/niobium_client)"
 
 # Bundle the OpenFHE runtime sonames alongside the extensions (deref symlinks).
@@ -35,7 +44,7 @@ for f in "$pkg"/*.so "$pkg"/*.so.* "$pkg"/fhetch_sim; do
 done
 
 repacked="$(mktemp -d)"
-python -m wheel pack -d "$repacked" "$work"/niobium_client-*/
+"$PY" -m wheel pack -d "$repacked" "$work"/niobium_client-*/
 
 # Retag manylinux only. The bundled libs are already in place ($ORIGIN), so exclude
 # them from grafting/renaming; auditwheel just verifies the extensions' glibc + tags.
