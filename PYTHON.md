@@ -33,10 +33,10 @@ python/
   archive_binding.cpp              _archive pybind module (TLV pack/unpack; no OpenFHE)
   CMakeLists.txt                   dual-mode: standalone _archive OR full add_subdirectory assembly
   tests/{submit_smoke,wheel_smoke}.py
+  examples/<scenario>/             client/server/decrypt ports (see examples/README.md)
 scripts/repair_wheel.sh            Linux: self-bundle + $ORIGIN + auditwheel --exclude
 scripts/repair_wheel_macos.sh      macOS: self-bundle + @loader_path + delocate --exclude
 make/python.mk                     dev-convenience make targets (included by the root Makefile)
-examples/python/<scenario>/        client/server/decrypt examples (run against the installed wheel)
 ```
 
 ## Prerequisites (local dev)
@@ -83,18 +83,42 @@ in CI (see [Release / CI](#release--ci)).
 # submit() + _archive against an in-process mock server (no OpenFHE):
 make test-submit-python-release PYTHON=$PY
 
-# Full primary-only smoke: record -> replay() (bundled fhetch_sim) -> decrypt:
+# Primary-only smoke (record -> replay() via bundled fhetch_sim -> decrypt).
+# This is also the cibuildwheel test-command (runs against the installed wheel in CI):
 make test-wheel-smoke-release PYTHON=$PY
-
-# Against an actually-installed wheel, in a clean venv (the real portability check):
-python3.12 -m venv /tmp/t && /tmp/t/bin/pip install dist/niobium_client-*.whl
-cd /tmp && /tmp/t/bin/python /path/to/examples/python/mult/client.py out \
-  && /tmp/t/bin/python .../mult/server.py out && /tmp/t/bin/python .../mult/decrypt.py out
 ```
 
-The example scenarios (`mult`, `simple_ops`, `plaintext_add`, `bootstrap`) under
-`examples/python/` each run `client.py` → `server.py` → `decrypt.py` against the
-installed wheel and print a PASS/FAIL — see `examples/python/README.md`.
+**Per-scenario tests** — the Python analogs of the C++ `test-<scenario>-release`
+targets, run against the assembled `build-wheel/` package:
+
+```bash
+make test-mult-python-release          PYTHON=$PY
+make test-simple-ops-python-release    PYTHON=$PY   # 13-op sweep
+make test-op-python-release OP=ADD A=5 B=6 PYTHON=$PY   # a single simple_ops op
+make test-plaintext-add-python-release PYTHON=$PY
+make test-bootstrap-python-release     PYTHON=$PY
+make test-examples-python-release      PYTHON=$PY   # all four scenarios
+
+# Delegate to the niobium-fhetch submodule's own Python roundtrip sweep
+# (simple_ops + plaintext-add + bootstrap, each primary + secondary via fhetch_driver):
+make test-fhetch-python-release        PYTHON=$PY
+```
+
+These run the `python/examples/<scenario>` ports (`client.py` → `server.py` →
+`decrypt.py`, each printing PASS/FAIL) against the assembled `build-wheel/` tree — see
+`python/examples/README.md`. What's *not* ported: `test-auto-ciphers-release`
+(auto-facade is off in the wheel) and `test-ring-dim-check-release` (no Python
+scenario); the `--target` C++ tests are compiler-only (the client's `submit()` path is
+covered by `test-submit-python-release`).
+
+To exercise an **actually-installed** wheel in a clean venv (the real portability
+check — the same thing CI's `test-wheel-smoke-release` does):
+
+```bash
+python3.12 -m venv /tmp/t && /tmp/t/bin/pip install dist/niobium_client-*.whl
+cd /tmp && /tmp/t/bin/python /path/to/python/examples/mult/client.py out \
+  && /tmp/t/bin/python .../mult/server.py out && /tmp/t/bin/python .../mult/decrypt.py out
+```
 
 ### Testing the manylinux wheel on a stock distro (Docker)
 
@@ -104,7 +128,7 @@ pip install cibuildwheel
 cibuildwheel --only cp312-manylinux_$(uname -m)      # -> ./wheelhouse/*.whl
 
 # Install + run it on a fresh Ubuntu (proves it's self-contained):
-docker run --rm -it -v "$PWD/wheelhouse":/w -v "$PWD/examples/python":/ex ubuntu:24.04 bash
+docker run --rm -it -v "$PWD/wheelhouse":/w -v "$PWD/python/examples":/ex ubuntu:24.04 bash
 #   apt-get update && apt-get install -y python3-venv
 #   python3 -m venv /v && . /v/bin/activate
 #   pip install /w/niobium_client-*$(uname -m)*.whl
