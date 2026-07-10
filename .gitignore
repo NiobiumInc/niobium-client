@@ -62,6 +62,8 @@ bootstrap_keys/
 bootstrap_server_workload_*/
 mult_keys/
 mult_server_workload_*/
+plaintext_add_keys/
+plaintext_add_server_workload_*/
 simple_ops_keys/
 simple_ops_server_workload_*/
 
