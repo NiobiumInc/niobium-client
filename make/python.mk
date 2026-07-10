@@ -8,7 +8,8 @@
         config-wheel-release build-wheel-release test-wheel-smoke-release wheel \
         test-mult-python-release test-simple-ops-python-release test-op-python-release \
         test-plaintext-add-python-release test-bootstrap-python-release \
-        test-examples-python-release test-fhetch-python-release
+        test-ring-dim-check-python-release test-fhetch-python-release \
+        test-client-python-release test-python-release
 
 PYTHON       ?= python3
 PYBIND11_DIR := $(shell $(PYTHON) -m pybind11 --cmakedir 2>/dev/null)
@@ -128,9 +129,12 @@ test-bootstrap-python-release: build-wheel-release ## Python bootstrap example: 
 	@echo "=== bootstrap decrypt (python) ==="
 	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/bootstrap/decrypt.py bootstrap_keys
 
-# Sweep of every applicable Python example scenario (analog of test-client-release,
-# minus the not-applicable auto-facade / ring-dim-check tests).
-test-examples-python-release: test-mult-python-release test-simple-ops-python-release test-plaintext-add-python-release test-bootstrap-python-release ## Run all Python example scenarios (assembled wheel)
+# Ring-dimension hardware-guard negative test — Python analog of
+# test-ring-dim-check-release. Asserts capture_crypto_context() rejects an
+# HW-incompatible ring dim (2048) when the check is on (no --no-ring-dim-check).
+test-ring-dim-check-python-release: build-wheel-release ## Python ring-dim guard negative test (assembled wheel)
+	@rm -rf ring_dim_check_smoke_workload_*
+	@$(WHEEL_RUN_ENV) $(PY_EXE) python/tests/ring_dim_check_smoke.py
 
 # Python analog of test-fhetch-release: delegate to the niobium-fhetch submodule's
 # own Python roundtrip sweep (simple_ops + plaintext-add + bootstrap, each primary +
@@ -140,6 +144,14 @@ test-examples-python-release: test-mult-python-release test-simple-ops-python-re
 # / fhetch_driver mechanics in fhetch's test-release.
 test-fhetch-python-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Run the fhetch submodule's Python roundtrip sweep (simple_ops + plaintext-add + bootstrap)
 	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) PYTHON="$(PYTHON)" test-roundtrip-python-release
+
+# --- Aggregates (mirror the C++ test-client-release / test-release) ------------
+# All client-level Python tests: the scenario ports + the ring-dim guard. No
+# auto-facade analog — the wheel is built WITH_AUTO_FACADE=OFF.
+test-client-python-release: test-mult-python-release test-simple-ops-python-release test-plaintext-add-python-release test-bootstrap-python-release test-ring-dim-check-python-release ## All client-level Python tests (analog of test-client-release)
+
+# Full Python sweep: client-level + the fhetch submodule's own Python roundtrips.
+test-python-release: test-client-python-release test-fhetch-python-release ## Full Python test sweep (analog of test-release)
 
 # Build the distributable wheel via PEP 517 (scikit-build-core). Uses build
 # isolation, so it fetches scikit-build-core + pybind11 itself; needs `build`
