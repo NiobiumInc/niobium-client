@@ -49,11 +49,19 @@ vendor/lib/
 # Python wheel build output + release artifacts (source tarball output)
 dist/
 wheelhouse/
+wheels/
 *.egg-info/
 
 # Python bytecode
 __pycache__/
-*.pyc
+*.py[oc]
+
+# Python virtual environments (venv / uv)
+.venv/
+.venv-*/
+venv/
+env/
+ENV/
 
 # Auto-facade test artifacts
 ciphers_auto/
