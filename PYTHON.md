@@ -20,6 +20,24 @@ The crypto + session extensions are built by **niobium-fhetch** (its `WITH_PYTHO
 option); this repo assembles them + the `_archive` binding + `nbc` + `fhetch_sim`
 into the wheel.
 
+## Package naming & metadata
+
+Naming/version live in `pyproject.toml` +
+`python/niobium_client/VERSION`.
+
+- **Distribution name:** `niobium_client` — `pip install niobium_client`,
+  `import niobium_client`.
+- **Namespaced imports — no top-level shadowing.** Everything is under
+  `niobium_client.*`, *including* `niobium_client.openfhe`. This allows both this module and stock `import OpenFHE` to coexist in one environment. The
+  compiled session module `niobium_session` is surfaced as `niobium_client.session`
+- **Version:** plain semver, currently `0.1.0` (pre-1.0 while packaging/API settle). The
+  bundled OpenFHE version goes in the wheel METADATA (informational)
+- **Wheel tags:** one wheel per **CPython minor × platform** (the cibuildwheel matrix).
+  Currently CPython **3.11–3.14** × {manylinux x86_64, manylinux aarch64,
+  macOS arm64} = **12 wheels/release**
+- **License / deps:** Apache-2.0 (`LICENSE` + classifier); **no runtime dependencies**
+  — the crypto/session/archive natives are bundled, `submit()` and `nbc` are pure stdlib.
+
 ## Layout
 
 ```
@@ -41,10 +59,13 @@ make/python.mk                     dev-convenience make targets (included by the
 
 ## Prerequisites (local dev)
 
+All commands below are run from the **`niobium-client` root** and use the venv at
+`.venv/` directly (no environment variables).
+
 - **Python 3.11–3.14** with **pybind11 3.x** and **build** in a venv (pybind11 is a
   build-time dependency, discovered via `find_package`):
   ```bash
-  python3.12 -m venv .venv
+  python3 -m venv .venv
   .venv/bin/pip install pybind11 build
   ```
 - **CMake ≥ 3.16** and a C++17 compiler (also `ninja` for speed).
@@ -53,22 +74,17 @@ make/python.mk                     dev-convenience make targets (included by the
   make config-openfhe-release build-openfhe-release   # -> vendor/lib/openfhe/
   ```
 
-Point the make targets at your venv with `PYTHON=`:
-```bash
-export PY=$PWD/.venv/bin/python
-```
-
 ## Build
 
 ```bash
 # Fast, submit-only (just the _archive binding; no OpenFHE) — for iterating on submit():
-make build-python-archive PYTHON=$PY          # -> build/python/niobium_client/
+make build-python-archive PYTHON=.venv/bin/python   # -> build/python/niobium_client/
 
 # Full package assembly (openfhe + session + _archive + nbc + fhetch_sim + libs):
-make build-wheel-release PYTHON=$PY           # -> build-wheel/niobium_client/
+make build-wheel-release PYTHON=.venv/bin/python     # -> build-wheel/niobium_client/
 
 # A real, distributable wheel via PEP 517 (needs `pip install build`):
-make wheel PYTHON=$PY                          # -> dist/niobium_client-*.whl
+make wheel PYTHON=.venv/bin/python                   # -> dist/niobium_client-*.whl
 ```
 
 `make wheel` runs `python -m build`, which drives the top-level CMake
@@ -81,34 +97,34 @@ in CI (see [Release / CI](#release--ci)).
 
 ```bash
 # submit() + _archive against an in-process mock server (no OpenFHE):
-make test-submit-python-release PYTHON=$PY
+make test-submit-python-release PYTHON=.venv/bin/python
 
 # Primary-only smoke (record -> replay() via bundled fhetch_sim -> decrypt).
 # This is also the cibuildwheel test-command (runs against the installed wheel in CI):
-make test-wheel-smoke-release PYTHON=$PY
+make test-wheel-smoke-release PYTHON=.venv/bin/python
 ```
 
 **Per-scenario tests** — the Python analogs of the C++ `test-<scenario>-release`
 targets, run against the assembled `build-wheel/` package:
 
 ```bash
-make test-mult-python-release           PYTHON=$PY
-make test-simple-ops-python-release     PYTHON=$PY   # 13-op sweep
-make test-op-python-release OP=ADD A=5 B=6 PYTHON=$PY   # a single simple_ops op
-make test-plaintext-add-python-release  PYTHON=$PY
-make test-bootstrap-python-release      PYTHON=$PY
-make test-ring-dim-check-python-release PYTHON=$PY   # negative test: guard rejects ring dim 2048
+make test-mult-python-release           PYTHON=.venv/bin/python
+make test-simple-ops-python-release     PYTHON=.venv/bin/python   # 13-op sweep
+make test-op-python-release OP=ADD A=5 B=6 PYTHON=.venv/bin/python   # one simple_ops op
+make test-plaintext-add-python-release  PYTHON=.venv/bin/python
+make test-bootstrap-python-release      PYTHON=.venv/bin/python
+make test-ring-dim-check-python-release PYTHON=.venv/bin/python   # negative: guard rejects ring dim 2048
 
 # Delegate to the niobium-fhetch submodule's own Python roundtrip sweep
 # (simple_ops + plaintext-add + bootstrap, each primary + secondary via fhetch_driver):
-make test-fhetch-python-release         PYTHON=$PY
+make test-fhetch-python-release         PYTHON=.venv/bin/python
 ```
 
 Aggregates, mirroring the C++ `test-client-release` / `test-release`:
 
 ```bash
-make test-client-python-release PYTHON=$PY   # scenario tests + ring-dim guard
-make test-python-release        PYTHON=$PY   # client-level + fhetch roundtrips (everything)
+make test-client-python-release PYTHON=.venv/bin/python   # scenario tests + ring-dim guard
+make test-python-release        PYTHON=.venv/bin/python   # client-level + fhetch (everything)
 ```
 
 The scenario targets run the `python/examples/<scenario>` ports (`client.py` →
@@ -119,27 +135,32 @@ are compiler-only (the client's `submit()` path is covered by
 `test-submit-python-release`).
 
 To exercise an **actually-installed** wheel in a clean venv (the real portability
-check — the same thing CI's `test-wheel-smoke-release` does):
+check — the same thing CI's `test-wheel-smoke-release` does). From the root, into a
+throwaway `.venv-demo/`:
 
 ```bash
-python3.12 -m venv /tmp/t && /tmp/t/bin/pip install dist/niobium_client-*.whl
-cd /tmp && /tmp/t/bin/python /path/to/python/examples/mult/client.py out \
-  && /tmp/t/bin/python .../mult/server.py out && /tmp/t/bin/python .../mult/decrypt.py out
+python3 -m venv .venv-demo && .venv-demo/bin/pip install dist/niobium_client-*.whl
+.venv-demo/bin/python python/examples/mult/client.py  mult_keys 7 13
+.venv-demo/bin/python python/examples/mult/server.py  mult_keys
+.venv-demo/bin/python python/examples/mult/decrypt.py mult_keys      # -> PASS 91.0
 ```
 
 ### Testing the manylinux wheel on a stock distro (Docker)
 
+Run from the `niobium-client` root (the `$(pwd)` mounts resolve to this checkout):
+
 ```bash
 # Build the manylinux wheel locally (needs Docker):
-pip install cibuildwheel
-cibuildwheel --only cp312-manylinux_$(uname -m)      # -> ./wheelhouse/*.whl
+.venv/bin/pip install cibuildwheel
+.venv/bin/cibuildwheel --only cp312-manylinux_$(uname -m)      # -> ./wheelhouse/*.whl
 
 # Install + run it on a fresh Ubuntu (proves it's self-contained):
-docker run --rm -it -v "$PWD/wheelhouse":/w -v "$PWD/python/examples":/ex ubuntu:24.04 bash
+docker run --rm -it -v "$(pwd)/wheelhouse":/w -v "$(pwd)/python/examples":/ex ubuntu:24.04 bash
 #   apt-get update && apt-get install -y python3-venv
-#   python3 -m venv /v && . /v/bin/activate
+#   python3 -m venv /work/v && . /work/v/bin/activate
 #   pip install /w/niobium_client-*$(uname -m)*.whl
-#   cd /tmp && python /ex/mult/client.py o && python /ex/mult/server.py o && python /ex/mult/decrypt.py o
+#   mkdir -p /work/run && cd /work/run
+#   python /ex/mult/client.py mult_keys 7 13 && python /ex/mult/server.py mult_keys && python /ex/mult/decrypt.py mult_keys
 ```
 
 ## Release / CI
