@@ -1,5 +1,14 @@
 # DSL for FHE: Design Rationale and Compiler Guide
 
+> **Building an FHE app? Read the design skill first — do not skip the design
+> stages.** Before you write a single `.niob` file, read
+> [`../.claude/skills/fhe-application-design/SKILL.md`](../.claude/skills/fhe-application-design/SKILL.md).
+> It walks you from problem statement through privacy model, feasibility, scheme
+> selection, circuit design, SIMD data layout, and parameter selection. Copying an
+> example without doing this design work is the most common way to ship a
+> working-but-wrong FHE application. This file (design rationale + codegen
+> internals) is *reference*, not the starting point.
+
 ## Quick Start
 
 ```bash
@@ -17,6 +26,7 @@ make set-membership         # Build the private name-matching example
 
 | File | Purpose |
 |---|---|
+| **`../.claude/skills/fhe-application-design/SKILL.md`** | **START HERE for a new app** — 8-stage design guide (privacy model → feasibility → scheme → circuit → data layout → parameters → codegen). Read before writing `.niob`. |
 | `AGENTS.md` | This file — design rationale, codegen internals, known pitfalls (imported by `CLAUDE.md`, or read directly by non-Claude agents) |
 | `HOWTO.md` | Step-by-step guide for adding a new example |
 | `NB_LANGUAGE.md` | Language reference — types, syntax, built-in functions, patterns |
