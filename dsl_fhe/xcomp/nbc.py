@@ -24,6 +24,20 @@ from semantic import analyze as semantic_analyze
 from codegen import generate
 from errors import CompileError
 
+# One-line pointer to the design skill. Printed to stderr by check/compile so an
+# agent that lands on `nbc` without having read the docs still gets nudged to the
+# 8-stage design guide before hand-writing a circuit. See discoverability notes in
+# dsl_fhe/AGENTS.md.
+_DESIGN_SKILL = ".claude/skills/fhe-application-design/SKILL.md"
+
+
+def _print_design_banner():
+    print(
+        f"nbc: building an FHE app? Read the design skill first — {_DESIGN_SKILL} "
+        f"(8 stages; don't skip the design work).",
+        file=sys.stderr,
+    )
+
 
 def cmd_lex(args):
     """Tokenize input files and print tokens."""
@@ -57,6 +71,7 @@ def cmd_parse(args):
 
 def cmd_check(args):
     """Parse and run semantic analysis on input files."""
+    _print_design_banner()
     combined_source, tokens = _lex_all(args.files)
     if tokens is None:
         return 1
@@ -81,6 +96,7 @@ def cmd_check(args):
 
 def cmd_compile(args):
     """Compile .niob files to OpenFHE C++."""
+    _print_design_banner()
     combined_source, tokens = _lex_all(args.files)
     if tokens is None:
         return 1

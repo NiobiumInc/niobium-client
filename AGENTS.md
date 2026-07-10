@@ -2,6 +2,14 @@
 
 Guidance for Claude Code (and other agents) working in this repository.
 
+> **Designing or building an FHE application? Read
+> [`.claude/skills/fhe-application-design/SKILL.md`](.claude/skills/fhe-application-design/SKILL.md)
+> first — do not skip the design stages.** It is an 8-stage design guide (privacy
+> model → feasibility → scheme → circuit → SIMD data layout → parameters →
+> codegen). This applies whether you enter through the nb DSL (`dsl_fhe/`),
+> instrumented OpenFHE (`examples/`), or direct FHETCH IR — the design work comes
+> before the code either way.
+
 ## Project Overview
 
 **Niobium Client** is the open-source client stack for the Niobium Mistic FHE
