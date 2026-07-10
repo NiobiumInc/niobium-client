@@ -4,7 +4,7 @@
 # targets just wrap the dev loop and `python -m build`. Included by the root Makefile
 # (shares its variable namespace: OPENFHE_INSTALL_DIR, NUM_CPUS, CURDIR come from there).
 
-.PHONY: config-python-release build-python-release test-submit-python-release \
+.PHONY: config-python-archive build-python-archive test-submit-python-release \
         config-wheel-release build-wheel-release test-wheel-smoke-release wheel \
         test-mult-python-release test-simple-ops-python-release test-op-python-release \
         test-plaintext-add-python-release test-bootstrap-python-release \
@@ -19,17 +19,17 @@ PY_EXE       := $(shell command -v $(PYTHON))
 
 # The _archive binding is pure C++ stdlib (no OpenFHE), so it builds standalone via
 # python/CMakeLists.txt (dual-mode) — fast submit-only iteration without OpenFHE.
-config-python-release: ## Configure the Python package (_archive binding). Needs pybind11.
+config-python-archive: ## Configure the standalone _archive binding. Needs pybind11.
 	@if [ -z "$(PYBIND11_DIR)" ]; then \
 		echo "pybind11 CMake dir not found for '$(PYTHON)'. Install: $(PYTHON) -m pip install pybind11"; \
 		exit 1; \
 	fi
 	cmake -S python -B build/python -Dpybind11_DIR=$(PYBIND11_DIR) -DPython_EXECUTABLE=$(PY_EXE)
 
-build-python-release: config-python-release ## Build the Python package (_archive)
+build-python-archive: config-python-archive ## Build the standalone _archive binding (submit-only; no OpenFHE)
 	cmake --build build/python -j $(NUM_CPUS)
 
-test-submit-python-release: build-python-release ## submit() + _archive smoke (mock server; no OpenFHE)
+test-submit-python-release: build-python-archive ## submit() + _archive smoke (mock server; no OpenFHE)
 	PYTHONPATH=$(CURDIR)/build/python $(PY_EXE) python/tests/submit_smoke.py
 
 # --- Full wheel assembly -------------------------------------------------------

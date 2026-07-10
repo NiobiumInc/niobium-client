@@ -62,7 +62,7 @@ export PY=$PWD/.venv/bin/python
 
 ```bash
 # Fast, submit-only (just the _archive binding; no OpenFHE) — for iterating on submit():
-make build-python-release PYTHON=$PY          # -> build/python/niobium_client/
+make build-python-archive PYTHON=$PY          # -> build/python/niobium_client/
 
 # Full package assembly (openfhe + session + _archive + nbc + fhetch_sim + libs):
 make build-wheel-release PYTHON=$PY           # -> build-wheel/niobium_client/
