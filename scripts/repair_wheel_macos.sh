@@ -10,16 +10,31 @@
 #
 # Usage:  repair_wheel_macos.sh {wheel} {dest_dir}
 #   OPENFHE_INSTALL_DIR overrides the substrate location (default: <cwd>/vendor/lib/openfhe).
+if [[ $# -lt 2 ]]; then
+    echo "usage: $(basename "$0") {wheel} {dest_dir}" >&2
+    echo "  e.g. $(basename "$0") dist/niobium_client-*.whl wheelhouse" >&2
+    exit 2
+fi
 set -euxo pipefail
 
 wheel="$1"
 dest="$2"
 ofhe_lib="${OPENFHE_INSTALL_DIR:-$PWD/vendor/lib/openfhe}/lib"
 
-pip install -q wheel delocate
+# Interpreter: honor $PYTHON (e.g. .venv/bin/python), else the repo venv, else PATH.
+# Invoking tools as `"$PY" -m …` avoids depending on bare pip/python/delocate-wheel
+# being on PATH — they usually aren't for a manual run (macOS has python3, not python).
+PY="${PYTHON:-}"
+if [[ -z "$PY" ]]; then
+    if [[ -x .venv/bin/python ]]; then PY=.venv/bin/python
+    elif command -v python >/dev/null 2>&1; then PY=python
+    else PY=python3; fi
+fi
+
+"$PY" -m pip install -q wheel delocate
 
 work="$(mktemp -d)"
-python -m wheel unpack -d "$work" "$wheel"
+"$PY" -m wheel unpack -d "$work" "$wheel"
 pkg="$(echo "$work"/niobium_client-*/niobium_client)"
 
 # Bundle the OpenFHE runtime dylibs alongside the extensions (deref symlinks).
@@ -35,8 +50,9 @@ for f in "$pkg"/*.so "$pkg"/*.dylib "$pkg"/fhetch_sim; do
 done
 
 repacked="$(mktemp -d)"
-python -m wheel pack -d "$repacked" "$work"/niobium_client-*/
+"$PY" -m wheel pack -d "$repacked" "$work"/niobium_client-*/
 
 # Verify + tag only; the bundled libs are already in place (@loader_path), so exclude
-# them from delocate's grafting/renaming.
-delocate-wheel --exclude libnbfhetch --exclude libOPENFHE -w "$dest" "$repacked"/*.whl
+# them from delocate's grafting/renaming. Invoke delocate via -m so it doesn't need to
+# be on PATH (only importable in $PY's env, which the pip install above guarantees).
+"$PY" -m delocate.cmd.delocate_wheel --exclude libnbfhetch --exclude libOPENFHE -w "$dest" "$repacked"/*.whl
