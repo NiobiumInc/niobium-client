@@ -92,24 +92,31 @@ make test-wheel-smoke-release PYTHON=$PY
 targets, run against the assembled `build-wheel/` package:
 
 ```bash
-make test-mult-python-release          PYTHON=$PY
-make test-simple-ops-python-release    PYTHON=$PY   # 13-op sweep
+make test-mult-python-release           PYTHON=$PY
+make test-simple-ops-python-release     PYTHON=$PY   # 13-op sweep
 make test-op-python-release OP=ADD A=5 B=6 PYTHON=$PY   # a single simple_ops op
-make test-plaintext-add-python-release PYTHON=$PY
-make test-bootstrap-python-release     PYTHON=$PY
-make test-examples-python-release      PYTHON=$PY   # all four scenarios
+make test-plaintext-add-python-release  PYTHON=$PY
+make test-bootstrap-python-release      PYTHON=$PY
+make test-ring-dim-check-python-release PYTHON=$PY   # negative test: guard rejects ring dim 2048
 
 # Delegate to the niobium-fhetch submodule's own Python roundtrip sweep
 # (simple_ops + plaintext-add + bootstrap, each primary + secondary via fhetch_driver):
-make test-fhetch-python-release        PYTHON=$PY
+make test-fhetch-python-release         PYTHON=$PY
 ```
 
-These run the `python/examples/<scenario>` ports (`client.py` → `server.py` →
-`decrypt.py`, each printing PASS/FAIL) against the assembled `build-wheel/` tree — see
-`python/examples/README.md`. What's *not* ported: `test-auto-ciphers-release`
-(auto-facade is off in the wheel) and `test-ring-dim-check-release` (no Python
-scenario); the `--target` C++ tests are compiler-only (the client's `submit()` path is
-covered by `test-submit-python-release`).
+Aggregates, mirroring the C++ `test-client-release` / `test-release`:
+
+```bash
+make test-client-python-release PYTHON=$PY   # scenario tests + ring-dim guard
+make test-python-release        PYTHON=$PY   # client-level + fhetch roundtrips (everything)
+```
+
+The scenario targets run the `python/examples/<scenario>` ports (`client.py` →
+`server.py` → `decrypt.py`, each printing PASS/FAIL) against the assembled
+`build-wheel/` tree — see `python/examples/README.md`. What's *not* ported:
+`test-auto-ciphers-release` (auto-facade is off in the wheel); the `--target` C++ tests
+are compiler-only (the client's `submit()` path is covered by
+`test-submit-python-release`).
 
 To exercise an **actually-installed** wheel in a clean venv (the real portability
 check — the same thing CI's `test-wheel-smoke-release` does):
