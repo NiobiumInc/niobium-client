@@ -1,5 +1,5 @@
 [build-system]
-requires = ["scikit-build-core>=0.10", "pybind11>=3,<4"]
+requires = ["scikit-build-core>=0.11", "pybind11>=3,<4"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -40,7 +40,8 @@ wheel.packages = []
 
 # Single source of truth: the wheel version is read from the VERSION file that the
 # package also exposes as niobium_client.__version__.
-[tool.scikit-build.metadata.version]
+[[tool.dynamic-metadata]]
+field = "version"
 provider = "scikit_build_core.metadata.regex"
 input = "python/niobium_client/VERSION"
 regex = "^(?P<value>.+)$"
