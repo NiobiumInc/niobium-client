@@ -102,6 +102,30 @@ def decrypt_check(d, a, b):
     return pt.GetRealPackedValue()[0]
 
 
+# Every third-party notice the wheel redistributes (see python/CMakeLists.txt).
+# Bundled under niobium_client/licenses/ as package data; guarded here so a
+# regression in the assembly fails CI loudly rather than shipping silently.
+EXPECTED_LICENSES = (
+    "LICENSE.OpenFHE",        # BSD-2  (compiled into openfhe.so)
+    "LICENSE.openfhe-python", # BSD-2  (compiled into openfhe.so)
+    "LICENSE.pybind11",       # BSD-3  (headers compiled into the extensions)
+    "LICENSE.libnbfhetch",    # Apache-2.0 (bundled .so)
+    "LICENSE.niobium-client", # Apache-2.0 (this project)
+)
+
+
+def check_licenses():
+    """The wheel must bundle every third-party license notice it redistributes."""
+    import niobium_client
+    lic_dir = os.path.join(os.path.dirname(niobium_client.__file__), "licenses")
+    missing = [
+        name for name in EXPECTED_LICENSES
+        if not (os.path.isfile(os.path.join(lic_dir, name))
+                and os.path.getsize(os.path.join(lic_dir, name)) > 0)
+    ]
+    return (not missing), missing
+
+
 def main():
     a, b = 5.0, 6.0
     work = tempfile.mkdtemp(prefix="nb_wheel_smoke_")
@@ -118,10 +142,18 @@ def main():
         shutil.rmtree(work, ignore_errors=True)
 
     exp = a * b
-    ok = abs(got - exp) < 0.01
-    print(f"niobium_client {getattr(__import__('niobium_client'), '__version__', '?')} "
-          f"wheel smoke: [{'PASS' if ok else 'FAIL'}] MUL {got:.4f} ~= {exp:.4f}")
-    return 0 if ok else 1
+    mul_ok = abs(got - exp) < 0.01
+    ver = getattr(__import__('niobium_client'), '__version__', '?')
+    print(f"niobium_client {ver} "
+          f"wheel smoke: [{'PASS' if mul_ok else 'FAIL'}] MUL {got:.4f} ~= {exp:.4f}")
+
+    lic_ok, missing = check_licenses()
+    print(f"niobium_client {ver} "
+          f"licenses: [{'PASS' if lic_ok else 'FAIL'}] "
+          f"{len(EXPECTED_LICENSES) - len(missing)}/{len(EXPECTED_LICENSES)} bundled"
+          + (f"  MISSING: {', '.join(missing)}" if missing else ""))
+
+    return 0 if (mul_ok and lic_ok) else 1
 
 
 if __name__ == "__main__":
