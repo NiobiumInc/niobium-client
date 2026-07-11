@@ -79,6 +79,55 @@ add_custom_command(TARGET niobium_client_pkg POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E rm -rf
             ${NB_PKG}/nbc/tests ${NB_PKG}/nbc/__pycache__ ${NB_PKG}/__pycache__)
 
+# --- Third-party license notices ---------------------------------------------
+# The wheel bundles/redistributes native code from BSD/Apache projects, so their
+# license texts must travel with it (the BSD-2/BSD-3 binary-redistribution clause).
+# Shipped as package data under niobium_client/licenses/:
+#   OpenFHE + openfhe-python  BSD-2-Clause  (compiled into openfhe*.so)
+#   pybind11                  BSD-3-Clause  (headers compiled into the extensions)
+#   libnbfhetch               Apache-2.0    (bundled .so)
+#   niobium-client            Apache-2.0    (this project)
+if(NIOBIUM_CLIENT_FHETCH_DIR)
+    set(NB_FHETCH_SRC "${NIOBIUM_CLIENT_FHETCH_DIR}")
+else()
+    set(NB_FHETCH_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/niobium-fhetch")
+endif()
+set(NB_LIC "${NB_PKG}/licenses")
+
+# pybind11 is a build dependency (not vendored); locate its LICENSE relative to the
+# pybind11 CMake package. pybind11_DIR is an absolute cache var set by find_package
+# (<site-packages>/pybind11/share/cmake/pybind11), so walk up to site-packages and
+# glob the dist-info. Best-effort — a miss warns rather than failing the build.
+set(NB_PYBIND11_LICENSE "")
+if(pybind11_DIR)
+    get_filename_component(_NB_SITE_PACKAGES "${pybind11_DIR}/../../../.." ABSOLUTE)
+    file(GLOB _NB_PB_LIC
+        "${_NB_SITE_PACKAGES}/pybind11-*.dist-info/licenses/LICENSE"
+        "${_NB_SITE_PACKAGES}/pybind11-*.dist-info/LICENSE"
+        "${_NB_SITE_PACKAGES}/pybind11/LICENSE")
+    if(_NB_PB_LIC)
+        list(GET _NB_PB_LIC 0 NB_PYBIND11_LICENSE)
+    endif()
+endif()
+
+add_custom_command(TARGET niobium_client_pkg POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${NB_LIC}
+    COMMAND ${CMAKE_COMMAND} -E copy ${NB_FHETCH_SRC}/vendor/openfhe/LICENSE        ${NB_LIC}/LICENSE.OpenFHE
+    COMMAND ${CMAKE_COMMAND} -E copy ${NB_FHETCH_SRC}/vendor/openfhe-python/LICENSE ${NB_LIC}/LICENSE.openfhe-python
+    COMMAND ${CMAKE_COMMAND} -E copy ${NB_FHETCH_SRC}/LICENSE                       ${NB_LIC}/LICENSE.libnbfhetch
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE         ${NB_LIC}/LICENSE.niobium-client
+    COMMENT "Bundling third-party license notices -> ${NB_LIC}")
+
+if(NB_PYBIND11_LICENSE AND EXISTS "${NB_PYBIND11_LICENSE}")
+    add_custom_command(TARGET niobium_client_pkg POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy "${NB_PYBIND11_LICENSE}" ${NB_LIC}/LICENSE.pybind11)
+else()
+    message(WARNING
+        "pybind11 LICENSE not found via importlib.metadata; the wheel will omit "
+        "licenses/LICENSE.pybind11 (BSD-3-Clause). Ensure pybind11 ships its "
+        "dist-info, or add the notice manually.")
+endif()
+
 # Wheel packaging (scikit-build-core installs only this component; niobium-fhetch's
 # lib/header install rules stay out of the wheel). delocate/auditwheel then graft
 # the OpenFHE dylibs next to the extensions.
