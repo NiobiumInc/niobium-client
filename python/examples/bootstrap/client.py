@@ -8,7 +8,7 @@ serialize for the server. Usage: client.py [dir]   (default: bootstrap_keys)
 import os
 import sys
 
-from niobium_client import openfhe as o
+from niobium_sdk import openfhe as o
 
 BIN = o.BINARY
 INPUT = [0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0]

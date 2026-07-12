@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""mult server — Python port of examples/mult/server.cpp (pip niobium_client).
+"""mult server — Python port of examples/mult/server.cpp (pip niobium_sdk).
 
 Deserialize the context/keys/ciphertexts, tag them, record a * b as a FHETCH
 trace, replay it locally through the bundled fhetch_sim, serialize the result.
@@ -8,7 +8,7 @@ Usage: server.py [dir [niobium-init-flags...]]
 """
 import sys
 
-from niobium_client import openfhe as o, session as nb
+from niobium_sdk import openfhe as o, session as nb
 
 BIN = o.BINARY
 

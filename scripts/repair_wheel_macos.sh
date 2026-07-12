@@ -12,7 +12,7 @@
 #   OPENFHE_INSTALL_DIR overrides the substrate location (default: <cwd>/vendor/lib/openfhe).
 if [[ $# -lt 2 ]]; then
     echo "usage: $(basename "$0") {wheel} {dest_dir}" >&2
-    echo "  e.g. $(basename "$0") dist/niobium_client-*.whl wheelhouse" >&2
+    echo "  e.g. $(basename "$0") dist/niobium_sdk-*.whl wheelhouse" >&2
     exit 2
 fi
 set -euxo pipefail
@@ -35,7 +35,7 @@ fi
 
 work="$(mktemp -d)"
 "$PY" -m wheel unpack -d "$work" "$wheel"
-pkg="$(echo "$work"/niobium_client-*/niobium_client)"
+pkg="$(echo "$work"/niobium_sdk-*/niobium_sdk)"
 
 # Bundle the OpenFHE runtime dylibs alongside the extensions (deref symlinks).
 for dy in "$ofhe_lib"/libOPENFHE*.1.dylib; do
@@ -50,7 +50,7 @@ for f in "$pkg"/*.so "$pkg"/*.dylib "$pkg"/fhetch_sim; do
 done
 
 repacked="$(mktemp -d)"
-"$PY" -m wheel pack -d "$repacked" "$work"/niobium_client-*/
+"$PY" -m wheel pack -d "$repacked" "$work"/niobium_sdk-*/
 
 # Verify + tag only; the bundled libs are already in place (@loader_path), so exclude
 # them from delocate's grafting/renaming. Invoke delocate via -m so it doesn't need to

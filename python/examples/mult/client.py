@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""mult client — Python port of examples/mult/client.cpp (pip niobium_client).
+"""mult client — Python port of examples/mult/client.cpp (pip niobium_sdk).
 
 Generate a CKKS context + keys, encrypt two values, serialize everything for the
 server. Pure OpenFHE (no Niobium session).
@@ -9,7 +9,7 @@ Usage: client.py [dir [a [b [ring_dim]]]]   (defaults: mult_keys, 7.0, 13.0, 204
 import os
 import sys
 
-from niobium_client import openfhe as o
+from niobium_sdk import openfhe as o
 
 BIN = o.BINARY
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke test for niobium_client.client.submit() + the _archive binding.
+"""Smoke test for niobium_sdk.client.submit() + the _archive binding.
 
 - unit: pack_directory -> unpack_into round-trips a dir and excludes serialized_probes/.
 - submit: against an in-process mock replay server, asserts the request contract
@@ -7,14 +7,14 @@
   the returned probe archive unpacks into <project>/serialized_probes/.
 
 No OpenFHE/libnbfhetch needed (the archive path is pure stdlib). Run with PYTHONPATH
-pointing at the built niobium_client package (build/python).
+pointing at the built niobium_sdk package (build/python).
 """
 import http.server
 import os
 import tempfile
 import threading
 
-from niobium_client import client, _archive
+from niobium_sdk import client, _archive
 
 
 def unit_pack_unpack():

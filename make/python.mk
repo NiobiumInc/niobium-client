@@ -35,10 +35,10 @@ test-submit-python-release: build-python-archive ## submit() + _archive smoke (m
 # --- Full wheel assembly -------------------------------------------------------
 # Drives the top-level CMake with NIOBIUM_CLIENT_WITH_PYTHON: builds openfhe +
 # niobium_session (via niobium-fhetch WITH_PYTHON) + _archive and assembles the
-# importable package at build-wheel/niobium_client/. Separate build dir from the
+# importable package at build-wheel/niobium_sdk/. Separate build dir from the
 # client build (build/) and the standalone submit build (build/python). Needs the
 # OpenFHE substrate installed (make install-release) + pybind11.
-config-wheel-release: ## Configure the full niobium_client package assembly
+config-wheel-release: ## Configure the full niobium_sdk package assembly
 	@if [ -z "$(PYBIND11_DIR)" ]; then \
 		echo "pybind11 CMake dir not found for '$(PYTHON)'. Install: $(PYTHON) -m pip install pybind11"; \
 		exit 1; \
@@ -51,15 +51,15 @@ config-wheel-release: ## Configure the full niobium_client package assembly
 		-DOPENFHE_INSTALL_DIR=$(OPENFHE_INSTALL_DIR) \
 		-Dpybind11_DIR=$(PYBIND11_DIR) -DPython_EXECUTABLE=$(PY_EXE)
 
-build-wheel-release: config-wheel-release ## Build + assemble build-wheel/niobium_client/
+build-wheel-release: config-wheel-release ## Build + assemble build-wheel/niobium_sdk/
 	cmake --build build-wheel -j $(NUM_CPUS)
 
-# Env for importing + running the assembled package tree (build-wheel/niobium_client):
+# Env for importing + running the assembled package tree (build-wheel/niobium_sdk):
 # import from build-wheel, resolve the OpenFHE dylibs + bundled natives at runtime.
 # Shared by the wheel smoke and the example-scenario tests below.
 WHEEL_RUN_ENV = PYTHONPATH=$(CURDIR)/build-wheel \
-	DYLD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib:$(CURDIR)/build-wheel/niobium_client \
-	LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib:$(CURDIR)/build-wheel/niobium_client
+	DYLD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib:$(CURDIR)/build-wheel/niobium_sdk \
+	LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib:$(CURDIR)/build-wheel/niobium_sdk
 
 test-wheel-smoke-release: build-wheel-release ## Primary-only smoke against the assembled package
 	$(WHEEL_RUN_ENV) $(PY_EXE) python/tests/wheel_smoke.py
@@ -67,7 +67,7 @@ test-wheel-smoke-release: build-wheel-release ## Primary-only smoke against the 
 # --- Example-scenario tests against the assembled package ----------------------
 # The Python analogs of the C++ test-<scenario>-release targets: run the
 # python/examples/<scenario> client → server → decrypt ports against the assembled
-# niobium_client tree, each printing the example's own PASS/FAIL line. (The example
+# niobium_sdk tree, each printing the example's own PASS/FAIL line. (The example
 # servers auto-add --no-ring-dim-check.) auto-facade and the ring-dim-check negative
 # test have no analog here — the wheel is built WITH_AUTO_FACADE=OFF and there is no
 # Python ring-dim scenario; the compiler/transport C++ targets are out of scope for
@@ -157,7 +157,7 @@ test-python-release: test-client-python-release test-fhetch-python-release ## Fu
 # isolation, so it fetches scikit-build-core + pybind11 itself; needs `build`
 # (pip install build) and the OpenFHE substrate installed. CI (cibuildwheel) runs
 # the per-version × platform matrix + delocate/auditwheel; this is the local path.
-wheel: ## Build the niobium_client wheel into dist/ (python -m build)
+wheel: ## Build the niobium_sdk wheel into dist/ (python -m build)
 	$(PY_EXE) -m build --wheel
 
 ##@ Python cleanup

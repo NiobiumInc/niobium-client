@@ -10,7 +10,7 @@ Usage: server.py [dir [niobium-init-flags...]]
 import os
 import sys
 
-from niobium_client import openfhe as o, session as nb
+from niobium_sdk import openfhe as o, session as nb
 
 BIN = o.BINARY
 LEVEL_BUDGET = [4, 4]

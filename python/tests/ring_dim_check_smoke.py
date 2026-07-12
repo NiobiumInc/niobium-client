@@ -9,7 +9,7 @@ via capture_crypto_context(), which derives N from the context.
 """
 import sys
 
-from niobium_client import openfhe as o, session as nb
+from niobium_sdk import openfhe as o, session as nb
 
 RING_DIM = 2048  # small / HW-incompatible on purpose
 

@@ -1,4 +1,4 @@
-"""niobium_client.client — client surface.
+"""niobium_sdk.client — client surface.
 
 Currently implements the cloud/remote target: submit(). Local replay (the default
 target) is the bundled fhetch_sim, driven by the recorder's replay() — a separate
@@ -6,7 +6,7 @@ path. submit() mirrors the C++ nbcc_fhetch_replay forwarder (src/fhetch_transpor
 client.cpp): pack the project dir (excluding serialized_probes/), POST it to the
 replay server, unpack the returned archive into serialized_probes/.
 
-Framing is the bound C++ archive (niobium_client._archive) — no Python reimpl of
+Framing is the bound C++ archive (niobium_sdk._archive) — no Python reimpl of
 the wire format. HTTP is stdlib urllib (no third-party dep).
 """
 import os
