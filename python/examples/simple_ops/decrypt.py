@@ -6,7 +6,7 @@ Usage: decrypt.py [dir [op [ct_file]]]   (op default: MUL)
 """
 import sys
 
-from niobium_client import openfhe as o
+from niobium_sdk import openfhe as o
 
 BIN = o.BINARY
 

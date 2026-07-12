@@ -8,7 +8,7 @@ Usage: server.py [dir [op [niobium-init-flags...]]]   (op default: MUL)
 """
 import sys
 
-from niobium_client import openfhe as o, session as nb
+from niobium_sdk import openfhe as o, session as nb
 
 BIN = o.BINARY
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Primary-only smoke for the INSTALLED niobium_client wheel.
+"""Primary-only smoke for the INSTALLED niobium_sdk wheel.
 
 Runs the real path end-to-end against the installed package — no build tree, no
 PYTHONPATH hacks, no fhetch_driver secondary:
@@ -11,14 +11,14 @@ re-drive cross-check is the niobium-fhetch dev repo's job. Imports come straight
 from the package, so this also exercises the __init__ RTLD_GLOBAL preload and the
 namespaced surface (openfhe / session).
 
-Run after `pip install niobium_client-*.whl`:  python wheel_smoke.py
+Run after `pip install niobium_sdk-*.whl`:  python wheel_smoke.py
 """
 import os
 import shutil
 import sys
 import tempfile
 
-from niobium_client import openfhe as o, session as nb  # noqa: E402
+from niobium_sdk import openfhe as o, session as nb  # noqa: E402
 
 BIN = o.BINARY
 
@@ -103,21 +103,21 @@ def decrypt_check(d, a, b):
 
 
 # Every third-party notice the wheel redistributes (see python/CMakeLists.txt).
-# Bundled under niobium_client/licenses/ as package data; guarded here so a
+# Bundled under niobium_sdk/licenses/ as package data; guarded here so a
 # regression in the assembly fails CI loudly rather than shipping silently.
 EXPECTED_LICENSES = (
     "LICENSE.OpenFHE",        # BSD-2  (compiled into openfhe.so)
     "LICENSE.openfhe-python", # BSD-2  (compiled into openfhe.so)
     "LICENSE.pybind11",       # BSD-3  (headers compiled into the extensions)
     "LICENSE.libnbfhetch",    # Apache-2.0 (bundled .so)
-    "LICENSE.niobium-client", # Apache-2.0 (this project)
+    "LICENSE.niobium-sdk", # Apache-2.0 (this project)
 )
 
 
 def check_licenses():
     """The wheel must bundle every third-party license notice it redistributes."""
-    import niobium_client
-    lic_dir = os.path.join(os.path.dirname(niobium_client.__file__), "licenses")
+    import niobium_sdk
+    lic_dir = os.path.join(os.path.dirname(niobium_sdk.__file__), "licenses")
     missing = [
         name for name in EXPECTED_LICENSES
         if not (os.path.isfile(os.path.join(lic_dir, name))
@@ -143,12 +143,12 @@ def main():
 
     exp = a * b
     mul_ok = abs(got - exp) < 0.01
-    ver = getattr(__import__('niobium_client'), '__version__', '?')
-    print(f"niobium_client {ver} "
+    ver = getattr(__import__('niobium_sdk'), '__version__', '?')
+    print(f"niobium_sdk {ver} "
           f"wheel smoke: [{'PASS' if mul_ok else 'FAIL'}] MUL {got:.4f} ~= {exp:.4f}")
 
     lic_ok, missing = check_licenses()
-    print(f"niobium_client {ver} "
+    print(f"niobium_sdk {ver} "
           f"licenses: [{'PASS' if lic_ok else 'FAIL'}] "
           f"{len(EXPECTED_LICENSES) - len(missing)}/{len(EXPECTED_LICENSES)} bundled"
           + (f"  MISSING: {', '.join(missing)}" if missing else ""))

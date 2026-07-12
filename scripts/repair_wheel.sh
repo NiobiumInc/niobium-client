@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Linux wheel repair for niobium_client — produce a self-contained manylinux wheel.
+# Linux wheel repair for niobium_sdk — produce a self-contained manylinux wheel.
 #
 # auditwheel's default grafting doesn't fit our layout: it can't resolve the
 # in-wheel companion lib (libnbfhetch, found by the extensions via $ORIGIN) and it
@@ -30,7 +30,7 @@ PY="${PYTHON:-python}"
 
 work="$(mktemp -d)"
 "$PY" -m wheel unpack -d "$work" "$wheel"
-pkg="$(echo "$work"/niobium_client-*/niobium_client)"
+pkg="$(echo "$work"/niobium_sdk-*/niobium_sdk)"
 
 # Bundle the OpenFHE runtime sonames alongside the extensions (deref symlinks).
 for so in "$ofhe_lib"/libOPENFHE*.so.1; do
@@ -44,7 +44,7 @@ for f in "$pkg"/*.so "$pkg"/*.so.* "$pkg"/fhetch_sim; do
 done
 
 repacked="$(mktemp -d)"
-"$PY" -m wheel pack -d "$repacked" "$work"/niobium_client-*/
+"$PY" -m wheel pack -d "$repacked" "$work"/niobium_sdk-*/
 
 # Retag manylinux only. The bundled libs are already in place ($ORIGIN), so exclude
 # them from grafting/renaming; auditwheel just verifies the extensions' glibc + tags.

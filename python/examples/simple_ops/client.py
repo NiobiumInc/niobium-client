@@ -9,7 +9,7 @@ Usage: client.py [dir [a [b]]]   (defaults: simple_ops_keys, 5.0, 6.0)
 import os
 import sys
 
-from niobium_client import openfhe as o
+from niobium_sdk import openfhe as o
 
 BIN = o.BINARY
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""mult decrypt — Python port of examples/mult/decrypt.cpp (pip niobium_client).
+"""mult decrypt — Python port of examples/mult/decrypt.cpp (pip niobium_sdk).
 
 Decrypt the result ciphertext and verify a * b. Usage: decrypt.py [dir [ct_file]].
 """
 import sys
 
-from niobium_client import openfhe as o
+from niobium_sdk import openfhe as o
 
 BIN = o.BINARY
 

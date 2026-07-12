@@ -40,7 +40,7 @@ option(NIOBIUM_CLIENT_WITH_FHETCH_TRANSPORT
     "Build the HTTP-based FHETCH transport (client forwarder + server daemon). Requires pthreads."
     ON)
 option(NIOBIUM_CLIENT_WITH_PYTHON
-    "Build + assemble the niobium_client Python package: openfhe + niobium_session (via niobium-fhetch WITH_PYTHON) + _archive + vendored nbc + fhetch_sim. Requires pybind11 + Python dev headers (pass -Dpybind11_DIR and -DPython_EXECUTABLE)."
+    "Build + assemble the niobium_sdk Python package: openfhe + niobium_session (via niobium-fhetch WITH_PYTHON) + _archive + vendored nbc + fhetch_sim. Requires pybind11 + Python dev headers (pass -Dpybind11_DIR and -DPython_EXECUTABLE)."
     OFF)
 
 # The crypto/session extensions come from niobium-fhetch's own WITH_PYTHON build;
@@ -115,7 +115,7 @@ endif()
 # ==============================================================================
 # niobium-fhetch (above, WITH_PYTHON) built openfhe + niobium_session into
 # ${CMAKE_BINARY_DIR}/python. python/CMakeLists.txt adds the _archive binding and
-# assembles + installs the importable niobium_client/ package (component mode).
+# assembles + installs the importable niobium_sdk/ package (component mode).
 
 if(NIOBIUM_CLIENT_WITH_PYTHON)
     find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)

@@ -1,15 +1,15 @@
-"""niobium_client — Niobium FHE client (Python).
+"""niobium_sdk — Niobium FHE client (Python).
 
 Public surface:
-- ``from niobium_client import openfhe``  — crypto (vendored openfhe-python,
+- ``from niobium_sdk import openfhe``  — crypto (vendored openfhe-python,
   rebuilt against Niobium's instrumented OpenFHE); recording fires from the C++
   core.
-- ``from niobium_client import session`` — the ``niobium::compiler()``
+- ``from niobium_sdk import session`` — the ``niobium::compiler()``
   record/replay session API; local ``replay()`` via the bundled ``fhetch_sim``.
-- ``from niobium_client import client``  — ``submit()`` / ``configure()`` cloud
+- ``from niobium_sdk import client``  — ``submit()`` / ``configure()`` cloud
   transport (pure Python).
-- ``from niobium_client import nbc``     — the ``.niob`` DSL compiler (pure Python;
-  CLI: ``python -m niobium_client.nbc``).
+- ``from niobium_sdk import nbc``     — the ``.niob`` DSL compiler (pure Python;
+  CLI: ``python -m niobium_sdk.nbc``).
 
 The crypto/session extensions (``openfhe``/``niobium_session``) are imported on
 demand, so DSL-only (``nbc``) and submit-only (``client``) use does not require
@@ -25,10 +25,10 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 
 def _lib_dirs():
     """Dirs that hold the bundled native libs: the package itself + the vendored-lib
-    dir that auditwheel (``niobium_client.libs``, a sibling) / delocate (``.dylibs``)
+    dir that auditwheel (``niobium_sdk.libs``, a sibling) / delocate (``.dylibs``)
     create during wheel repair. Only existing dirs, package dir first."""
     dirs = [_HERE]
-    for sub in (".dylibs", os.path.join(os.pardir, "niobium_client.libs")):
+    for sub in (".dylibs", os.path.join(os.pardir, "niobium_sdk.libs")):
         d = os.path.normpath(os.path.join(_HERE, sub))
         if os.path.isdir(d):
             dirs.append(d)

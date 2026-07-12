@@ -3,7 +3,7 @@ requires = ["scikit-build-core>=0.11", "pybind11>=3,<4"]
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "niobium_client"
+name = "niobium_sdk"
 dynamic = ["version"]
 description = "Niobium FHE client — record OpenFHE computations for the Mistic accelerator"
 readme = "README.md"
@@ -38,17 +38,17 @@ cmake.args = [
     "-DNIOBIUM_CLIENT_WITH_EXAMPLES=OFF",
 ]
 # The wheel content comes solely from the CMake `python_wheel` install component
-# (the assembled niobium_client/ tree). Disable pure-Python auto-discovery so the
-# in-tree python/niobium_client sources aren't packaged a second time.
+# (the assembled niobium_sdk/ tree). Disable pure-Python auto-discovery so the
+# in-tree python/niobium_sdk sources aren't packaged a second time.
 install.components = ["python_wheel"]
 wheel.packages = []
 
 # Single source of truth: the wheel version is read from the VERSION file that the
-# package also exposes as niobium_client.__version__.
+# package also exposes as niobium_sdk.__version__.
 [[tool.dynamic-metadata]]
 field = "version"
 provider = "scikit_build_core.metadata.regex"
-input = "python/niobium_client/VERSION"
+input = "python/niobium_sdk/VERSION"
 regex = "^(?P<value>.+)$"
 
 [tool.cibuildwheel]

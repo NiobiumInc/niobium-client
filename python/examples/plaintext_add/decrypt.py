@@ -5,7 +5,7 @@ Verify each of the 10 slots equals 2*(i+1). Usage: decrypt.py [dir [ct_file]].
 """
 import sys
 
-from niobium_client import openfhe as o
+from niobium_sdk import openfhe as o
 
 BIN = o.BINARY
 EXPECTED = [2.0 * (i + 1) for i in range(10)]

@@ -1,20 +1,20 @@
-# Python examples (pip-installed `niobium_client`)
+# Python examples (pip-installed `niobium_sdk`)
 
 Python ports of the C++ examples in [`examples/`](../../examples/), using the installed
-`niobium_client` wheel instead of a source build. Same **client → server →
+`niobium_sdk` wheel instead of a source build. Same **client → server →
 decrypt** split as the C++ versions:
 
 - **`client.py`** — generate a CKKS context + keys, encrypt inputs, serialize
   everything to a directory (pure OpenFHE, no Niobium session).
 - **`server.py`** — deserialize, tag inputs/keys, record the computation as a
-  FHETCH trace (`niobium_client.session`), replay it locally through the bundled
+  FHETCH trace (`niobium_sdk.session`), replay it locally through the bundled
   `fhetch_sim`, and serialize the result ciphertext.
 - **`decrypt.py`** — deserialize the secret key + result, decrypt, verify.
 
 ## Setup
 
 ```bash
-pip install niobium_client        # or a local wheel: pip install ./niobium_client-*.whl
+pip install niobium_sdk        # or a local wheel: pip install ./niobium_sdk-*.whl
 ```
 
 Everything the examples need (crypto, session/replay, the simulator) ships in the
@@ -46,6 +46,6 @@ python bootstrap/server.py  out
 python bootstrap/decrypt.py out
 ```
 
-The public surfaces used: `niobium_client.openfhe` (crypto) and
-`niobium_client.session` (record/replay). To send a trace to a compilation
-target instead of replaying locally, see `niobium_client.client.submit()`.
+The public surfaces used: `niobium_sdk.openfhe` (crypto) and
+`niobium_sdk.session` (record/replay). To send a trace to a compilation
+target instead of replaying locally, see `niobium_sdk.client.submit()`.

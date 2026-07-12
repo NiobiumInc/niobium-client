@@ -1,20 +1,20 @@
-# Python module & wheel (`niobium_client`)
+# Python module & wheel (`niobium_sdk`)
 
 How to build, test, and maintain the Python distribution of the Niobium client —
-the `niobium_client` wheel. For the C++ build see [`README.md`](README.md).
+the `niobium_sdk` wheel. For the C++ build see [`README.md`](README.md).
 
 ## What ships in the wheel
 
-`pip install niobium_client` gives four import surfaces, all self-contained (the
+`pip install niobium_sdk` gives four import surfaces, all self-contained (the
 wheel bundles OpenFHE, `libnbfhetch`, and the `fhetch_sim` binary — no external
 libraries or `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH` needed at runtime):
 
 | Import | What |
 |---|---|
-| `from niobium_client import openfhe`  | crypto — vendored openfhe-python, rebuilt against Niobium's instrumented OpenFHE |
-| `from niobium_client import session`  | `niobium::compiler()` record/replay; local `replay()` via the bundled `fhetch_sim` |
-| `from niobium_client import client`   | `submit()` / `configure()` — pure-Python transport (endpoint supplied by the caller) |
-| `from niobium_client import nbc`      | the `.niob` DSL compiler (pure Python; `python -m niobium_client.nbc`) |
+| `from niobium_sdk import openfhe`  | crypto — vendored openfhe-python, rebuilt against Niobium's instrumented OpenFHE |
+| `from niobium_sdk import session`  | `niobium::compiler()` record/replay; local `replay()` via the bundled `fhetch_sim` |
+| `from niobium_sdk import client`   | `submit()` / `configure()` — pure-Python transport (endpoint supplied by the caller) |
+| `from niobium_sdk import nbc`      | the `.niob` DSL compiler (pure Python; `python -m niobium_sdk.nbc`) |
 
 The crypto + session extensions are built by **niobium-fhetch** (its `WITH_PYTHON`
 option); this repo assembles them + the `_archive` binding + `nbc` + `fhetch_sim`
@@ -23,13 +23,13 @@ into the wheel.
 ## Package naming & metadata
 
 Naming/version live in `pyproject.toml` +
-`python/niobium_client/VERSION`.
+`python/niobium_sdk/VERSION`.
 
-- **Distribution name:** `niobium_client` — `pip install niobium_client`,
-  `import niobium_client`.
+- **Distribution name:** `niobium_sdk` — `pip install niobium_sdk`,
+  `import niobium_sdk`.
 - **Namespaced imports — no top-level shadowing.** Everything is under
-  `niobium_client.*`, *including* `niobium_client.openfhe`. This allows both this module and stock `import OpenFHE` to coexist in one environment. The
-  compiled session module `niobium_session` is surfaced as `niobium_client.session`
+  `niobium_sdk.*`, *including* `niobium_sdk.openfhe`. This allows both this module and stock `import OpenFHE` to coexist in one environment. The
+  compiled session module `niobium_session` is surfaced as `niobium_sdk.session`
 - **Version:** plain semver, currently `0.1.0` (pre-1.0 while packaging/API settle). The
   bundled OpenFHE version goes in the wheel METADATA (informational)
 - **Wheel tags:** one wheel per **CPython minor × platform** (the cibuildwheel matrix).
@@ -43,7 +43,7 @@ Naming/version live in `pyproject.toml` +
 ```
 pyproject.toml                     scikit-build-core backend + [tool.cibuildwheel] matrix
 python/
-  niobium_client/
+  niobium_sdk/
     __init__.py                    RTLD_GLOBAL preload of libnbfhetch; sets NBCC_FHETCH_SIM; __version__
     session.py                     re-export shim over the compiled niobium_session
     client.py                      submit()/configure()
@@ -78,13 +78,13 @@ All commands below are run from the **`niobium-client` root** and use the venv a
 
 ```bash
 # Fast, submit-only (just the _archive binding; no OpenFHE) — for iterating on submit():
-make build-python-archive PYTHON=.venv/bin/python   # -> build/python/niobium_client/
+make build-python-archive PYTHON=.venv/bin/python   # -> build/python/niobium_sdk/
 
 # Full package assembly (openfhe + session + _archive + nbc + fhetch_sim + libs):
-make build-wheel-release PYTHON=.venv/bin/python     # -> build-wheel/niobium_client/
+make build-wheel-release PYTHON=.venv/bin/python     # -> build-wheel/niobium_sdk/
 
 # A real, distributable wheel via PEP 517 (needs `pip install build`):
-make wheel PYTHON=.venv/bin/python                   # -> dist/niobium_client-*.whl
+make wheel PYTHON=.venv/bin/python                   # -> dist/niobium_sdk-*.whl
 ```
 
 `make wheel` runs `python -m build`, which drives the top-level CMake
@@ -139,7 +139,7 @@ check — the same thing CI's `test-wheel-smoke-release` does). From the root, i
 throwaway `.venv-demo/`:
 
 ```bash
-python3 -m venv .venv-demo && .venv-demo/bin/pip install dist/niobium_client-*.whl
+python3 -m venv .venv-demo && .venv-demo/bin/pip install dist/niobium_sdk-*.whl
 .venv-demo/bin/python python/examples/mult/client.py  mult_keys 7 13
 .venv-demo/bin/python python/examples/mult/server.py  mult_keys
 .venv-demo/bin/python python/examples/mult/decrypt.py mult_keys      # -> PASS 91.0
@@ -158,7 +158,7 @@ Run from the `niobium-client` root (the `$(pwd)` mounts resolve to this checkout
 docker run --rm -it -v "$(pwd)/wheelhouse":/w -v "$(pwd)/python/examples":/ex ubuntu:24.04 bash
 #   apt-get update && apt-get install -y python3-venv
 #   python3 -m venv /work/v && . /work/v/bin/activate
-#   pip install /w/niobium_client-*$(uname -m)*.whl
+#   pip install /w/niobium_sdk-*$(uname -m)*.whl
 #   mkdir -p /work/run && cd /work/run
 #   python /ex/mult/client.py mult_keys 7 13 && python /ex/mult/server.py mult_keys && python /ex/mult/decrypt.py mult_keys
 ```
@@ -193,8 +193,8 @@ inlined probe hooks resolve) and points the loader at the bundled libs for the
 
 ## Updating / maintaining
 
-- **Bump the wheel version:** edit `python/niobium_client/VERSION`. It is the single
-  source of truth — both `niobium_client.__version__` and the wheel version read it.
+- **Bump the wheel version:** edit `python/niobium_sdk/VERSION`. It is the single
+  source of truth — both `niobium_sdk.__version__` and the wheel version read it.
 - **Update the crypto binding (openfhe-python):** bump the nested submodule at
   `vendor/niobium-fhetch/vendor/openfhe-python`, then bump the `vendor/niobium-fhetch`
   pin here (`chore: bump niobium-fhetch to <sha>`). The build patches openfhe-python's
