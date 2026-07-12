@@ -21,6 +21,7 @@ from .semantic import analyze as semantic_analyze
 from .codegen import generate
 from .errors import CompileError
 
+
 # One-line pointer to the design skill. Printed to stderr by check/compile so an
 # agent that lands on `nbc` without having read the docs still gets nudged to the
 # 8-stage design guide before hand-writing a circuit. See discoverability notes in
@@ -32,21 +33,6 @@ def _print_design_banner():
     print(
         f"nbc: building an FHE app? Read the design skill first — {_DESIGN_SKILL} "
         f"(8 stages; don't skip the design work).",
-        file=sys.stderr,
-    )
-
-
-# One-line pointer to the nb language reference. Printed to stderr by check/compile
-# so someone who lands on `nbc` without having read the docs gets nudged to it. Uses
-# the canonical URL (not a repo-relative path) so it resolves from an installed
-# package too. See discoverability notes in dsl_fhe/AGENTS.md.
-_DSL_REFERENCE_URL = "https://github.com/NiobiumInc/niobium-client/tree/main/dsl_fhe"
-
-
-def _print_dsl_banner():
-    print(
-        f"nbc: writing nb DSL? See the language reference — {_DSL_REFERENCE_URL} "
-        f"(NB_LANGUAGE.md, GRAMMAR.md, HOWTO.md).",
         file=sys.stderr,
     )
 
@@ -83,7 +69,7 @@ def cmd_parse(args):
 
 def cmd_check(args):
     """Parse and run semantic analysis on input files."""
-    _print_dsl_banner()
+    _print_design_banner()
     combined_source, tokens = _lex_all(args.files)
     if tokens is None:
         return 1
@@ -108,7 +94,7 @@ def cmd_check(args):
 
 def cmd_compile(args):
     """Compile .niob files to OpenFHE C++."""
-    _print_dsl_banner()
+    _print_design_banner()
     combined_source, tokens = _lex_all(args.files)
     if tokens is None:
         return 1
