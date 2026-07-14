@@ -36,6 +36,14 @@ if(NOT yaml-cpp_FOUND)
         GIT_SHALLOW    TRUE
     )
     FetchContent_MakeAvailable(yaml_cpp)
+    # yaml-cpp 0.8.0's emitterutils.cpp uses uint16_t/uint32_t without
+    # #include <cstdint>, which newer clang/gcc libstdc++ headers no longer
+    # supply transitively. Force-include it for this target only, leaving the
+    # vendored source untouched (mirrors the -Wno-restrict scoping elsewhere).
+    # Scoped to C++ TUs via COMPILE_LANGUAGE. (MSVC would need "/FI cstdint"
+    # instead of "-include cstdint" should Windows ever be supported.)
+    target_compile_options(yaml-cpp PRIVATE
+        "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include cstdint>")
 endif()
 
 add_library(niobium_client_autofacade STATIC
