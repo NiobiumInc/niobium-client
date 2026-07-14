@@ -9,6 +9,7 @@
         test-mult-python-release test-simple-ops-python-release test-op-python-release \
         test-plaintext-add-python-release test-bootstrap-python-release \
         test-ring-dim-check-python-release test-fhetch-python-release \
+        test-submit-python-release test-fog-python-release \
         test-client-python-release test-python-release clean-python
 
 PYTHON       ?= python3
@@ -31,6 +32,9 @@ build-python-archive: config-python-archive ## Build the standalone _archive bin
 
 test-submit-python-release: build-python-archive ## submit() + _archive smoke (mock server; no OpenFHE)
 	PYTHONPATH=$(CURDIR)/build/python $(PY_EXE) python/tests/submit_smoke.py
+
+test-fog-python-release: build-python-archive ## niobium_sdk.fog control-plane smoke (mock fog-api + worker; no OpenFHE)
+	PYTHONPATH=$(CURDIR)/build/python $(PY_EXE) python/tests/fog_smoke.py
 
 # --- Full wheel assembly -------------------------------------------------------
 # Drives the top-level CMake with NIOBIUM_CLIENT_WITH_PYTHON: builds openfhe +
