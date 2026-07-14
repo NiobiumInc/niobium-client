@@ -38,24 +38,30 @@ def unit_pack_unpack():
 
 
 def start_mock_server():
-    got = {}
+    reqs = []  # one dict per received POST, in order
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, *a):
             pass
 
         def do_POST(self):
-            got["path"] = self.path
-            got["target"] = self.headers.get("X-Target")
-            got["project"] = self.headers.get("X-Project-Name")
-            got["ctype"] = self.headers.get("Content-Type")
             body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
             with tempfile.TemporaryDirectory() as td:
-                got["unpacked"] = _archive.unpack_into(body, os.path.join(td, "in"))
+                unpacked = _archive.unpack_into(body, os.path.join(td, "in"))
                 pdir = os.path.join(td, "probes")
                 os.makedirs(pdir)
                 open(os.path.join(pdir, "result.ct"), "wb").write(b"probe-bytes")
                 resp = _archive.pack_directory(pdir, [])  # entry: "result.ct"
+            reqs.append({
+                "path": self.path,
+                "target": self.headers.get("X-Target"),
+                "project": self.headers.get("X-Project-Name"),
+                "ctype": self.headers.get("Content-Type"),
+                "opt": self.headers.get("X-Opt-Level"),
+                "auth": self.headers.get("Authorization"),
+                "jobid": self.headers.get("X-Job-Id"),
+                "unpacked": unpacked,
+            })
             self.send_response(200)
             self.send_header("Content-Type", "application/x-niobium-archive")
             self.send_header("Content-Length", str(len(resp)))
@@ -64,32 +70,51 @@ def start_mock_server():
 
     srv = http.server.HTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    return srv, got
+    return srv, reqs
 
 
 def main():
     ok = unit_pack_unpack()
-    srv, got = start_mock_server()
+    srv, reqs = start_mock_server()
     port = srv.server_address[1]
     try:
         with tempfile.TemporaryDirectory() as d:
             proj = os.path.join(d, "mult_server_workload_x")
             os.makedirs(proj)
             open(os.path.join(proj, "trace.fhetch"), "w").write("halt\n")
+
+            # (1) direct / local-dev path: bare origin -> /replay, no auth.
             n = client.submit(proj, target="FUNC_SIM",
                               endpoint=f"http://127.0.0.1:{port}", opt_level="O1")
             probe = os.path.join(proj, "serialized_probes", "result.ct")
+            r0 = reqs[0]
             checks = [
                 ("submit returned n>0", n > 0),
                 ("probe unpacked into serialized_probes/",
                  os.path.exists(probe) and open(probe, "rb").read() == b"probe-bytes"),
-                ("POST path == /replay", got.get("path") == "/replay"),
-                ("X-Target forwarded", got.get("target") == "FUNC_SIM"),
+                ("bare origin -> POST /replay", r0["path"] == "/replay"),
+                ("X-Target forwarded", r0["target"] == "FUNC_SIM"),
                 ("X-Project-Name == dir basename",
-                 got.get("project") == "mult_server_workload_x"),
-                ("content-type", got.get("ctype") == "application/x-niobium-archive"),
-                ("server received a valid NBAR body", got.get("unpacked", 0) > 0),
+                 r0["project"] == "mult_server_workload_x"),
+                ("X-Opt-Level forwarded", r0["opt"] == "O1"),
+                ("content-type", r0["ctype"] == "application/x-niobium-archive"),
+                ("server received a valid NBAR body", r0["unpacked"] > 0),
+                ("no Authorization when no token", r0["auth"] is None),
             ]
+
+            # (2) Fog worker path: a full /jobs/<id>/run URL is used verbatim, and
+            # the per-job ticket -> Authorization: Bearer, job id -> X-Job-Id.
+            client.submit(proj, target="fpga5.2",
+                          endpoint=f"http://127.0.0.1:{port}/jobs/j123/run",
+                          token="tok123", job_id="j123")
+            r1 = reqs[1]
+            checks += [
+                ("Fog worker URL used verbatim (no /replay suffix)",
+                 r1["path"] == "/jobs/j123/run"),
+                ("per-job ticket -> Bearer", r1["auth"] == "Bearer tok123"),
+                ("job id -> X-Job-Id", r1["jobid"] == "j123"),
+            ]
+
             for name, passed in checks:
                 print(f"  [{'PASS' if passed else 'FAIL'}] {name}")
                 ok = ok and passed
