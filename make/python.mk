@@ -142,8 +142,11 @@ test-ring-dim-check-python-release: build-wheel-release ## Python ring-dim guard
 # the submodule builds its bindings against this repo's OpenFHE install with the same
 # interpreter (needs pybind11 in that PYTHON). No analog for the C++-only simple_fhetch
 # / fhetch_driver mechanics in fhetch's test-release.
+# Forward the interpreter as an ABSOLUTE path ($(abspath $(PY_EXE))): this recipe cd's
+# into the submodule, so a relative PYTHON (e.g. .venv/bin/python) would not resolve
+# there. PY_EXE is `command -v $(PYTHON)`, so a bare `python3` is PATH-resolved first.
 test-fhetch-python-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Run the fhetch submodule's Python roundtrip sweep (simple_ops + plaintext-add + bootstrap)
-	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) PYTHON="$(PYTHON)" test-roundtrip-python-release
+	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) PYTHON="$(abspath $(PY_EXE))" test-roundtrip-python-release
 
 # --- Aggregates (mirror the C++ test-client-release / test-release) ------------
 # All client-level Python tests: the scenario ports + the ring-dim guard. No
