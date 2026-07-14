@@ -327,6 +327,131 @@ git commit -m "chore: bump fhe-application-design skill to <git-ref>"
 
 It is a manual step — nothing fetches the skill at build or clone time.
 
+## Fog quickstart
+
+**Niobium Fog** is the hosted *jobs-as-a-service* replay path: instead of
+replaying a trace on the local `fhetch_sim`, you submit it to a Fog worker (a
+Mistic FPGA, or a hosted functional simulator) over TLS. The **`fog`** CLI
+(`scripts/fog`) provisions a job, waits for a worker to be assigned, wires the
+worker's endpoint into the environment, and runs your OpenFHE app against it —
+the app's `replay()` transparently dispatches to the remote worker instead of
+the local simulator.
+
+### 1. Request an account
+
+Fog access is gated. Request an account at
+**<https://console.niobium.co/request-account>**. You will receive an account
+email and password — `fog login` uses them once to mint a long-lived API key
+that is stored locally (`~/.fog/credentials`, mode `0600`).
+
+### 2. Install build prerequisites
+
+The build needs a C++17 toolchain, CMake ≥ 3.16, OpenSSL headers (the Fog
+transport speaks HTTPS to workers), and Python 3 (the `fog` CLI and the example
+harnesses). `git` is needed to fetch the submodules.
+
+**macOS** — install Apple's command-line tools, then [Homebrew](https://brew.sh),
+then CMake and OpenSSL:
+
+```bash
+xcode-select --install                              # clang, make, git
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+brew install cmake openssl@3 python3
+# Point CMake at Homebrew's OpenSSL for this shell (Apple ships only LibreSSL):
+export OPENSSL_ROOT_DIR="$(brew --prefix openssl@3)"
+```
+
+**Ubuntu / Debian**:
+
+```bash
+sudo apt update
+sudo apt install -y build-essential cmake libssl-dev python3 git
+```
+
+### 3. Build and install the CLI
+
+```bash
+make sync         # fetch submodules: niobium-fhetch + nested OpenFHE + json
+make release      # build OpenFHE + libnbfhetch + transport client + examples (Release)
+make install-cli  # install the fog CLI to ~/.local/bin/fog
+```
+
+`make install-cli` copies the standalone `fog` script (it needs no build).
+Install elsewhere with `make install-cli CLI_PREFIX=/usr/local` (installs to
+`$CLI_PREFIX/bin/fog`). `make release` is what builds the `nbcc_fhetch_replay`
+transport client that `fog` hands each job off to at submit time.
+
+Make sure the install dir is on your `PATH`:
+
+```bash
+# zsh (macOS default): ~/.zshrc   ·   bash: ~/.bashrc (Linux) / ~/.bash_profile (macOS)
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && exec $SHELL
+fog --help
+```
+
+### 4. Log in and submit a job
+
+```bash
+fog init                                    # optional: write ~/.fog/config with defaults
+fog login -u you@example.com                # prompts for password; mints + stores an API key
+fog submit ./build/examples/mult_server mult_keys --target=FOG
+fog list                                    # watch your jobs
+```
+
+`fog submit ./app --target=FOG …` provisions a Fog job, blocks until a worker is
+assigned, then `exec`s `./app` with `NBCC_FHETCH_SERVER`/`NBCC_FHETCH_TOKEN` set
+so its `replay()` runs on that worker. Everything after the program name is
+passed straight through to your app; `--target` is the one flag `fog` itself
+reads.
+
+### `fog` command reference
+
+Run `fog` (or `fog --help`) for the summary. All commands read the config +
+credentials described below.
+
+| Command | What it does |
+|---|---|
+| `fog init [-f\|--force]` | Write `~/.fog/config` with default values (edit to taste). `--force` overwrites an existing file. |
+| `fog login [-u\|--username EMAIL] [-n\|--name NAME]` | Authenticate (OAuth2 password flow) and provision a **named** API key, saved to `~/.fog/credentials` (`0600`). Prompts for email/password if not given; `-n` labels the key (default `fog@<hostname>`). Adds a key — existing keys stay valid. Also prints the raw token to stdout, so `export FOG_API_TOKEN=$(fog login)` works. |
+| `fog submit ./app --target=T [args…]` | **Wrapper mode** — provision a job for target `T`, wait for a worker, then run your OpenFHE app `./app` against it (extra args pass through to the app). |
+| `fog list` | Table of all your jobs (id, status, mode, target, worker, enqueued time) with an in-flight count. |
+| `fog get ID [ID…]` | Full JSON detail for one or more job ids. |
+| `fog cancel ID [ID…]` | Cancel/release specific jobs. |
+| `fog cancel --pending` | Cancel every in-flight job (`queued`/`assigned`/`running`/`reserved`) — frees workers. |
+
+**`--target` values** — `FOG` runs on Niobium's stable FPGA alias (the server
+resolves it to the currently pinned hardware id) `--target` is
+required for `submit`.
+
+### Configuration
+
+`fog` reads two optional INI files (override the directory with `$FOG_HOME`,
+default `~/.fog`). Precedence for every setting is **environment variable →
+config file → built-in default**.
+
+| File | Section / keys | Written by |
+|---|---|---|
+| `~/.fog/config` | `[fog]` `api_url`, `mode`, `wait`, `maxwait` | `fog init` (hand-edit after) |
+| `~/.fog/credentials` | `[fog]` `api_token` | `fog login` (mode `0600`) |
+
+**Environment variables** (each overrides the config file):
+
+| Variable | Meaning | Default |
+|---|---|---|
+| `FOG_API_URL` | Base URL of fog-api | `https://api.niobium.co` |
+| `FOG_API_TOKEN` | API token (sent as `X-Api-Token`) | read from `credentials` |
+| `FOG_JOB_MODE` | `batch` or `persistent` | `batch` |
+| `FOG_JOB_WAIT` | Per-request long-poll seconds | `20` |
+| `FOG_JOB_MAXWAIT` | Total seconds to keep polling the queue | `600` |
+| `FOG_HOME` | Config/credentials directory | `~/.fog` |
+| `NBCC_FHETCH_REPLAY_BIN` | Path to the `nbcc_fhetch_replay` client `fog` hands off to | `PATH`, then `build/` |
+| `NBCC_FHETCH_REPLAY` | Set to `fog` to enable driver mode (see above) | unset |
+
+**TLS note** — `fog` uses only the Python standard library. On builds that ship
+no CA store (e.g. some python.org macOS builds), `pip install certifi` gives it
+a bundle to verify against; otherwise it uses the OS trust store and honors
+`$SSL_CERT_FILE`.
+
 ## Project structure
 
 ```

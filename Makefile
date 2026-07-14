@@ -100,7 +100,7 @@ NATIVEOPT ?= OFF
         config config-release build build-release release \
         config-openfhe config-openfhe-release build-openfhe build-openfhe-release \
         config-client config-client-release \
-        install install-release clean clean-all
+        install install-release install-cli clean clean-all
 
 ##@ Primary Targets
 
@@ -226,6 +226,16 @@ install: ## Install the client + fhetch library (Debug)
 install-release: ## Install the client + fhetch library (Release)
 	$(call set-build-config,Release,build)
 	cmake --install build
+
+# The `fog` CLI is a self-contained Python tool (scripts/fog) — no build needed,
+# so it installs independently of the client library. Onto PATH via CLI_PREFIX
+# (default ~/.local/bin); override with `make install-cli CLI_PREFIX=/some/where`.
+CLI_PREFIX ?= $(HOME)/.local
+
+install-cli: ## Install the fog CLI to $(CLI_PREFIX)/bin
+	@mkdir -p "$(CLI_PREFIX)/bin"
+	install -m 755 scripts/fog "$(CLI_PREFIX)/bin/fog"
+	@echo "Installed fog -> $(CLI_PREFIX)/bin/fog"
 
 ##@ Testing
 

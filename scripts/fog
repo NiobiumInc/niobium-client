@@ -423,7 +423,7 @@ USAGE = """usage: fog <command> [args]
   cancel ID [ID…]         cancel/release specific job(s)
   cancel --pending        cancel every in-flight job
 
-Config: ~/.fog/config + ~/.fog/credentials (INI). See `head -40 $(command -v fog)`.
+Config: ~/.fog/config + ~/.fog/credentials (INI).
 """
 
 
