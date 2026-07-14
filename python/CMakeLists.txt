@@ -32,11 +32,17 @@ pybind11_add_module(_archive
 target_include_directories(_archive PRIVATE ${NB_TRANSPORT})
 set_target_properties(_archive PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${NB_PKG}")
 
+# Vendored Fog CLI: scripts/fog copied verbatim as niobium_sdk/_fog.py (single
+# source of truth — same file the C++ stack ships; the wheel never forks it).
+# niobium_sdk.fog reuses its control plane and adds an in-process submit.
+set(NB_FOG_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/fog")
+
 if(NB_PY_STANDALONE)
     # Submit-only: _archive + the pure-Python sources next to it.
     add_custom_command(TARGET _archive POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
                 ${CMAKE_CURRENT_SOURCE_DIR}/niobium_sdk ${NB_PKG}
+        COMMAND ${CMAKE_COMMAND} -E copy ${NB_FOG_SRC} ${NB_PKG}/_fog.py
         COMMENT "Assembling niobium_sdk package (submit-only)")
     return()
 endif()
@@ -55,10 +61,11 @@ add_custom_target(niobium_sdk_pkg ALL
     DEPENDS _archive niobium_session openfhe_python fhetch_sim
     COMMENT "Assembling niobium_sdk package -> ${NB_PKG}")
 
-# Pure-Python sources + VERSION.
+# Pure-Python sources + VERSION, plus the vendored Fog CLI (scripts/fog -> _fog.py).
 add_custom_command(TARGET niobium_sdk_pkg POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_CURRENT_SOURCE_DIR}/niobium_sdk ${NB_PKG})
+            ${CMAKE_CURRENT_SOURCE_DIR}/niobium_sdk ${NB_PKG}
+    COMMAND ${CMAKE_COMMAND} -E copy ${NB_FOG_SRC} ${NB_PKG}/_fog.py)
 # Crypto + session extensions (both installed to ${CMAKE_BINARY_DIR}/python).
 add_custom_command(TARGET niobium_sdk_pkg POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy

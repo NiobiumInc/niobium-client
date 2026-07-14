@@ -10,8 +10,11 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "Niobium Microsystems" }]
-# No runtime dependencies: the crypto/session/archive natives are bundled, the
-# submit client and nbc DSL compiler are pure stdlib.
+# The crypto/session/archive natives are bundled and the submit client + nbc DSL
+# compiler are pure stdlib. The lone runtime dep is certifi: the `fog` cloud client
+# (niobium_sdk.fog) talks HTTPS to api.niobium.co, and macOS/python.org builds ship
+# no system CA store, so without a bundle TLS would verify nothing.
+dependencies = ["certifi"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: C++",
@@ -20,6 +23,11 @@ classifiers = [
     "Operating System :: MacOS :: MacOS X",
     "Topic :: Security :: Cryptography",
 ]
+
+[project.scripts]
+# Pure-Python Fog cloud client (login/provision/submit). Mirrors scripts/fog's UX;
+# `submit` takes a recorded project dir and runs the job in-process via niobium_sdk.client.
+fog = "niobium_sdk.fog:main"
 
 [project.urls]
 Homepage = "https://github.com/NiobiumInc/niobium-client"
