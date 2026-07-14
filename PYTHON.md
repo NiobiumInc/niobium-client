@@ -5,7 +5,7 @@ the `niobium_sdk` wheel. For the C++ build see [`README.md`](README.md).
 
 ## What ships in the wheel
 
-`pip install niobium_sdk` gives four import surfaces, all self-contained (the
+`pip install niobium_sdk` gives five import surfaces, all self-contained (the
 wheel bundles OpenFHE, `libnbfhetch`, and the `fhetch_sim` binary — no external
 libraries or `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH` needed at runtime):
 
@@ -13,12 +13,15 @@ libraries or `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH` needed at runtime):
 |---|---|
 | `from niobium_sdk import openfhe`  | crypto — vendored openfhe-python, rebuilt against Niobium's instrumented OpenFHE |
 | `from niobium_sdk import session`  | `niobium::compiler()` record/replay; local `replay()` via the bundled `fhetch_sim` |
-| `from niobium_sdk import client`   | `submit()` / `configure()` — pure-Python transport (endpoint supplied by the caller) |
+| `from niobium_sdk import client`   | data plane — `submit()` / `configure()`, the Python peer of the C++ transport client (POST an archive to a replay endpoint) |
+| `from niobium_sdk import fog`      | Fog control plane — `login`/`provision`/`run` + the `fog` console script; provisions a cloud job then submits via `client` |
 | `from niobium_sdk import nbc`      | the `.niob` DSL compiler (pure Python; `python -m niobium_sdk.nbc`) |
 
 The crypto + session extensions are built by **niobium-fhetch** (its `WITH_PYTHON`
 option); this repo assembles them + the `_archive` binding + `nbc` + `fhetch_sim`
-into the wheel.
+into the wheel. The `fog` cloud client is `niobium_sdk.fog` (a thin layer over
+`niobium_sdk._fog`, a **build-time verbatim copy of `scripts/fog`** — single source
+of truth, never forked); it also installs a `fog` console script.
 
 ## Package naming & metadata
 
@@ -35,8 +38,10 @@ Naming/version live in `pyproject.toml` +
 - **Wheel tags:** one wheel per **CPython minor × platform** (the cibuildwheel matrix).
   Currently CPython **3.11–3.14** × {manylinux x86_64, manylinux aarch64,
   macOS arm64} = **12 wheels/release**
-- **License / deps:** Apache-2.0 (`LICENSE` + classifier); **no runtime dependencies**
-  — the crypto/session/archive natives are bundled, `submit()` and `nbc` are pure stdlib.
+- **License / deps:** Apache-2.0 (`LICENSE` + classifier); one runtime dependency,
+  **`certifi`** — the `fog` cloud client talks HTTPS to `api.niobium.co` and
+  macOS/python.org builds ship no system CA store, so a bundle is needed to verify TLS.
+  Everything else is bundled natives or pure stdlib.
 
 ## Layout
 
@@ -46,11 +51,13 @@ python/
   niobium_sdk/
     __init__.py                    RTLD_GLOBAL preload of libnbfhetch; sets NBCC_FHETCH_SIM; __version__
     session.py                     re-export shim over the compiled niobium_session
-    client.py                      submit()/configure()
+    client.py                      submit()/configure() — data plane (POST to a replay endpoint)
+    fog.py                         Fog control plane + `fog` console script (over vendored _fog)
+    _fog.py                        build-time verbatim copy of scripts/fog (not in git; assembled)
     VERSION                        single source of truth for the wheel version
   archive_binding.cpp              _archive pybind module (TLV pack/unpack; no OpenFHE)
   CMakeLists.txt                   dual-mode: standalone _archive OR full add_subdirectory assembly
-  tests/{submit_smoke,wheel_smoke}.py
+  tests/{submit_smoke,fog_smoke,wheel_smoke}.py
   examples/<scenario>/             client/server/decrypt ports (see examples/README.md)
 scripts/repair_wheel.sh            Linux: self-bundle + $ORIGIN + auditwheel --exclude
 scripts/repair_wheel_macos.sh      macOS: self-bundle + @loader_path + delocate --exclude
@@ -98,6 +105,9 @@ in CI (see [Release / CI](#release--ci)).
 ```bash
 # submit() + _archive against an in-process mock server (no OpenFHE):
 make test-submit-python-release PYTHON=.venv/bin/python
+
+# niobium_sdk.fog control plane against a mock fog-api + worker (no OpenFHE):
+make test-fog-python-release PYTHON=.venv/bin/python
 
 # Primary-only smoke (record -> replay() via bundled fhetch_sim -> decrypt).
 # This is also the cibuildwheel test-command (runs against the installed wheel in CI):
