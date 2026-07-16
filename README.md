@@ -373,13 +373,13 @@ sudo apt install -y build-essential cmake libssl-dev python3 git
 ```bash
 make sync         # fetch submodules: niobium-fhetch + nested OpenFHE + json
 make release      # build OpenFHE + libnbfhetch + transport client + examples (Release)
-make install-cli  # install the fog CLI to ~/.local/bin/fog
+make install-cli  # install fog + nbcc_fhetch_replay to ~/.local/bin
 ```
 
-`make install-cli` copies the standalone `fog` script (it needs no build).
-Install elsewhere with `make install-cli CLI_PREFIX=/usr/local` (installs to
-`$CLI_PREFIX/bin/fog`). `make release` is what builds the `nbcc_fhetch_replay`
-transport client that `fog` hands each job off to at submit time.
+`make install-cli` copies the standalone `fog` script plus the
+`nbcc_fhetch_replay` transport client that `fog` hands each job off to at submit
+time (built by `make release`). Install elsewhere with
+`make install-cli CLI_PREFIX=/usr/local` (installs to `$CLI_PREFIX/bin`).
 
 Make sure the install dir is on your `PATH`:
 
@@ -403,6 +403,23 @@ assigned, then `exec`s `./app` with `NBCC_FHETCH_SERVER`/`NBCC_FHETCH_TOKEN` set
 so its `replay()` runs on that worker. Everything after the program name is
 passed straight through to your app; `--target` is the one flag `fog` itself
 reads.
+
+### 5. End-to-end: the `mult` example on Fog
+
+The `mult_*` example is a three-step client → server → decrypt split. The client
+generates keys and encrypts two integers, the server multiplies them on a Fog
+worker, and decrypt reveals the product. Run it from `build/examples`:
+
+```bash
+cd build/examples
+./mult_client mult_keys 7 13 65536              # keygen + encrypt (ring dim 2^16)
+fog submit ./mult_server mult_keys --target=FOG # multiply on a Fog worker
+./mult_decrypt mult_keys                         # → 91
+```
+
+`mult_client`'s last argument is the ring dimension (`65536` = 2^16); the two
+integers before it are the operands. `fog submit` wraps `mult_server` so its
+`replay()` dispatches to the assigned worker instead of the local simulator.
 
 ### `fog` command reference
 

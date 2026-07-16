@@ -231,11 +231,18 @@ install-release: ## Install the client + fhetch library (Release)
 # so it installs independently of the client library. Onto PATH via CLI_PREFIX
 # (default ~/.local/bin); override with `make install-cli CLI_PREFIX=/some/where`.
 CLI_PREFIX ?= $(HOME)/.local
+NBCC_FHETCH_REPLAY_BIN = build/src/fhetch_transport/nbcc_fhetch_replay
 
-install-cli: ## Install the fog CLI to $(CLI_PREFIX)/bin
+install-cli: ## Install the fog CLI + nbcc_fhetch_replay to $(CLI_PREFIX)/bin
 	@mkdir -p "$(CLI_PREFIX)/bin"
 	install -m 755 scripts/fog "$(CLI_PREFIX)/bin/fog"
 	@echo "Installed fog -> $(CLI_PREFIX)/bin/fog"
+	@if [ ! -x "$(NBCC_FHETCH_REPLAY_BIN)" ]; then \
+		echo "ERROR: $(NBCC_FHETCH_REPLAY_BIN) not found — run 'make release' first"; \
+		exit 2; \
+	fi
+	install -m 755 "$(NBCC_FHETCH_REPLAY_BIN)" "$(CLI_PREFIX)/bin/nbcc_fhetch_replay"
+	@echo "Installed nbcc_fhetch_replay -> $(CLI_PREFIX)/bin/nbcc_fhetch_replay"
 
 ##@ Testing
 
