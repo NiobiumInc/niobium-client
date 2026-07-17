@@ -151,6 +151,12 @@ directly.
 #include "openfhe.h"
 #include "niobium/compiler.h"
 
+// OpenFHE serialization support — required for Serial::(De)SerializeFromFile.
+#include "ciphertext-ser.h"
+#include "cryptocontext-ser.h"
+#include "key/key-ser.h"
+#include "scheme/ckksrns/ckksrns-ser.h"
+
 using namespace lbcrypto;
 
 int main(int argc, char* argv[]) {
@@ -185,10 +191,12 @@ int main(int argc, char* argv[]) {
         niobium::compiler().probe("result", result);
         niobium::compiler().stop();
         // .fhetch + fhetch_replay.json are now written to disk.
-    } else {
-        // ---- REPLAY (cache hit: zero FHE ops on the host) ----
-        niobium::compiler().replay();
     }
+    // ---- REPLAY ----
+    // Always replay: result() below rehydrates from the replay output.
+    // On a cache-valid run this is all that executes — zero FHE ops on the host.
+    niobium::compiler().replay();
+
     Ciphertext<DCRTPoly> ct_result;
     niobium::compiler().result(cc, "result", ct_result);
     Serial::SerializeToFile("keys/ct_result.bin", ct_result, SerType::BINARY);
@@ -223,7 +231,7 @@ plaintexts come after keys.
 |---|---|
 | `examples/bootstrap/` | CKKS bootstrap under hollow recording (large trace, full replay) |
 | `examples/mult/` | CKKS `EvalMult` — client/server/decrypt split with replay + rehydrate |
-| `examples/simple_ops/` | 13 ops (ADD, SUB, MUL, NEG, ADDI/SUBI/MULI, compound chains, MORPH) driven by one harness |
+| `examples/simple_ops/` | 14 ops (ADD, SUB, MUL, NEG, ADDI/SUBI/MULI, compound chains, MORPH) driven by one harness |
 
 ```bash
 make test-simple-ops-release
@@ -286,10 +294,12 @@ make config && make build # same, Debug (config once, then build)
 
 ### Incremental Build
 
+On an already-configured tree (i.e. after a prior `make release` or
+`make config`) you can rebuild without re-configuring:
+
 ```bash
-make sync
-make build-release        # build OpenFHE + libnbfhetch + examples (Release)
-make build                # same, Debug
+make build-release        # incremental Release build (requires a prior `make release`)
+make build                # incremental Debug build   (requires a prior `make config`)
 ```
 
 ### Build Pipeline
@@ -430,7 +440,7 @@ credentials described below.
 |---|---|
 | `fog init [-f\|--force]` | Write `~/.fog/config` with default values (edit to taste). `--force` overwrites an existing file. |
 | `fog login [-u\|--username EMAIL] [-n\|--name NAME]` | Authenticate (OAuth2 password flow) and provision a **named** API key, saved to `~/.fog/credentials` (`0600`). Prompts for email/password if not given; `-n` labels the key (default `fog@<hostname>`). Adds a key — existing keys stay valid. Also prints the raw token to stdout, so `export FOG_API_TOKEN=$(fog login)` works. |
-| `fog submit ./app --target=T [args…]` | **Wrapper mode** — provision a job for target `T`, wait for a worker, then run your OpenFHE app `./app` against it (extra args pass through to the app). |
+| `fog submit ./app --target=T [args…]` | **Wrapper mode** — provision a job for target `T`, wait for a worker, then run your OpenFHE app `./app` against it (extra args pass through to the app). With no app (`fog submit --target=T [args…]`) it execs the `nbcc_fhetch_replay` transport client directly. |
 | `fog list` | Table of all your jobs (id, status, mode, target, worker, enqueued time) with an in-flight count. |
 | `fog get ID [ID…]` | Full JSON detail for one or more job ids. |
 | `fog cancel ID [ID…]` | Cancel/release specific jobs. |
@@ -462,7 +472,7 @@ config file → built-in default**.
 | `FOG_JOB_MAXWAIT` | Total seconds to keep polling the queue | `600` |
 | `FOG_HOME` | Config/credentials directory | `~/.fog` |
 | `NBCC_FHETCH_REPLAY_BIN` | Path to the `nbcc_fhetch_replay` client `fog` hands off to | `PATH`, then `build/` |
-| `NBCC_FHETCH_REPLAY` | Set to `fog` to enable driver mode (see above) | unset |
+| `NBCC_FHETCH_REPLAY` | Set to `fog` to enable driver mode: your app's `replay()` spawns `fog` itself, which provisions the job and hands off to `nbcc_fhetch_replay` — no `fog submit` wrapper needed (details in the `scripts/fog` header comment) | unset |
 
 **TLS note** — `fog` uses only the Python standard library. On builds that ship
 no CA store (e.g. some python.org macOS builds), `pip install certifi` gives it
