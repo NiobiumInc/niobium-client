@@ -319,7 +319,15 @@ test-plaintext-add-release: build-release ## Run the plaintext-add example: clie
 # auto-facade's template+refill path for relin-based ops. Tracked as
 # a follow-up simulator-precision task.
 #
-# Override AUTO_OP=MUL AUTO_EXPECTED=21 to reproduce the failure mode.
+# Update (2026-07-17, niobium-fhetch @ c387dce): MUL now passes both
+# the record and the cache-hit replay decrypt. The replay pass used to
+# log spurious "[NIOBIUM] Result 'output_N' not found" lines; both
+# sources are fixed in AutoFacade.cpp (substituted-ciphertext tracking
+# in on_decrypt, and a serialized_probes/ guard in
+# on_serialize_ciphertext so reconstruct_probes' own writes are not
+# intercepted).
+#
+# Override AUTO_OP=MUL AUTO_EXPECTED=21 to run the MUL variant.
 AUTO_OP        ?= ADD
 AUTO_A         ?= 7
 AUTO_B         ?= 3

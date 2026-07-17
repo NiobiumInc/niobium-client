@@ -33,6 +33,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 // ---------------------------------------------------------------------------
@@ -116,6 +117,15 @@ static thread_local bool g_in_make_plaintext_hook = false;
 // Track probed ciphertext pointers -> probe name, to avoid double-probing
 // and to let on_decrypt use the same name that on_serialize used.
 static std::unordered_map<const void*, std::string> g_probed_cts;
+
+// Replay only: ciphertexts whose contents already ARE the reconstructed HW
+// result — substituted by on_decrypt or refreshed in place by
+// on_serialize_ciphertext. The instrumented Decrypt re-enters itself on a
+// substituted ct (to skip the recording guards), so on_decrypt must recognize
+// these and let the real decrypt proceed instead of minting a fresh
+// "output_<N>" probe name and re-fetching (the name would miss, logging a
+// spurious "Result 'output_<N>' not found").
+static std::unordered_set<const void*> g_substituted_cts;
 
 // Thread-local re-entry flag set when the facade itself issues
 // OpenFHE deserializations (e.g. Compiler::result loading a
@@ -590,6 +600,16 @@ bool on_serialize_ciphertext(const std::string &filepath,
 
   const std::string stem = path_stem(filepath);
 
+  // Facade-internal write: reconstruct_probes serializing
+  // serialized_probes/<name>.ct fires this hook too (mirrors the
+  // serialized_probes guard in on_deserialize_ciphertext). Let it proceed
+  // untouched — asking result() for the very probe reconstruct_probes is
+  // writing right now would log a spurious "Result '<name>' not found" on
+  // the first replay pass, and on later passes pointlessly rewrite the
+  // file with its own previous contents.
+  if (filepath.find("serialized_probes") != std::string::npos)
+    return false;
+
   if (g_replay_mode) {
     ensure_replayed();
     // Retrieve the hardware-computed result and write it to the output file.
@@ -611,6 +631,7 @@ bool on_serialize_ciphertext(const std::string &filepath,
         // Update the in-memory ciphertext with the HW result so subsequent
         // Decrypt on this ct gets the real data instead of dummy polynomials.
         ct->SetElements(hw_ct->GetElements());
+        g_substituted_cts.insert(ct.get());
         return true; // result found + HW ct written, skip normal serialize
       }
     }
@@ -662,12 +683,21 @@ bool on_decrypt(lbcrypto::Ciphertext<lbcrypto::DCRTPoly> &ct) {
 
   if (g_replay_mode) {
     ensure_replayed();
+    // This ct already holds the reconstructed HW result (substituted by a
+    // prior hook call, or refreshed in place by on_serialize_ciphertext):
+    // decrypt it as-is. This also terminates the instrumented Decrypt's
+    // re-entrant call on the substituted ciphertext.
+    if (g_substituted_cts.count(ct.get()))
+      return false;
     // Look up the HW-computed result by the same name used during recording
     if (g_cc) {
       lbcrypto::Ciphertext<lbcrypto::DCRTPoly> hw_ct;
       InFacadeIoGuard _facade_io;
       if (niobium::compiler().result(g_cc, name, hw_ct) && hw_ct) {
+        g_probed_cts[ct.get()] = name; // repeat decrypts of the dummy reuse this name
         ct = hw_ct; // substitute the dummy with the real HW result
+        g_probed_cts[ct.get()] = name;
+        g_substituted_cts.insert(ct.get());
         return false; // proceed with normal decrypt on the HW result
       }
     }
