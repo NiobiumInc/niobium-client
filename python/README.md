@@ -1,7 +1,7 @@
 # Python module & wheel (`niobium_sdk`)
 
 How to build, test, and maintain the Python distribution of the Niobium client —
-the `niobium_sdk` wheel. For the C++ build see [`README.md`](README.md).
+the `niobium_sdk` wheel. For the C++ build see [`../README.md`](../README.md).
 
 ## What ships in the wheel
 
@@ -22,6 +22,23 @@ option); this repo assembles them + the `_archive` binding + `nbc` + `fhetch_sim
 into the wheel. The `fog` cloud client is `niobium_sdk.fog` (a thin layer over
 `niobium_sdk._fog`, a **build-time verbatim copy of `scripts/fog`** — single source
 of truth, never forked); it also installs a `fog` console script.
+
+## Installation
+
+```bash
+pip install niobium_sdk
+```
+
+Not yet published to PyPI — until the first release, build the wheel from source
+([Build](#build) below). Wheels ship one per CPython minor × platform (manylinux
+x86_64/aarch64 + macOS arm64) and are self-contained: OpenFHE, `libnbfhetch`, and
+`fhetch_sim` are bundled, so nothing external is needed at runtime.
+
+## Usage
+
+Write FHE in Python, record a FHETCH trace, then replay it locally or submit it to the Fog
+cloud. See [`USAGE.md`](USAGE.md) for the end-to-end walkthrough; the import surfaces are
+summarized above.
 
 ## Package naming & metadata
 
@@ -99,6 +116,21 @@ make wheel PYTHON=.venv/bin/python                   # -> dist/niobium_sdk-*.whl
 platform-tagged wheel. Note: a raw local wheel is **not yet relocatable** — the
 OpenFHE/`libnbfhetch` deps are made self-contained by the repair scripts, which run
 in CI (see [Release / CI](#release--ci)).
+
+### Building against a prebuilt runtime (optional)
+
+The wheel build is dual-mode: by default it builds OpenFHE from source (above), but it can
+instead consume a prebuilt **`niobium-runtime`** distribution and skip the ~30-minute OpenFHE
+compile. Point it at an extracted runtime prefix:
+
+```bash
+make build-wheel-release PYTHON=.venv/bin/python \
+     NIOBIUM_RUNTIME_PREFIX=/abs/path/to/niobium-runtime
+```
+
+From-source stays the default (contributors and the current CI need no published runtime);
+runtime mode is the faster path once a `niobium-runtime` release exists (see the Releases
+section of the niobium-fhetch README). Validated on macos-arm64 + manylinux-aarch64.
 
 ## Test
 
