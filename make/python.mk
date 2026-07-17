@@ -53,6 +53,7 @@ config-wheel-release: ## Configure the full niobium_sdk package assembly
 		-DNIOBIUM_CLIENT_WITH_FHETCH_TRANSPORT=OFF \
 		-DNIOBIUM_CLIENT_WITH_EXAMPLES=OFF \
 		-DOPENFHE_INSTALL_DIR=$(OPENFHE_INSTALL_DIR) \
+		$(if $(NIOBIUM_RUNTIME_PREFIX),-DNIOBIUM_RUNTIME_PREFIX=$(NIOBIUM_RUNTIME_PREFIX)) \
 		-Dpybind11_DIR=$(PYBIND11_DIR) -DPython_EXECUTABLE=$(PY_EXE)
 
 build-wheel-release: config-wheel-release ## Build + assemble build-wheel/niobium_sdk/
