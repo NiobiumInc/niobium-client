@@ -214,6 +214,22 @@ crypto context, tag the eval keys, and tag each input ciphertext as your code
 loads them (this is what the DSL generates). See
 [`docs/AUTO_FACADE.md`](docs/AUTO_FACADE.md).
 
+### `init()` command-line flags
+
+`niobium::compiler().init(argc, argv)` parses and removes these Niobium flags
+from your application's command line; everything else is left in argv for your
+own argument handling:
+
+| Flag | Effect |
+|---|---|
+| `--target=<t>` | Where `replay()` executes. `local` (default) replays in-process on the bundled FHETCH simulator; any other value hands the replay off to the `nbcc_fhetch_replay` transport client (e.g. `FOG` — see entry point 3). |
+| `--hollow` | Hollow recording — capture the instruction trace without computing the real polynomial math (how `examples/bootstrap` keeps its very large trace affordable). |
+| `--opt-level=<O0..O3>` | Optimization level, forwarded with the trace on a non-local replay handoff. |
+| `-v` | Verbose diagnostics. |
+
+Additional internal/testing flags exist and are documented in the parser
+itself (`niobium-fhetch`'s `src/compiler.cpp`).
+
 ### Tagging inputs, keys, and outputs (manual mode)
 
 - `capture_crypto_context(cc)` — stamps the manifest with ring dimension,

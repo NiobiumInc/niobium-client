@@ -124,23 +124,14 @@ keys:
 compiler:
   target:       local          # local = in-process FHETCH simulator (default);
                                # any other value dispatches replay to nbcc_fhetch_replay
-  optimization: "3"            # -O level
-  registers:    "32"           # --registers
-  memory:       "16"           # --memory (GB)
-  niobium_hw:   true           # --niobium_hw
+  optimization: "3"            # --opt-level (O0..O3), forwarded on replay handoff
+  verbose:      false          # -v
   hollow:       false          # enable_hollow_mode (read directly, not passed to init)
-  fence:        true           # --fence / --no-fence
-  noop:         "0"            # --noop
-  multiplier:   "shoup"        # --multiplier (standard | shoup)
-  config_sectors: "4"          # --config-sectors
-  binary_json:  true           # --binary-json / --ascii-json
-  no_cereal_binary: false      # --no-cereal-binary
-  transform_bin_to_json: false # --transform-bin-to-json
-  no_preserve_input_ciphertexts: false
-  formal:       false          # --formal
-  lock_timing:  false          # --lock-timing
-  no_ring_dim_check: false     # --no-ring-dim-check (needed for toy ring dims)
 ```
+
+Additional internal/testing fields are accepted (see the flag parser in
+`niobium-fhetch`'s `src/compiler.cpp` for the authoritative list); they are
+not part of the public interface.
 
 ### `nbcc.py` Wrapper
 
@@ -153,16 +144,13 @@ python3 tools/nbcc.py --name NAME \
     [--version V] [--description D] \
     [--cache KEY=VALUE ...] \
     [--keys-mult PATH] [--keys-auto PATH] \
-    [--target TARGET] [-O LEVEL] \
-    [--registers N] [--memory GB] \
-    [--niobium-hw] [--hollow] \
-    [--fence | --no-fence] [--no-ring-dim-check] \
+    [--target TARGET] [-O LEVEL] [-v] [--hollow] \
     [--fhetch-driver PATH [--driver-cc PATH] [--driver-ring-dim N] [--driver-output NAME:PATH ...]] \
     -- EXECUTABLE [ARGS...]
 ```
 
-(Run `nbcc.py --help` for the remaining pass-through flags: `--noop`,
-`--multiplier`, `--config-sectors`, `--binary-json`/`--ascii-json`, etc.)
+(`nbcc.py --help` also lists internal/testing pass-through flags — e.g. the
+`--no-ring-dim-check` used below, which the toy ring dimension needs.)
 
 **Behavior:**
 1. Builds a YAML string from the CLI options
