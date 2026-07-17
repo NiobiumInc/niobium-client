@@ -47,18 +47,27 @@ if(NB_PY_STANDALONE)
     return()
 endif()
 
-# --- Full assembly (component mode) -------------------------------------------
-# niobium-fhetch (WITH_PYTHON) already built openfhe + niobium_session into
-# ${CMAKE_BINARY_DIR}/python. Assemble the importable package:
+# --- Full assembly ------------------------------------------------------------
+# The bindings (openfhe + niobium_session) were built into ${CMAKE_BINARY_DIR}/python
+# by niobium-fhetch's binding recipe — from-source (WITH_PYTHON), or against the prebuilt
+# runtime when NIOBIUM_RUNTIME_PREFIX is set. Assemble the importable package:
 #   ${CMAKE_BINARY_DIR}/niobium_sdk/
 #     __init__.py client.py session.py VERSION       (niobium_sdk/)
 #     openfhe*.so niobium_session*.so                 (from ${CMAKE_BINARY_DIR}/python)
 #     _archive*.so                                    (built above)
-#     libnbfhetch.*                                   (RTLD_GLOBAL-preloaded by __init__)
+#     libnbfhetch.* (+ OpenFHE in runtime mode)        (RTLD_GLOBAL-preloaded by __init__)
 #     fhetch_sim                                       (bundled; local replay())
 #     nbc/                                            (vendored dsl_fhe/xcomp)
+if(NOT NIOBIUM_RUNTIME_PREFIX)
+    set(NIOBIUM_RUNTIME_PREFIX "$ENV{NIOBIUM_RUNTIME_PREFIX}")
+endif()
+# fhetch_sim is a from-source target only; in runtime mode it is a prebuilt binary.
+set(NB_PKG_DEPS _archive niobium_session openfhe_python)
+if(NOT NIOBIUM_RUNTIME_PREFIX)
+    list(APPEND NB_PKG_DEPS fhetch_sim)
+endif()
 add_custom_target(niobium_sdk_pkg ALL
-    DEPENDS _archive niobium_session openfhe_python fhetch_sim
+    DEPENDS ${NB_PKG_DEPS}
     COMMENT "Assembling niobium_sdk package -> ${NB_PKG}")
 
 # Pure-Python sources + VERSION, plus the vendored Fog CLI (scripts/fog -> _fog.py).
@@ -72,13 +81,26 @@ add_custom_command(TARGET niobium_sdk_pkg POST_BUILD
             ${CMAKE_BINARY_DIR}/python/openfhe*.so
             ${CMAKE_BINARY_DIR}/python/niobium_session*.so
             ${NB_PKG}/)
-# Runtime lib (preloaded) + local simulator. Copy the SONAME file only
-# (libnbfhetch.so.1) — that's niobium_session's DT_NEEDED and what the loader/preload
-# resolve; the versioned .so.1.0.0 is redundant weight in the wheel.
-add_custom_command(TARGET niobium_sdk_pkg POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy
-            $<TARGET_SONAME_FILE:niobium_fhetch>
-            $<TARGET_FILE:fhetch_sim> ${NB_PKG}/)
+# Native libs (RTLD_GLOBAL-preloaded by __init__) + the local simulator.
+if(NIOBIUM_RUNTIME_PREFIX)
+    # Runtime mode: libnbfhetch, the OpenFHE dylibs, and fhetch_sim come from the runtime
+    # (no from-source targets exist). Bundle them so the assembled tree is self-contained.
+    file(GLOB NB_RT_LIBS
+        "${NIOBIUM_RUNTIME_PREFIX}/lib/libnbfhetch*"
+        "${NIOBIUM_RUNTIME_PREFIX}/lib/libOPENFHE*")
+    add_custom_command(TARGET niobium_sdk_pkg POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy ${NB_RT_LIBS} ${NB_PKG}/
+        COMMAND ${CMAKE_COMMAND} -E copy ${NIOBIUM_RUNTIME_PREFIX}/bin/fhetch_sim ${NB_PKG}/)
+else()
+    # From-source: copy the libnbfhetch SONAME file (libnbfhetch.so.1 — niobium_session's
+    # DT_NEEDED, what the loader/preload resolve; the versioned .so.1.0.0 is redundant
+    # weight) + fhetch_sim. The OpenFHE dylibs are grafted by delocate/auditwheel from
+    # OPENFHE_INSTALL_DIR at repair time.
+    add_custom_command(TARGET niobium_sdk_pkg POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+                $<TARGET_SONAME_FILE:niobium_fhetch>
+                $<TARGET_FILE:fhetch_sim> ${NB_PKG}/)
+endif()
 # Vendored DSL compiler (pure Python). Drop dev-only tests + stale bytecode.
 add_custom_command(TARGET niobium_sdk_pkg POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -101,6 +123,16 @@ else()
 endif()
 set(NB_LIC "${NB_PKG}/licenses")
 
+# OpenFHE + libnbfhetch notices: from the runtime's share/licenses in runtime mode (the
+# nested vendor/openfhe fork isn't checked out then), else from the fhetch source tree.
+if(NIOBIUM_RUNTIME_PREFIX)
+    set(NB_LIC_OPENFHE     "${NIOBIUM_RUNTIME_PREFIX}/share/licenses/LICENSE.OpenFHE")
+    set(NB_LIC_LIBNBFHETCH "${NIOBIUM_RUNTIME_PREFIX}/share/licenses/LICENSE.niobium-fhetch")
+else()
+    set(NB_LIC_OPENFHE     "${NB_FHETCH_SRC}/vendor/openfhe/LICENSE")
+    set(NB_LIC_LIBNBFHETCH "${NB_FHETCH_SRC}/LICENSE")
+endif()
+
 # pybind11 is a build dependency (not vendored); locate its LICENSE relative to the
 # pybind11 CMake package. pybind11_DIR is an absolute cache var set by find_package
 # (<site-packages>/pybind11/share/cmake/pybind11), so walk up to site-packages and
@@ -119,9 +151,9 @@ endif()
 
 add_custom_command(TARGET niobium_sdk_pkg POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory ${NB_LIC}
-    COMMAND ${CMAKE_COMMAND} -E copy ${NB_FHETCH_SRC}/vendor/openfhe/LICENSE        ${NB_LIC}/LICENSE.OpenFHE
+    COMMAND ${CMAKE_COMMAND} -E copy ${NB_LIC_OPENFHE}                             ${NB_LIC}/LICENSE.OpenFHE
     COMMAND ${CMAKE_COMMAND} -E copy ${NB_FHETCH_SRC}/vendor/openfhe-python/LICENSE ${NB_LIC}/LICENSE.openfhe-python
-    COMMAND ${CMAKE_COMMAND} -E copy ${NB_FHETCH_SRC}/LICENSE                       ${NB_LIC}/LICENSE.libnbfhetch
+    COMMAND ${CMAKE_COMMAND} -E copy ${NB_LIC_LIBNBFHETCH}                          ${NB_LIC}/LICENSE.libnbfhetch
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE         ${NB_LIC}/LICENSE.niobium-sdk
     COMMENT "Bundling third-party license notices -> ${NB_LIC}")
 

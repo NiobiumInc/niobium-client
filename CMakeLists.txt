@@ -43,10 +43,15 @@ option(NIOBIUM_CLIENT_WITH_PYTHON
     "Build + assemble the niobium_sdk Python package: openfhe + niobium_session (via niobium-fhetch WITH_PYTHON) + _archive + vendored nbc + fhetch_sim. Requires pybind11 + Python dev headers (pass -Dpybind11_DIR and -DPython_EXECUTABLE)."
     OFF)
 
-# The crypto/session extensions come from niobium-fhetch's own WITH_PYTHON build;
-# turn it on before add_subdirectory() below so its openfhe/niobium_session targets
-# land in ${CMAKE_BINARY_DIR}/python.
-if(NIOBIUM_CLIENT_WITH_PYTHON)
+# The crypto/session extensions come from niobium-fhetch. Two modes:
+#  * NIOBIUM_RUNTIME_PREFIX set -> consume a prebuilt niobium-runtime (no OpenFHE build);
+#    only the bindings compile against it (bindings/python runtime mode).
+#  * else -> from-source: niobium-fhetch WITH_PYTHON builds OpenFHE + libnbfhetch +
+#    fhetch_sim + the bindings, landing them in ${CMAKE_BINARY_DIR}/python.
+if(NOT NIOBIUM_RUNTIME_PREFIX)
+    set(NIOBIUM_RUNTIME_PREFIX "$ENV{NIOBIUM_RUNTIME_PREFIX}")
+endif()
+if(NIOBIUM_CLIENT_WITH_PYTHON AND NOT NIOBIUM_RUNTIME_PREFIX)
     set(WITH_PYTHON ON CACHE BOOL "niobium-fhetch: build the Python bindings" FORCE)
 endif()
 
@@ -80,7 +85,13 @@ set(OPENFHE_LIBRARY_PATH "${OPENFHE_INSTALL_DIR}/lib")
 set(NIOBIUM_CLIENT_FHETCH_DIR "" CACHE PATH
     "External niobium-fhetch source tree to use instead of vendor/niobium-fhetch (empty = use vendored submodule)")
 
-if(NIOBIUM_CLIENT_FHETCH_DIR)
+if(NIOBIUM_RUNTIME_PREFIX)
+    # Runtime mode: consume the prebuilt core. Build only the fhetch bindings against it
+    # (bindings/python sees NIOBIUM_RUNTIME_PREFIX -> runtime mode); OpenFHE, libnbfhetch,
+    # and fhetch_sim come from the runtime, not from a source build.
+    add_subdirectory(vendor/niobium-fhetch/bindings/python
+                     ${CMAKE_BINARY_DIR}/_fhetch_bindings)
+elseif(NIOBIUM_CLIENT_FHETCH_DIR)
     add_subdirectory(${NIOBIUM_CLIENT_FHETCH_DIR}
                      ${CMAKE_BINARY_DIR}/_deps/niobium-fhetch-build)
 else()
