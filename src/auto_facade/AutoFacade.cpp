@@ -258,21 +258,13 @@ static std::vector<std::string> build_init_argv(const YAML::Node &node) {
   };
 
   add_value_flag("target", "--target");
-  if (node["optimization"])
-    args.push_back("-O" + node["optimization"].as<std::string>());
-  add_value_flag("registers", "--registers");
-  add_value_flag("memory", "--memory");
+  // init() parses --opt-level (values O0..O3, with or without the leading O)
+  add_value_flag("optimization", "--opt-level");
+  add_bool_flag("verbose", "-v");
+  // Internal/testing fields (see the flag parser in niobium-fhetch's
+  // src/compiler.cpp). Fields for flags init() does not parse were dropped
+  // with the compiler-repo port.
   add_bool_flag("niobium_hw", "--niobium_hw");
-  add_bool_flag("fence", "--fence", "--no-fence");
-  add_value_flag("noop", "--noop");
-  add_value_flag("multiplier", "--multiplier");
-  add_value_flag("config_sectors", "--config-sectors");
-  add_bool_flag("binary_json", "--binary-json", "--ascii-json");
-  add_bool_flag("no_cereal_binary", "--no-cereal-binary");
-  add_bool_flag("transform_bin_to_json", "--transform-bin-to-json");
-  add_bool_flag("no_preserve_input_ciphertexts", "--no-preserve-input-ciphertexts");
-  add_bool_flag("formal", "--formal");
-  add_bool_flag("lock_timing", "--lock-timing");
   add_bool_flag("no_ring_dim_check", "--no-ring-dim-check");
 
   return args;
