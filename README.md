@@ -121,8 +121,11 @@ directly.
 ### Step by step
 
 1. **Compile & Link** — Build your OpenFHE application against `libnbfhetch`
-   and the Niobium-instrumented OpenFHE branch. Add `niobium::compiler().init()`,
-   `start()`, `stop()` around the computation. No changes to FHE algorithm code.
+   and the Niobium-instrumented OpenFHE branch (both produced by `make release`;
+   see [Linking your own application](#linking-your-own-application) for the
+   exact CMake recipe, including the required `OPENFHE_CPROBES` define). Add
+   `niobium::compiler().init()`, `start()`, `stop()` around the computation.
+   No changes to FHE algorithm code.
 
 2. **Execute** — Every OpenFHE polynomial operation (`NTT`, `INTT`, `ADD`,
    `SUB`, `MUL`, `MULI`, `ADDI`, `MORPH`, …) triggers a C probe
@@ -316,6 +319,72 @@ one tree.
 - OpenFHE (Niobium-instrumented branch, reached transitively through
   `vendor/niobium-fhetch/vendor/openfhe`)
 - Python 3 (DSL compiler + example harnesses)
+
+### Linking your own application
+
+A `make release` of this repo produces everything your application needs:
+the instrumented OpenFHE install under `vendor/lib/openfhe` and
+`libnbfhetch` under `build/vendor/niobium-fhetch`. Build your app against
+those with CMake:
+
+```cmake
+cmake_minimum_required(VERSION 3.16)
+project(my_app LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+
+# Path to your niobium-client checkout, already built with `make release`.
+set(NIOBIUM_CLIENT_ROOT "/path/to/niobium-client" CACHE PATH "niobium-client repo root")
+
+# REQUIRED: activates the recording probes compiled into your own translation
+# units. Without it your app still builds and runs, but the trace it records
+# is incomplete and replays garbage.
+add_compile_definitions(OPENFHE_CPROBES)
+
+set(OPENFHE_INC "${NIOBIUM_CLIENT_ROOT}/vendor/lib/openfhe/include/openfhe")
+include_directories(
+  "${OPENFHE_INC}" "${OPENFHE_INC}/core" "${OPENFHE_INC}/pke" "${OPENFHE_INC}/binfhe"
+  "${OPENFHE_INC}/third-party/include"
+  "${NIOBIUM_CLIENT_ROOT}/vendor/niobium-fhetch/include")
+
+find_library(NBFHETCH_LIB nbfhetch
+  PATHS "${NIOBIUM_CLIENT_ROOT}/build/vendor/niobium-fhetch" NO_DEFAULT_PATH)
+set(OPENFHE_LIB_DIR "${NIOBIUM_CLIENT_ROOT}/vendor/lib/openfhe/lib")
+link_directories("${OPENFHE_LIB_DIR}")
+
+add_executable(my_app my_app.cpp)
+target_link_libraries(my_app PRIVATE ${NBFHETCH_LIB} OPENFHEpke OPENFHEcore OPENFHEbinfhe)
+if(NOT APPLE)
+  target_link_options(my_app PRIVATE "LINKER:--no-as-needed")
+endif()
+set_target_properties(my_app PROPERTIES
+  BUILD_RPATH "${OPENFHE_LIB_DIR};${NIOBIUM_CLIENT_ROOT}/build/vendor/niobium-fhetch")
+```
+
+```bash
+cmake -B build -DNIOBIUM_CLIENT_ROOT=/path/to/niobium-client -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+```
+
+Two things deserve emphasis:
+
+- **`OPENFHE_CPROBES` is not optional.** The recording probes live in
+  instrumented OpenFHE *header* code that gets compiled into your translation
+  units. In-tree targets inherit the define automatically (the
+  `niobium_fhetch` CMake target exports it as `PUBLIC`), but when you link
+  `libnbfhetch` by path you must define it yourself. An app compiled without
+  it links and runs — and silently records a trace that is missing the
+  header-inlined polynomial ops, so a later cache-hit replay reconstructs
+  garbage.
+- **Runtime library paths.** The template sets `BUILD_RPATH` so the binary
+  finds `libOPENFHE*.so` and `libnbfhetch.so` without help; if you drop that,
+  set `LD_LIBRARY_PATH` to the two lib directories instead.
+
+If you use cooperative auto-tagging (`enable_auto_tagging()`) rather than
+manual `tag_input`/`tag_keys` calls, additionally link
+`libniobium_client_autofacade` (from `build/src/auto_facade`) with
+`--whole-archive` plus `yaml-cpp` — see the auto-generated
+`dsl_fhe/examples/*/nb_out/CMakeLists.txt` for a complete worked build that
+does exactly this.
 
 ### Updating the vendored design skill
 
