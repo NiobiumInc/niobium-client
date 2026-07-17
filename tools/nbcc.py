@@ -58,21 +58,9 @@ def build_yaml(args):
 
     add_value("target", args.target)
     add_value("optimization", args.optimization)
-    add_value("registers", args.registers)
-    add_value("memory", args.memory)
-    add_bool("niobium_hw", args.niobium_hw)
+    add_bool("verbose", args.verbose)
     add_bool("hollow", args.hollow)
-    # fence: --fence sets True, --no-fence sets False, neither sets None
-    add_bool("fence", args.fence)
-    add_value("noop", args.noop)
-    add_value("multiplier", args.multiplier)
-    add_value("config_sectors", args.config_sectors)
-    add_bool("binary_json", args.binary_json)
-    add_bool("no_cereal_binary", args.no_cereal_binary)
-    add_bool("transform_bin_to_json", args.transform_bin_to_json)
-    add_bool("no_preserve_input_ciphertexts", args.no_preserve_input_ciphertexts)
-    add_bool("formal", args.formal)
-    add_bool("lock_timing", args.lock_timing)
+    # Internal/testing flag (needed for toy ring dimensions).
     add_bool("no_ring_dim_check", args.no_ring_dim_check)
 
     if compiler_lines:
@@ -129,39 +117,14 @@ def parse_args():
                         help="Target (default: local — in-process FHETCH sim; "
                              "non-local values dispatch to nbcc_fhetch_replay)")
     parser.add_argument("-O", "--optimization", default=None,
-                        help="Optimization level")
-    parser.add_argument("--registers", default=None, help="Number of registers")
-    parser.add_argument("--memory", default=None, help="Memory in GB")
-    parser.add_argument("--niobium-hw", action="store_true", default=None,
-                        help="Enable niobium hardware mode")
+                        help="Optimization level (O0..O3)")
+    parser.add_argument("-v", "--verbose", action="store_true", default=None,
+                        help="Verbose compiler output")
     parser.add_argument("--hollow", action="store_true", default=None,
                         help="Enable hollow mode")
-
-    # Fence (mutually exclusive)
-    fence_group = parser.add_mutually_exclusive_group()
-    fence_group.add_argument("--fence", action="store_true", dest="fence", default=None)
-    fence_group.add_argument("--no-fence", action="store_false", dest="fence")
-
-    parser.add_argument("--noop", default=None, help="Noop value")
-    parser.add_argument("--multiplier", default=None,
-                        choices=["standard", "shoup"], help="Multiplier type")
-    parser.add_argument("--config-sectors", default=None, help="Config sectors")
-
-    # Binary/JSON (mutually exclusive)
-    json_group = parser.add_mutually_exclusive_group()
-    json_group.add_argument("--binary-json", action="store_true",
-                            dest="binary_json", default=None)
-    json_group.add_argument("--ascii-json", action="store_false",
-                            dest="binary_json")
-
-    parser.add_argument("--no-cereal-binary", action="store_true", default=None)
-    parser.add_argument("--transform-bin-to-json", action="store_true", default=None)
-    parser.add_argument("--no-preserve-input-ciphertexts", action="store_true",
-                        default=None)
-    parser.add_argument("--formal", action="store_true", default=None)
-    parser.add_argument("--lock-timing", action="store_true", default=None)
     parser.add_argument("--no-ring-dim-check", action="store_true", default=None,
-                        help="Skip the Niobium hardware ring-dimension check")
+                        help="Internal/testing: skip the Niobium hardware "
+                             "ring-dimension check (toy ring dimensions)")
 
     # Positional: everything after --
     parser.add_argument("command", nargs=argparse.REMAINDER,
