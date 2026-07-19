@@ -4,8 +4,21 @@ name: Wheels
 # Add `push`/`pull_request`/tag triggers when the matrix is ready to run
 # automatically. NOTE: a workflow_dispatch workflow is only runnable (Actions tab
 # "Run workflow" / `gh workflow run`) once this file exists on the default branch.
+#
+# Every run builds + smoke-tests the wheels and uploads them as (short-lived) run
+# artifacts for inspection. `publish: true`, run from a vX.Y.Z tag ref, additionally
+# attaches the wheels + checksums to that tag's GitHub Release. This mirrors
+# niobium-fhetch's runtime-release.yml. IMPORTANT: a GitHub Release is a staging/mirror
+# point, NOT the `pip install` channel — `pip install niobium_sdk` resolves from PyPI,
+# which is a separate, manual, gated step (see PYTHON_WHEEL_PLAN "Publishing to PyPI" and
+# DISTRIBUTION_PLAN §8). Nothing publishes on push/tag automatically.
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Attach the built wheels to the GitHub Release for the current tag ref"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -95,3 +108,34 @@ jobs:
           path: ./wheelhouse/*.whl
           if-no-files-found: error
           retention-days: 7
+
+  # ------------------------------------------------------------------
+  # Gated publish: only on an explicit dispatch with publish=true, from a vX.Y.Z tag
+  # ref. Collects every platform's wheels and attaches them + a SHA256SUMS to that tag's
+  # GitHub Release. This is a durable, versioned MIRROR of the build outputs (and the
+  # source for the separate PyPI upload / a `--find-links` manual install), NOT the
+  # canonical channel: `pip install niobium_sdk` does not look here — it looks at PyPI.
+  # See PYTHON_WHEEL_PLAN "Publishing to PyPI".
+  # ------------------------------------------------------------------
+  release:
+    name: Attach GitHub Release
+    needs: [wheels-linux, wheels-macos]
+    if: ${{ inputs.publish && startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create/attach the Release for the tag
+    steps:
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: wheels-*
+          merge-multiple: true
+      - name: Checksums
+        run: cd artifacts && sha256sum *.whl | tee SHA256SUMS
+      - name: Attach wheels + checksums to the tag's Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/*.whl
+            artifacts/SHA256SUMS
