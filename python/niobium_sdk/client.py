@@ -24,7 +24,7 @@ _DEFAULT_SERVER = "http://127.0.0.1:9443"
 # The Fog per-job ticket (protocol.h kAuthTokenEnv) — sent as `Authorization:
 # Bearer`. This is the *worker* auth, distinct from the fog-api control-plane key
 # (X-Api-Token / FOG_API_TOKEN), which niobium_sdk.fog uses for POST /jobs/.
-_TOKEN_ENVS = ("NBCC_FHETCH_TOKEN",)
+_TOKEN_ENV = "NBCC_FHETCH_TOKEN"
 
 _config = {"endpoint": None, "token": None}
 
@@ -59,12 +59,8 @@ def _target_url(server):
 
 
 def _resolve_token(token):
-    if token or _config["token"]:
-        return token or _config["token"]
-    for env in _TOKEN_ENVS:
-        if os.environ.get(env):
-            return os.environ[env]
-    return None
+    # Fog worker ticket: explicit arg > configure() > NBCC_FHETCH_TOKEN env.
+    return token or _config["token"] or os.environ.get(_TOKEN_ENV)
 
 
 def submit(project_dir, target, *, endpoint=None, opt_level=None, token=None,
