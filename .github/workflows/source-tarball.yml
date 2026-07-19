@@ -1,0 +1,85 @@
+name: source-tarball
+
+# Manual-only, matching the runtime-release / wheels workflows. A workflow_dispatch
+# workflow is runnable (Actions tab "Run workflow" / `gh workflow run`) only once this
+# file is on the default branch. Every run builds + validates the self-contained source
+# tarball and uploads it as a (short-lived) run artifact for inspection. `publish: true`,
+# run from a vX.Y.Z tag ref, additionally attaches the tarball + checksum to that tag's
+# GitHub Release — the distribution point the Homebrew/Linux/Docker from-source builds
+# fetch. Nothing publishes on push/tag automatically.
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Attach the source tarball to the GitHub Release for the current tag ref"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: source tarball
+    runs-on: ubuntu-latest
+    steps:
+      # Submodules (incl. the nested OpenFHE + its third-party) must be present so
+      # the tarball can vendor their sources; --recursive pulls the whole tree.
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Determine version
+        id: ver
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF#refs/tags/v}"     # release: the tag is authoritative
+          else
+            version="$(cat VERSION)"                # otherwise: repo-wide source of truth
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Version: $version"
+
+      - name: Build the source tarball
+        run: make source-tarball VERSION="${{ steps.ver.outputs.version }}"
+
+      - name: Validate the tarball is self-contained
+        run: make check-source-tarball VERSION="${{ steps.ver.outputs.version }}"
+
+      - name: Upload the source tarball (run artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: niobium-client-source
+          path: dist/niobium-client-*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  # Gated publish: only on an explicit dispatch with publish=true, from a vX.Y.Z tag ref.
+  release:
+    name: Attach GitHub Release
+    needs: build
+    if: ${{ inputs.publish && startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create/attach the Release for the tag
+    steps:
+      - name: Download the source tarball
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: niobium-client-source
+          merge-multiple: true
+      - name: Checksums
+        run: cd artifacts && sha256sum *.tar.gz | tee SHA256SUMS
+      - name: Attach tarball + checksum to the tag's Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/*.tar.gz
+            artifacts/SHA256SUMS
