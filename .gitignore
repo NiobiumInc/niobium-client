@@ -45,6 +45,9 @@ build/
 dbuild/
 vendor/lib/
 
+# Release artifacts (source tarball output)
+dist/
+
 # Auto-facade test artifacts
 ciphers_auto/
 bootstrap_auto_keys/

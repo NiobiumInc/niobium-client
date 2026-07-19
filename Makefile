@@ -578,3 +578,8 @@ clean: ## Remove all build artifacts
 
 clean-all: clean ## Deep clean including vendor installations
 	-rm -rf $(VENDOR_LIB_DIR)
+
+# ==============================================================================
+# Capability fragments (one per capability; keep this root file thin)
+# ==============================================================================
+include make/source-tarball.mk
