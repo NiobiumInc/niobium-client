@@ -110,16 +110,121 @@ jobs:
           retention-days: 7
 
   # ------------------------------------------------------------------
+  # Python roundtrip (primary + fhetch_driver SECONDARY re-drive).
+  #
+  # cibuildwheel's test-command (wheel_smoke.py) is primary-only BY DESIGN:
+  # fhetch_driver is a test tool that is NOT shipped in the wheel, so the isolated
+  # test env can't run the secondary re-drive. The full Python roundtrip is a
+  # dev-build test, so it runs here as its own job (not inside cibuildwheel) via the
+  # committed `make test-python-release` — its test-fhetch-python-release leg
+  # delegates to the niobium-fhetch submodule's roundtrip sweep, which builds
+  # fhetch_driver (WITH_TESTS) and decrypts primary + secondary. One platform is
+  # enough: the roundtrip logic is platform-independent (mirrors how ci.yml runs
+  # test-client-release on ubuntu-latest only); the multi-platform wheel matrix is
+  # for relocatability, which wheel_smoke.py already covers. Build steps + caching
+  # mirror ci.yml.
+  # ------------------------------------------------------------------
+  python-roundtrip:
+    name: Python roundtrip (primary + secondary, ubuntu-latest)
+    if: github.repository == 'NiobiumInc/niobium-client'
+    runs-on: ubuntu-latest
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+      OPENMP: OFF
+      NATIVEOPT: OFF
+      OPENFHE_ROOT: ${{ github.workspace }}/vendor/lib/openfhe
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean
+          df -h
+
+      - name: Install build tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ccache ninja-build python3-dev python3-venv
+          python3 -m pip install --user 'pybind11>=3,<4'
+          ccache --version
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ubuntu-latest-ccache-release-${{ hashFiles('**/CMakeLists.txt', '**/*.cpp', '**/*.h', 'Makefile', 'vendor/niobium-fhetch/Makefile') }}
+          restore-keys: |
+            ubuntu-latest-ccache-release-
+
+      - name: Prime ccache
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          ccache --max-size=2G
+          ccache --zero-stats
+
+      - name: Capture OpenFHE submodule commit
+        id: openfhe_rev
+        run: |
+          cd vendor/niobium-fhetch/vendor/openfhe
+          echo "rev=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore OpenFHE build
+        uses: actions/cache@v4
+        with:
+          path: |
+            vendor/lib/openfhe
+            vendor/niobium-fhetch/vendor/openfhe/build
+          key: ubuntu-latest-openfhe-release-${{ steps.openfhe_rev.outputs.rev }}
+          restore-keys: |
+            ubuntu-latest-openfhe-release-
+
+      - name: Build OpenFHE
+        run: |
+          export CC="ccache gcc"
+          export CXX="ccache g++"
+          TARGETS_FILE="vendor/lib/openfhe/lib/OpenFHE/OpenFHETargets.cmake"
+          if [ -f "$TARGETS_FILE" ] && grep -q "${{ github.workspace }}" "$TARGETS_FILE"; then
+            echo "✓ OpenFHE cache valid for this workspace"
+          else
+            if [ -f "$TARGETS_FILE" ]; then
+              echo "✗ OpenFHE cache has a stale workspace path — rebuilding"
+              rm -rf vendor/lib/openfhe vendor/niobium-fhetch/vendor/openfhe/build
+            fi
+            make config-openfhe-release NATIVEOPT=${NATIVEOPT} OPENMP=${OPENMP}
+            make build-openfhe-release
+          fi
+
+      # Assemble the wheel package tree and run the full Python parity suite,
+      # including the fhetch_driver secondary re-drive. PYTHON is absolutized so the
+      # submodule delegate (which cd's into vendor/niobium-fhetch) resolves it.
+      - name: Run test-python-release (full parity incl. secondary)
+        run: |
+          export CC="ccache gcc"
+          export CXX="ccache g++"
+          export LD_LIBRARY_PATH="$OPENFHE_ROOT/lib:$LD_LIBRARY_PATH"
+          make test-python-release PYTHON="$(command -v python3)"
+
+  # ------------------------------------------------------------------
   # Gated publish: only on an explicit dispatch with publish=true, from a vX.Y.Z tag
   # ref. Collects every platform's wheels and attaches them + a SHA256SUMS to that tag's
   # GitHub Release. This is a durable, versioned MIRROR of the build outputs (and the
   # source for the separate PyPI upload / a `--find-links` manual install), NOT the
   # canonical channel: `pip install niobium_sdk` does not look here — it looks at PyPI.
-  # See PYTHON_WHEEL_PLAN "Publishing to PyPI".
+  # See PYTHON_WHEEL_PLAN "Publishing to PyPI". Gated on python-roundtrip too, so a
+  # stable publish never ships wheels whose Python parity (incl. secondary) failed.
   # ------------------------------------------------------------------
   release:
     name: Attach GitHub Release
-    needs: [wheels-linux, wheels-macos]
+    needs: [wheels-linux, wheels-macos, python-roundtrip]
     if: ${{ inputs.publish && startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     permissions:
