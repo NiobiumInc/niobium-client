@@ -7,8 +7,8 @@
 #   * Component (add_subdirectory(python) from the top-level CMakeLists, under
 #     NIOBIUM_CLIENT_WITH_PYTHON): the full wheel assembly — pulls niobium-fhetch's
 #     openfhe + niobium_session, adds _archive, and assembles the importable
-#     niobium_sdk/ tree, installed as the `python_wheel` component (see
-#     PYTHON_WHEEL_PLAN). The parent has already found Python + pybind11.
+#     niobium_sdk/ tree, installed as the `python_wheel` component. The parent
+#     has already found Python + pybind11.
 cmake_minimum_required(VERSION 3.16)
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)

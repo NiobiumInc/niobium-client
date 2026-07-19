@@ -122,7 +122,7 @@ if(NIOBIUM_CLIENT_WITH_EXAMPLES)
 endif()
 
 # ==============================================================================
-# Python package (optional; see PYTHON_WHEEL_PLAN)
+# Python package (optional)
 # ==============================================================================
 # niobium-fhetch (above, WITH_PYTHON) built openfhe + niobium_session into
 # ${CMAKE_BINARY_DIR}/python. python/CMakeLists.txt adds the _archive binding and
