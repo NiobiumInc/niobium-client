@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(NiobiumClient VERSION 1.0.0 LANGUAGES CXX)
+# Version is read from the root VERSION file — the single source of truth shared
+# with the packaging channels and the source-tarball workflow.
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" NIOBIUM_CLIENT_VERSION)
+project(NiobiumClient VERSION ${NIOBIUM_CLIENT_VERSION} LANGUAGES CXX)
 
 # Use ccache if available
 find_program(CCACHE_PROGRAM ccache)
