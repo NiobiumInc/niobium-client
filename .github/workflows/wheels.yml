@@ -10,8 +10,7 @@ name: Wheels
 # attaches the wheels + checksums to that tag's GitHub Release. This mirrors
 # niobium-fhetch's runtime-release.yml. IMPORTANT: a GitHub Release is a staging/mirror
 # point, NOT the `pip install` channel — `pip install niobium_sdk` resolves from PyPI,
-# which is a separate, manual, gated step (see PYTHON_WHEEL_PLAN "Publishing to PyPI" and
-# DISTRIBUTION_PLAN §8). Nothing publishes on push/tag automatically.
+# which is a separate, manual, gated step. Nothing publishes on push/tag automatically.
 on:
   workflow_dispatch:
     inputs:
@@ -230,8 +229,8 @@ jobs:
   # GitHub Release. This is a durable, versioned MIRROR of the build outputs (and the
   # source for the separate PyPI upload / a `--find-links` manual install), NOT the
   # canonical channel: `pip install niobium_sdk` does not look here — it looks at PyPI.
-  # See PYTHON_WHEEL_PLAN "Publishing to PyPI". Gated on python-roundtrip too, so a
-  # stable publish never ships wheels whose Python parity (incl. secondary) failed.
+  # Gated on python-roundtrip too, so a stable publish never ships wheels whose
+  # Python parity (incl. secondary) failed.
   # ------------------------------------------------------------------
   release:
     name: Attach GitHub Release
