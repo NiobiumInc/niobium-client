@@ -51,14 +51,19 @@ jobs:
             runner: ubuntu-24.04-arm   # native arm64 (GitHub-hosted ARM runner)
 
     steps:
-      # niobium-fhetch is a submodule; OpenFHE + openfhe-python are nested one
-      # level deeper. --recursive pulls all of them (the in-container build needs
-      # the sources).
+      # The recorder builds only against niobium-fhetch (OpenFHE fork +
+      # openfhe-python + json, nested one level deeper), so init just that subtree
+      # rather than a top-level --recursive: niobium-haze is a separate compiled
+      # library (shipped via the niobium_ir package), unused here, and would pull
+      # duplicate OpenFHE copies. The in-container build needs the fhetch sources.
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          submodules: recursive
+          submodules: false
           fetch-depth: 1
+
+      - name: Init build submodules (recorder = niobium-fhetch only; skip haze)
+        run: git submodule update --init --recursive vendor/niobium-fhetch
 
       - name: Free disk space
         run: |
@@ -95,8 +100,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          submodules: recursive
+          submodules: false
           fetch-depth: 1
+
+      - name: Init build submodules (recorder = niobium-fhetch only; skip haze)
+        run: git submodule update --init --recursive vendor/niobium-fhetch
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v3
@@ -137,8 +145,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          submodules: recursive
+          submodules: false
           fetch-depth: 1
+
+      - name: Init build submodules (recorder = niobium-fhetch only; skip haze)
+        run: git submodule update --init --recursive vendor/niobium-fhetch
 
       - name: Free disk space
         run: |

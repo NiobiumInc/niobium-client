@@ -3,6 +3,9 @@
 How to build, test, and maintain the Python distribution of the Niobium client —
 the `niobium_sdk` wheel. For the C++ build see [`../README.md`](../README.md).
 
+> **Scope:** the HAZE C API is **not** included in `niobium_sdk`. It is
+> distributed separately via the `niobium_ir` package.
+
 ## What ships in the wheel
 
 `pip install niobium_sdk` gives five import surfaces, all self-contained (the
