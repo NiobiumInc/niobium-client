@@ -2,7 +2,7 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-07-18
+Generated: 2026-07-20
 Tool: SCANOSS (snippet detection with License dataset)
 Components: 80
 
@@ -637,20 +637,13 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2007; Google Inc.
     Copyright (c) 2008; Google Inc.
     Copyright (c) 2009; Google Inc.
-    Copyright (c) 2010 The Chromium Authors
-    Copyright (c) 2010 The Chromium Authors. All rights reserved.
     Copyright (c) 2011; Google Inc.
-    Copyright (c) 2013; Google Inc.
-    Copyright (c) 2014; 2024; gperftools Contributors
     Copyright (c) 2014; gperftools Contributors
-    Copyright (c) 2016; gperftools Contributors
     Copyright (c) 2021; IBM Ltd.
     Copyright (c) 2021; gperftools Contributors
     Copyright (c) 2023; gperftools Contributors
     Copyright (c) 2023; gperftools Contributors.
     Copyright (c) 2024; gperftools Contributors
-    Copyright 2009 Google Inc.
-    Copyright 2009 Google Inc. All Rights Reserved.
   License: BSD-3-Clause
 
   gperftools
@@ -660,7 +653,6 @@ COMPONENT ATTRIBUTIONS
   Copyright:
     Copyright 2005 Google Inc
     Copyright 2023 gperftools Contributors
-    Copyright (c) 2000; Google Inc.
     Copyright (c) 2003; Google Inc.
     Copyright (c) 2004; Google Inc.
     Copyright (c) 2005; Google Inc.
