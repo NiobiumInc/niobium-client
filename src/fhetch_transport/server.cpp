@@ -338,6 +338,7 @@ int main(int argc, char** argv) {
     // "Failed to write connection" error.
     srv.set_payload_max_length((std::numeric_limits<size_t>::max)());
     srv.set_read_timeout(60 * 120, 0);  // 2 hr — matches client's read timeout
+    srv.set_write_timeout(60 * 120, 0); // 2 hr - match read/write
     std::signal(SIGINT,  shutdown_handler);
     std::signal(SIGTERM, shutdown_handler);
 

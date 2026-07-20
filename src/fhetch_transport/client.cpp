@@ -160,6 +160,7 @@ int main(int argc, char** argv) {
     cli.set_read_timeout(60 * 120, 0);  // 2 hr — FUNC_SIM_HW on large workloads can exceed 30 min
     cli.set_write_timeout(60, 0);
     cli.set_connection_timeout(10, 0);
+    cli.set_payload_max_length(SIZE_MAX); // increase max payload
 
     httplib::Headers headers = {
         {nft::kTargetHeader,      args.target},
