@@ -7,10 +7,12 @@ client.cpp): pack the project dir (excluding serialized_probes/), POST it to the
 replay server, unpack the returned archive into serialized_probes/.
 
 Framing is the bound C++ archive (niobium_sdk._archive) — no Python reimpl of
-the wire format. HTTP is stdlib urllib (no third-party dep).
+the wire format. HTTP is stdlib urllib; HTTPS verifies against certifi's CA
+bundle when installed (else the default context).
 """
 import os
 import shutil
+import ssl
 import urllib.request
 from urllib.parse import urlsplit, urlunsplit
 
@@ -25,6 +27,16 @@ _DEFAULT_SERVER = "http://127.0.0.1:9443"
 # Bearer`. This is the *worker* auth, distinct from the fog-api control-plane key
 # (X-Api-Token / FOG_API_TOKEN), which niobium_sdk.fog uses for POST /jobs/.
 _TOKEN_ENV = "NBCC_FHETCH_TOKEN"
+
+# TLS: python.org macOS framework builds (a wheel target) ship no CA store, so
+# urllib's default context can verify nothing. Use certifi's CA bundle when it is
+# installed; otherwise fall back to the default context (which honors a working OS
+# store / $SSL_CERT_FILE). Mirrors scripts/fog. Ignored for http:// endpoints.
+try:
+    import certifi
+    _TLS = ssl.create_default_context(cafile=certifi.where())
+except ImportError:
+    _TLS = None
 
 _config = {"endpoint": None, "token": None}
 
@@ -100,7 +112,7 @@ def submit(project_dir, target, *, endpoint=None, opt_level=None, token=None,
 
     req = urllib.request.Request(url, data=body,
                                  headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with urllib.request.urlopen(req, timeout=timeout, context=_TLS) as resp:
         archive = resp.read()
 
     probes_dir = os.path.join(project_dir, "serialized_probes")
