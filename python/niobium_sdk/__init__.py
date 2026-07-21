@@ -15,6 +15,7 @@ The crypto/session extensions (``openfhe``/``niobium_session``) are imported on
 demand, so DSL-only (``nbc``) and submit-only (``client``) use does not require
 the native stack to load.
 """
+import contextlib
 import ctypes
 import glob
 import os
@@ -56,13 +57,34 @@ def _preload_libnbfhetch():
 
 _preload_libnbfhetch()
 
-# fhetch_sim runs as a *subprocess* (spawned by replay()), so the RTLD_GLOBAL
-# preload above doesn't help it — point the dynamic loader at our lib dirs so it
-# resolves libnbfhetch + the bundled OpenFHE. Prepend; keep any caller value.
-if len(_LIBDIRS) > 0:
-    _var = "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
-    _existing = os.environ.get(_var)
-    os.environ[_var] = os.pathsep.join(_LIBDIRS + ([_existing] if _existing else []))
+
+@contextlib.contextmanager
+def _sim_library_path():
+    """Temporarily prepend the bundled native-lib dirs to the loader search path.
+
+    fhetch_sim runs as a *subprocess* (posix_spawn'd by the C++ ``replay()``,
+    inheriting this process's environment), so it needs DYLD/LD_LIBRARY_PATH to
+    point at our bundled libnbfhetch + OpenFHE. Scoped to the ``replay()`` call
+    (see ``niobium_sdk.session.replay``) and restored afterward, rather than set
+    globally at import — so the bundled libs never leak into an unrelated child
+    process the host may spawn. (The extensions themselves resolve their deps via
+    their $ORIGIN/@loader_path RPATHs + the RTLD_GLOBAL preload above, not this.)
+    No-op when nothing is bundled (source tree). Not reentrant across threads.
+    """
+    if not _LIBDIRS:
+        yield
+        return
+    var = "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
+    prev = os.environ.get(var)
+    os.environ[var] = os.pathsep.join(_LIBDIRS + ([prev] if prev else []))
+    try:
+        yield
+    finally:
+        if prev is None:
+            os.environ.pop(var, None)
+        else:
+            os.environ[var] = prev
+
 
 # Point replay() at the bundled fhetch_sim unless the caller overrode it.
 _SIM = os.path.join(_HERE, "fhetch_sim")
