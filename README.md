@@ -8,6 +8,31 @@ validation, or submit to the Niobium compilation service for optimization and
 deployment to hardware. All optimization logic lives server-side — this client
 stays thin, open (Apache 2.0), and self-contained.
 
+## Support matrix
+
+External dependencies required to build (`make release`) and run the client:
+
+| Dependency               | Minimum version |
+|--------------------------|-----------------|
+| CMake                    | 3.16.3          |
+| GCC                      | 9.0             |
+| Clang (alternative to GCC) | 10.0          |
+| GNU make                 | 3.82            |
+| bash                     | 3.0             |
+| Git                      | any             |
+| pthreads                 | any             |
+| yaml-cpp                 | 0.8.0           |
+| OpenSSL                  | 3.0.0           |
+| BoringSSL / LibreSSL (alternative to OpenSSL) | 1.1.1 |
+| python3                  | 3.7             |
+| certifi (Python package) | any             |
+
+python3 and certifi are runtime dependencies of the `fog` CLI (and python3 of
+the `nbc` DSL compiler) — the C++ build itself never touches Python in the
+default configuration. certifi is strictly required only where the OS/Python
+installation ships no usable CA store (e.g. python.org macOS builds);
+elsewhere `fog` falls back to the system trust store.
+
 ## Choose your entry point
 
 There are four ways in, by audience:
