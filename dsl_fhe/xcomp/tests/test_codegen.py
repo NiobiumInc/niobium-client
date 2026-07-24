@@ -580,6 +580,44 @@ def test_hardware_save_duplicate_stem_rejected():
         assert "not unique" in str(e)
 
 
+def test_save_field_detection_is_structural():
+    """A plain field is never treated as a ciphertext by save(), regardless
+    of its name — detection is _field_kind()-structural, with no name
+    fallback. A plain-named-'result' wire in an @hardware stage must not be
+    probed (it can't be a trace live-out)."""
+    files = compile_str("""
+    struct Instance { ring_dim: u32 }
+    wire Meta { result: f64 }
+    fn outdir(inst: Instance) -> path { "io" / "out" }
+    @server @stage(name: "compute") @hardware(cache_key: ["wl"])
+    fn compute(inst: Instance) {
+        save(Meta { result: 1.0 }, to: outdir(inst) / "meta.bin")
+    }
+    """)
+    cpp = files["compute.cpp"]
+    assert "probe(" not in cpp
+    # Falls through to whole-struct serialization, not a .result field access.
+    assert ".result, SerType::BINARY" not in cpp
+
+
+def test_hardware_save_requires_server_stage():
+    from xcomp.codegen import CodegenError
+    try:
+        compile_str("""
+        struct Instance { ring_dim: u32 }
+        wire EncOut { ciphertext: enc<f64> }
+        fn outdir(inst: Instance) -> path { "io" / "out" }
+        @client @stage(name: "cl") @hardware(cache_key: ["wl"])
+        fn cl(inst: Instance) {
+            let ct: enc<f64> = zero()
+            save(EncOut { ciphertext: ct }, to: outdir(inst) / "out.bin")
+        }
+        """)
+        assert False, "expected CodegenError for @client @hardware save()"
+    except CodegenError as e:
+        assert "@server" in str(e)
+
+
 def test_client_save_has_no_probe():
     """Only @hardware stages probe their save()s — client stages and
     non-hardware servers keep the plain serialization."""
