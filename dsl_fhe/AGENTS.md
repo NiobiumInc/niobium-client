@@ -274,7 +274,14 @@ Each `@stage("name")` function generates a `.cpp` with:
    `start()` emitted inside it, after the leading input `load()`s so the hooks
    tag inputs first), then `probe()`/`stop()`; on a **cache-valid** run zero FHE
    ops execute — `replay()` runs the cached trace and `result()` reconstructs
-   the output (mirrors the canonical fetch-by-similarity client integration)
+   the output (mirrors the canonical fetch-by-similarity client integration).
+   This covers `save()`d outputs too: each `save()` in an `@hardware` stage
+   also emits a `probe()` (name = the `.bin` filename's stem, or the field
+   name for multi-field wires), and the replay branch reconstructs each file
+   via `result()` — the stage body never runs on a cache-valid run, so
+   without this the saved files would replay stale/empty. Save paths must
+   end in a literal filename and be re-evaluable from `main()` (stage args +
+   consts); violations raise `CodegenError`.
 6. **Result serialization** — always: OpenFHE's own output on a record run,
    the reconstructed ciphertext on a replay run
 
@@ -436,6 +443,31 @@ consumer dirs now match on both hand-offs. Key/context wires are unaffected (can
 cc/pk/mk/rk layout), an explicit `to:` path still overrides, and single-dir (`encdir`)
 designs are unchanged since the `ctxtupdir` branch is gated on that helper existing.
 Pinned by `test_client_output_routes_to_upload_dir`.
+
+### 12. `save()`d Outputs of `@hardware` Stages Replayed Stale/Empty
+
+**Problem**: `save()` in an `@hardware` stage emitted a bare
+`Serial::SerializeToFile` with no `probe()`. In cooperative auto-tagging mode
+the auto-facade's serialize hook doesn't probe either (it gates on the
+facade-driven `g_recording`, which cooperative mode never sets), so the saved
+ciphertext was not a live-out of the FHETCH trace. On a cache-valid run the
+stage body never executes, and the replay branch only rehydrated the returned
+wire result — so `save()` files were left stale from the record run (hollow
+garbage under `--hollow`, or missing entirely), decrypting to zeros/empty.
+Found via furever-home, whose scoring stage returns nothing and `save()`s both
+outputs; its `build_dsl.sh` post-patched the generated code to the manual
+Entry-Point-2 pattern as a workaround. (The other half of that report —
+host-built plaintexts needing manual `tag_input` — was wrong: the
+`on_make_plaintext` hook tags them automatically in cooperative mode.)
+
+**Fix**: `_gen_save()` now also emits `niobium::compiler().probe(<stem>, ct)`
+inside `@hardware` stage bodies (record pass only, since that's the only time
+the body runs), and `_gen_main_body_after_args()`'s replay branch reconstructs
+each registered save site via `result()` + `SerializeToFile` to the same path.
+Probe names come from the save filename's stem (field names for multi-field
+wires); duplicate stems and paths not re-evaluable from `main()` raise
+`CodegenError`. Pinned by `test_hardware_save_probe_and_rehydrate`,
+`test_hardware_save_duplicate_stem_rejected`, `test_client_save_has_no_probe`.
 
 ## File Structure
 
