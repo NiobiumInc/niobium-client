@@ -40,6 +40,13 @@ ifndef NUM_CPUS
   endif
 endif
 
+# Self-locating rpath token for the OpenFHE .so install (see config-openfhe).
+ifeq ($(UNAME_S), Darwin)
+  OPENFHE_ORIGIN_RPATH := @loader_path
+else
+  OPENFHE_ORIGIN_RPATH := $$ORIGIN
+endif
+
 # ==============================================================================
 # Build Configuration
 # ==============================================================================
@@ -129,6 +136,13 @@ update-openfhe: ## Update OpenFHE (inside niobium-fhetch) to latest remote commi
 
 ##@ OpenFHE Build
 
+# -DLIBINSTALL='$(OPENFHE_ORIGIN_RPATH)' works around an OpenFHE CMake bug — its
+# CMakeLists does `set(CMAKE_INSTALL_RPATH "$${LIBINSTALL}")` but never defines
+# LIBINSTALL (renamed to INSTALL_LIB_DIR), so installed .so's got an EMPTY
+# rpath and libOPENFHEpke couldn't find its sibling libOPENFHEbinfhe.so.1 at
+# runtime without LD_LIBRARY_PATH. Defining it here bakes a relocatable
+# $$ORIGIN rpath instead. If a future OpenFHE bump sets LIBINSTALL
+# itself, this -D is silently ignored — fix it upstream in openfhe then.
 config-openfhe: ## Configure OpenFHE (Debug)
 	$(call set-build-config,Debug,dbuild)
 	cmake -S $(OPENFHE_DIR) -B $(OPENFHE_DIR)/dbuild \
@@ -141,6 +155,7 @@ config-openfhe: ## Configure OpenFHE (Debug)
 		-DWITH_REDUCED_NOISE=ON \
 		-DWITH_NATIVEOPT=$(NATIVEOPT) \
 		-DWITH_OPENMP=$(OPENMP) \
+		-DLIBINSTALL='$(OPENFHE_ORIGIN_RPATH)' \
 		-DCMAKE_INSTALL_PREFIX=$(OPENFHE_INSTALL_DIR)
 
 config-openfhe-release: ## Configure OpenFHE (Release)
@@ -155,6 +170,7 @@ config-openfhe-release: ## Configure OpenFHE (Release)
 		-DWITH_REDUCED_NOISE=ON \
 		-DWITH_NATIVEOPT=$(NATIVEOPT) \
 		-DWITH_OPENMP=$(OPENMP) \
+		-DLIBINSTALL='$(OPENFHE_ORIGIN_RPATH)' \
 		-DCMAKE_INSTALL_PREFIX=$(OPENFHE_INSTALL_DIR)
 
 build-openfhe: ## Build and install OpenFHE (Debug)
