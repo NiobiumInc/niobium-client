@@ -103,6 +103,11 @@ class StageInfo:
     io_specs: list[ast.IoSpec] = field(default_factory=list)
 
 
+class CodegenError(Exception):
+    """A construct the codegen cannot translate correctly (as opposed to a
+    semantic error in the .niob source, which analyze() reports)."""
+
+
 class CodeGenerator:
     """Generates OpenFHE C++ from a checked nb AST."""
 
@@ -141,6 +146,14 @@ class CodeGenerator:
         # {field}.ref.bin raw-double files). Set only while emitting
         # <stage>_ref.cpp translation units.
         self._plain_mode: bool = False
+        self._current_stage_hardware: bool = False
+        # save() sites inside the current @hardware stage body. A cache-valid
+        # run executes zero FHE ops (the stage function is never called), so
+        # every save()d ciphertext must be probe()d during recording and
+        # reconstructed by main()'s replay branch via result(). Entries:
+        # {"stem": probe name, "path": C++ path expr, "field": optional
+        #  "{field}.bin" suffix for multi-field dir saves}.
+        self._hw_stage_saves: list[dict] = []
         self._classify_items()
         # User-function signatures: name -> FnDecl. Lets encrypted-ness (and
         # vector-ness) of user-fn calls resolve from declared return types
@@ -1006,6 +1019,7 @@ endforeach()
         # each input load() (see _gen_let_stmt).
         self._current_fn = stage.fn
         self._current_stage_hardware = bool(stage.hardware)
+        self._hw_stage_saves = []
         self._local_var_cpp_types.clear()
         self._declared_vars.clear()
         self._enc_vars.clear()
@@ -1314,6 +1328,31 @@ endforeach()
             self.wl("}")
             if has_return:
                 self._gen_result_io(stage, "rehydrate")
+            # Reconstruct every save()d output: the stage body never runs on a
+            # cache-valid run, so each recorded probe is fetched via result()
+            # and written to the same file the record pass saved it to.
+            for sv in self._hw_stage_saves:
+                self.wl("{")
+                self.indent()
+                self.wl("Ciphertext<DCRTPoly> _hw_ct;")
+                self.wl(f'if (!niobium::compiler().result(cc, "{sv["stem"]}", _hw_ct)) {{')
+                self.indent()
+                self.wl(f'std::cerr << "[ERROR] Result retrieval failed for '
+                        f'\'{sv["stem"]}\'!" << std::endl;')
+                self.wl("return 1;")
+                self.dedent()
+                self.wl("}")
+                if sv["field"]:
+                    self.wl(f"auto _dir = fs::path({sv['path']});")
+                    self.wl("fs::create_directories(_dir);")
+                    self.wl(f'Serial::SerializeToFile(_dir / "{sv["field"]}", '
+                            f"_hw_ct, SerType::BINARY);")
+                else:
+                    self.wl(f"auto _dir = fs::path({sv['path']});")
+                    self.wl("fs::create_directories(_dir.parent_path());")
+                    self.wl("Serial::SerializeToFile(_dir, _hw_ct, SerType::BINARY);")
+                self.dedent()
+                self.wl("}")
             self.dedent()
             self.wl("}")
         else:
@@ -3350,14 +3389,72 @@ endforeach()
                 f"results.push_back(ct); "
                 f"}} return results; }}()")
 
+    def _hw_save_stem(self, to_ast) -> str | None:
+        """Static probe name for a save() destination: the .bin filename's stem
+        when the path expression ends in a string literal (`dir / "name.bin"`
+        or a bare "name.bin"). None when no literal filename is derivable."""
+        node = to_ast
+        while isinstance(node, ast.BinaryExpr) and node.op == "/":
+            node = node.right
+        if isinstance(node, ast.StringLiteral) and node.value:
+            stem = node.value.rsplit("/", 1)[-1]
+            if "." in stem:
+                stem = stem[:stem.rindex(".")]
+            return stem or None
+        return None
+
+    def _register_hw_save(self, stem: str, path_cpp: str, to_ast,
+                          field: str | None = None):
+        """Record a @hardware save() site for main()'s replay-branch
+        rehydration, validating that the probe name is unique and that the
+        path expression is re-evaluable from main() (stage args + consts)."""
+        taken = {s["stem"] for s in self._hw_stage_saves} | {"result"}
+        if stem in taken:
+            raise CodegenError(
+                f"@hardware stage '{self._current_fn.name}': save() probe name "
+                f"'{stem}' is not unique (each save() needs a distinct .bin "
+                f"filename, and 'result' is reserved for the wire result)")
+        allowed = {p.name for p in self._current_fn.params} | {"inst"}
+        allowed |= {c.name for c in self.consts}
+        callees = {n.func.name for n in self._walk_ast(to_ast)
+                   if isinstance(n, ast.CallExpr) and isinstance(n.func, ast.Ident)}
+        unknown = {n.name for n in self._walk_ast(to_ast)
+                   if isinstance(n, ast.Ident)} - allowed - callees
+        if unknown:
+            raise CodegenError(
+                f"@hardware stage '{self._current_fn.name}': save() path uses "
+                f"stage-local variable(s) {sorted(unknown)} — the path must be "
+                f"computable in main() on a cache-valid run (stage args and "
+                f"consts only), or return the value via the wire result instead")
+        self._hw_stage_saves.append({"stem": stem, "path": path_cpp,
+                                     "field": field})
+
     def _gen_save(self, args: list[ast.Arg]) -> str:
-        """Generate serialization for wire types: save(WireType{...}, to: path)."""
+        """Generate serialization for wire types: save(WireType{...}, to: path).
+
+        Inside an @hardware stage (record pass only — a cache-valid run never
+        executes the stage body), each saved ciphertext is also probe()d so it
+        becomes a live-out of the FHETCH trace; main()'s replay branch then
+        reconstructs the same files via result()."""
         positional = [a for a in args if not a.name]
         named = {a.name: self._expr_to_cpp(a.value) for a in args if a.name}
         to_path = named.get("to", "")
         if not to_path:
             return f"/* save: missing 'to:' argument */"
         data_expr = self._expr_to_cpp(positional[0].value) if positional else "data"
+
+        to_ast = next((a.value for a in args if a.name == "to"), None)
+        hw = self._current_stage_hardware and not self._plain_mode
+
+        def hw_stem_or_raise() -> str:
+            stem = self._hw_save_stem(to_ast)
+            if stem is None:
+                raise CodegenError(
+                    f"@hardware stage '{self._current_fn.name}': cannot derive "
+                    f"a probe name from the save() path — end the 'to:' path "
+                    f"with a literal filename (e.g. dir / \"out.bin\"), or "
+                    f"return the value via the wire result instead")
+            return stem
 
         # Determine wire type from the first positional argument
         type_name = None
@@ -3379,11 +3476,34 @@ endforeach()
                         return (f"nb_plain::write_slots("
                                 f'fs::path({to_path}).string() + ".ref", '
                                 f"{data_expr}.{field})")
+                    if hw:
+                        stem = hw_stem_or_raise()
+                        self._register_hw_save(stem, to_path, to_ast)
+                        return (f"[&]() {{ auto _dir = {to_path}; "
+                                f"fs::create_directories(_dir.parent_path()); "
+                                f"auto&& _w = {data_expr}; "
+                                f"Serial::SerializeToFile(_dir, _w.{field}, SerType::BINARY); "
+                                f'niobium::compiler().probe("{stem}", _w.{field}); }}()')
                     return (f"[&]() {{ auto _dir = {to_path}; "
                             f"fs::create_directories(_dir.parent_path()); "
                             f"Serial::SerializeToFile(_dir, {data_expr}.{field}, SerType::BINARY); }}()")
                 if len(ct_fields) > 1:
                     # Multi-field enc wire type — save each field to {dir}/{field_name}.bin
+                    if hw:
+                        for f in ct_fields:
+                            self._register_hw_save(f.name, to_path, to_ast,
+                                                   field=f"{f.name}.bin")
+                        parts = [f"[&]() {{ auto _dir = fs::path({to_path}); "
+                                 f"fs::create_directories(_dir); "
+                                 f"auto&& _w = {data_expr}; "]
+                        for f in ct_fields:
+                            parts.append(
+                                f'Serial::SerializeToFile(_dir / "{f.name}.bin", '
+                                f"_w.{f.name}, SerType::BINARY); ")
+                            parts.append(
+                                f'niobium::compiler().probe("{f.name}", _w.{f.name}); ')
+                        parts.append("}()")
+                        return "".join(parts)
                     parts = [f"[&]() {{ auto _dir = fs::path({to_path}); "
                              f"fs::create_directories(_dir); "]
                     for f in ct_fields:
@@ -3392,6 +3512,12 @@ endforeach()
                             f"{data_expr}.{f.name}, SerType::BINARY); ")
                     parts.append("}()")
                     return "".join(parts)
+        if hw and positional and self._is_encrypted_expr(positional[0].value):
+            stem = hw_stem_or_raise()
+            self._register_hw_save(stem, to_path, to_ast)
+            return (f"[&]() {{ auto&& _ct = {data_expr}; "
+                    f"Serial::SerializeToFile({to_path}, _ct, SerType::BINARY); "
+                    f'niobium::compiler().probe("{stem}", _ct); }}()')
         return f"Serial::SerializeToFile({to_path}, {data_expr}, SerType::BINARY)"
 
     def _gen_save_secret_key(self, args: list[ast.Arg]) -> str:

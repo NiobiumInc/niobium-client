@@ -532,6 +532,70 @@ def test_norelin_operator():
     assert "EvalMultNoRelin" in impl
 
 
+def test_hardware_save_probe_and_rehydrate():
+    """save() inside an @hardware stage must probe each output during the
+    record pass and reconstruct it via result() in main()'s replay branch —
+    the stage body never runs on a cache-valid run, so without this the
+    saved files replay as stale/empty (furever-home bug)."""
+    files = compile_str("""
+    struct Instance { ring_dim: u32 }
+    wire EncOut { ciphertext: enc<f64> }
+    fn outdir(inst: Instance) -> path { "io" / "out" }
+    @server @stage(name: "compute") @hardware(cache_key: ["wl"])
+    fn compute(inst: Instance) {
+        let ct: enc<f64> = zero()
+        save(EncOut { ciphertext: ct }, to: outdir(inst) / "first_output.bin")
+        save(EncOut { ciphertext: ct }, to: outdir(inst) / "second_output.bin")
+    }
+    """)
+    cpp = files["compute.cpp"]
+    # Record pass: each save() also probes, making the ct a trace live-out.
+    # The probe name is the save() filename's stem — nothing is hardcoded.
+    assert 'niobium::compiler().probe("first_output"' in cpp
+    assert 'niobium::compiler().probe("second_output"' in cpp
+    # Replay branch: each save() site is rehydrated via result() and
+    # re-serialized to the same path.
+    replay_branch = cpp.split("} else {")[1]
+    assert 'result(cc, "first_output"' in replay_branch
+    assert 'result(cc, "second_output"' in replay_branch
+    assert replay_branch.count("SerializeToFile") >= 2
+
+
+def test_hardware_save_duplicate_stem_rejected():
+    from xcomp.codegen import CodegenError
+    try:
+        compile_str("""
+        struct Instance { ring_dim: u32 }
+        wire EncOut { ciphertext: enc<f64> }
+        fn encdir(inst: Instance) -> path { "io" / "encrypted" }
+        @server @stage(name: "compute") @hardware(cache_key: ["wl"])
+        fn compute(inst: Instance) {
+            let ct: enc<f64> = zero()
+            save(EncOut { ciphertext: ct }, to: encdir(inst) / "out.bin")
+            save(EncOut { ciphertext: ct }, to: encdir(inst) / "sub" / "out.bin")
+        }
+        """)
+        assert False, "expected CodegenError for duplicate save() stem"
+    except CodegenError as e:
+        assert "not unique" in str(e)
+
+
+def test_client_save_has_no_probe():
+    """Only @hardware stages probe their save()s — client stages and
+    non-hardware servers keep the plain serialization."""
+    files = compile_str("""
+    struct Instance { ring_dim: u32 }
+    wire EncOut { ciphertext: enc<f64> }
+    fn encdir(inst: Instance) -> path { "io" / "encrypted" }
+    @client @stage(name: "enc")
+    fn enc_stage(inst: Instance) {
+        let ct: enc<f64> = zero()
+        save(EncOut { ciphertext: ct }, to: encdir(inst) / "input.bin")
+    }
+    """)
+    assert "probe(" not in files["enc.cpp"]
+
+
 def test_closure_generation():
     files = compile_str("""
     fn f() {
