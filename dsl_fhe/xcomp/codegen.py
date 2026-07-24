@@ -147,6 +147,7 @@ class CodeGenerator:
         # <stage>_ref.cpp translation units.
         self._plain_mode: bool = False
         self._current_stage_hardware: bool = False
+        self._current_stage_domain: Domain | None = None
         # save() sites inside the current @hardware stage body. A cache-valid
         # run executes zero FHE ops (the stage function is never called), so
         # every save()d ciphertext must be probe()d during recording and
@@ -1019,6 +1020,7 @@ endforeach()
         # each input load() (see _gen_let_stmt).
         self._current_fn = stage.fn
         self._current_stage_hardware = bool(stage.hardware)
+        self._current_stage_domain = stage.domain
         self._hw_stage_saves = []
         self._local_var_cpp_types.clear()
         self._declared_vars.clear()
@@ -3408,6 +3410,11 @@ endforeach()
         """Record a @hardware save() site for main()'s replay-branch
         rehydration, validating that the probe name is unique and that the
         path expression is re-evaluable from main() (stage args + consts)."""
+        if self._current_stage_domain != Domain.SERVER:
+            raise CodegenError(
+                f"@hardware stage '{self._current_fn.name}': save() replay "
+                f"reconstruction needs the CryptoContext, which main() only "
+                f"loads for @server stages — mark the stage @server")
         taken = {s["stem"] for s in self._hw_stage_saves} | {"result"}
         if stem in taken:
             raise CodegenError(
@@ -3468,8 +3475,7 @@ endforeach()
             wire_def = next((w for w in self.wires if w.name == type_name), None)
             if wire_def:
                 ct_fields = [f for f in wire_def.fields
-                             if (f.type_ann and isinstance(f.type_ann, ast.EncType))
-                             or f.name in ("ciphertext", "score", "query", "result")]
+                             if self._field_kind(f) == "enc"]
                 if len(ct_fields) == 1:
                     field = ct_fields[0].name
                     if self._plain_mode:
