@@ -2,9 +2,9 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-07-23
+Generated: 2026-07-24
 Tool: SCANOSS (snippet detection with License dataset)
-Components: 84
+Components: 77
 
 This file lists all third-party software components detected
 in this repository, along with their licenses and copyright
@@ -15,10 +15,6 @@ notices as required by those licenses.
 WARNING: The following component(s) have no license information.
 These require manual review to determine licensing terms.
 
-  - automated-fuzzer (https://github.com/qarmin/Automated-Fuzzer)
-  - PaperFriend-desktop-app (https://github.com/CSE201-project/PaperFriend-desktop-app)
-  - pkcs11_solid (https://github.com/AndreanIvan/pkcs11_solid)
-  - Snake (https://github.com/ILTZ/Snake)
   - startle (https://github.com/raphael-group/startle)
 
 ------------------------------------------------------------
@@ -43,7 +39,7 @@ LICENSE SUMMARY
   BSD-2-Clause AND LGPL-2.1-only: 1 component(s)
   BSD-2-Clause-Darwin: 1 component(s)
   BSD-2-Clause-Patent: 1 component(s)
-  BSD-3-Clause: 34 component(s)
+  BSD-3-Clause: 33 component(s)
   BSD-3-Clause AND GPL-2.0-only AND BSD-3-Clause OR GPL-2.0-or-later AND GPL-1.0-or-later: 1 component(s)
   BSD-3-Clause AND ISC AND ISC AND MIT AND MIT: 1 component(s)
   BSD-3-Clause-LBNL: 1 component(s)
@@ -106,7 +102,7 @@ LICENSE SUMMARY
   GPL-2.0-or-later [COPYLEFT]: 2 component(s)
   GPL-3.0-linking-exception: 1 component(s)
   GPL-3.0-linking-source-exception: 1 component(s)
-  GPL-3.0-only [COPYLEFT]: 5 component(s)
+  GPL-3.0-only [COPYLEFT]: 4 component(s)
   GPL-3.0-only AND BSD-3-Clause AND GPL-1.0-or-later AND GPL-2.0-only: 1 component(s)
   GPL-3.0-only AND GPL-1.0-or-later AND BSD-3-Clause: 1 component(s)
   GPL-3.0-or-later AND FSFAP: 1 component(s)
@@ -160,7 +156,7 @@ LICENSE SUMMARY
   MPL-1.1 [COPYLEFT]: 1 component(s)
   MPL-2.0 [COPYLEFT]: 2 component(s)
   MPL-2.0 AND Apache-2.0: 1 component(s)
-  NCSA: 4 component(s)
+  NCSA: 3 component(s)
   OFL-1.1 [COPYLEFT]: 1 component(s)
   OFL-1.1 AND Apache-2.0: 1 component(s)
   OLDAP-2.8: 1 component(s)
@@ -208,12 +204,6 @@ COMPONENT ATTRIBUTIONS
   Copyright:
     Copyright 2007; Google Inc.
   License: BSD-3-Clause
-
-  automated-fuzzer
-  Version: test
-  Source: https://github.com/qarmin/Automated-Fuzzer
-  PURL: pkg:github/qarmin/automated-fuzzer
-  License: UNKNOWN — requires manual review
 
   aview
   Version: 1.3.0rc1-6
@@ -487,12 +477,6 @@ COMPONENT ATTRIBUTIONS
     Copyright 2008 Google Inc.
   License: LGPL-2.1-only
 
-  Fuzzer
-  Version: 16f5f74
-  Source: https://gitee.com/local-grpc/Fuzzer
-  PURL: pkg:gitee/local-grpc/fuzzer
-  License: NCSA
-
   gcc
   Version: basepoints
   Source: https://github.com/gcc-mirror/gcc
@@ -638,17 +622,18 @@ COMPONENT ATTRIBUTIONS
     Copyright 2005 ; Google Inc.
     Copyright 2008 ; Google Inc.
     Copyright 2014 gperftools Contributors
+    Copyright 2023 gperftools Contributors
     Copyright (c) 2000; Google Inc.
     Copyright (c) 2003; Google Inc.
     Copyright (c) 2004; Google Inc.
     Copyright (c) 2006; Google Inc.
     Copyright (c) 2007; Google Inc.
+    Copyright (c) 2008-2009; Google Inc.
     Copyright (c) 2009; Google Inc.
     Copyright (c) 2011; Google Inc.
     Copyright (c) 2013; Google Inc.
     Copyright (c) 2021; IBM Ltd.
     Copyright (c) 2021; gperftools Contributors
-    Copyright (c) 2023; gperftools Contributors
     Copyright (c) 2024; gperftools Contributors
   License: BSD-3-Clause
 
@@ -1055,15 +1040,6 @@ COMPONENT ATTRIBUTIONS
     Copyright 2024 Google Inc
   License: GPL-3.0-only
 
-  PaperFriend-desktop-app
-  Version: cse201_final
-  Source: https://github.com/CSE201-project/PaperFriend-desktop-app
-  PURL: pkg:github/cse201-project/paperfriend-desktop-app
-  Copyright:
-    Copyright COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM; DAMAGES OR OTHER LIABILITY; WHETHER IN AN ACTION OF CONTRACT; TORT OR OTHERWISE; ARI
-    Copyright copyright interest in the
-  License: UNKNOWN — requires manual review
-
   pf2
   Version: v0.7.0
   Source: https://github.com/osyoyu/pf2
@@ -1073,14 +1049,6 @@ COMPONENT ATTRIBUTIONS
     Copyright 2016 Google Inc. All Rights Reserved
     Copyright 2023 Daisuke Aritomo
   License: BSD-3-Clause, MIT
-
-  pkcs11_solid
-  Version: result-addition
-  Source: https://github.com/AndreanIvan/pkcs11_solid
-  PURL: pkg:github/andreanivan/pkcs11_solid
-  Copyright:
-    Copyright 2007; Google Inc.
-  License: UNKNOWN — requires manual review
 
   platform/external/google-benchmark
   Version: platform-tools-30.0.1
@@ -1132,15 +1100,6 @@ COMPONENT ATTRIBUTIONS
   PURL: pkg:github/nettrino/slowfuzz
   License: NCSA
 
-  Snake
-  Version: v1.0.0
-  Source: https://github.com/ILTZ/Snake
-  PURL: pkg:github/iltz/snake
-  Copyright:
-    Copyright COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM; DAMAGES OR OTHER LIABILITY; WHETHER IN AN ACTION OF CONTRACT; TORT OR OTHERWISE; ARI
-    Copyright (C) 2007-2018 Laurent Gomila - laurent@sfml-dev.org
-  License: UNKNOWN — requires manual review
-
   startle
   Version: v1.1.0
   Source: https://github.com/raphael-group/startle
@@ -1152,22 +1111,6 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2018 Pranav Srinivas Kumar <pranav.srinivas.kumar@gmail.com>
     Copyright 2008; Google Inc.
   License: UNKNOWN — requires manual review
-
-  subconverter-extended
-  Version: v1.0.24
-  Source: https://github.com/aethersailor/subconverter-extended
-  PURL: pkg:github/aethersailor/subconverter-extended
-  Copyright:
-    Copyright 2026 Yuji Hirose. All rights reserved
-  License: GPL-3.0-only
-
-  Task_2
-  Version: 3
-  Source: https://github.com/VishnenkoMaxim/Task_2
-  PURL: pkg:github/vishnenkomaxim/task_2
-  Copyright:
-    Copyright 2008 Google Inc
-  License: BSD-3-Clause
 
   tcmalloc
   Version: gperftools-2.1.90
@@ -3417,7 +3360,7 @@ comply.
 
 
 
---- LGPL-3.0-only AND CC-BY-SA-3.0 ---
+--- LGPL-3.0-only ---
 
 This program is free software: you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the Free
@@ -3433,7 +3376,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 Full license text: https://www.gnu.org/licenses/gpl-3.0.html
 
 
---- LGPL-3.0-only ---
+--- LGPL-3.0-only AND CC-BY-SA-3.0 ---
 
 This program is free software: you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the Free
@@ -10395,26 +10338,6 @@ The licence and distribution terms for any publically available version or deriv
 
 
 
---- NCSA ---
-
-University of Illinois/NCSA Open Source License
-
-Copyright (c) <Year> <Owner Organization Name>. All rights reserved.
-
-Developed by: <Name of Development Group> <Name of Institution> <URL for Development Group/Institution>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal with the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-     * Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimers.
-
-     * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimers in the documentation and/or other materials provided with the distribution.
-
-     * Neither the names of <Name of Development Group, Name of Institution>, nor the names of its contributors may be used to endorse or promote products derived from this Software without specific prior written permission.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE SOFTWARE.
-
-
-
 --- BSD-3-Clause-LBNL ---
 
 Redistribution and use in source and binary forms, with or without
@@ -10441,6 +10364,26 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+--- NCSA ---
+
+University of Illinois/NCSA Open Source License
+
+Copyright (c) <Year> <Owner Organization Name>. All rights reserved.
+
+Developed by: <Name of Development Group> <Name of Institution> <URL for Development Group/Institution>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal with the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+     * Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimers.
+
+     * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimers in the documentation and/or other materials provided with the distribution.
+
+     * Neither the names of <Name of Development Group, Name of Institution>, nor the names of its contributors may be used to endorse or promote products derived from this Software without specific prior written permission.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE SOFTWARE.
+
 
 
 --- Apache-2.0 WITH LLVM-exception AND NCSA AND NCSA OR MIT AND NCSA AND MIT ---
