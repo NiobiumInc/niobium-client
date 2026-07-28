@@ -2,9 +2,9 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-07-27
+Generated: 2026-07-28
 Tool: SCANOSS (snippet detection with License dataset)
-Components: 77
+Components: 75
 
 This file lists all third-party software components detected
 in this repository, along with their licenses and copyright
@@ -26,7 +26,7 @@ LICENSE SUMMARY
   AFL-2.1: 1 component(s)
   AFL-3.0 AND GPL-2.0-only AND AFL-2.1 AND GPL-2.0-or-later AND MIT AND GPL-1.0-or-later: 1 component(s)
   AGPL-3.0-only [COPYLEFT]: 1 component(s)
-  Apache-2.0: 17 component(s)
+  Apache-2.0: 16 component(s)
   Apache-2.0 AND Apache-2.0 AND OpenSSL: 1 component(s)
   Apache-2.0 WITH LLVM-exception: 3 component(s)
   Apache-2.0 WITH LLVM-exception AND NCSA: 2 component(s)
@@ -39,7 +39,7 @@ LICENSE SUMMARY
   BSD-2-Clause AND LGPL-2.1-only: 1 component(s)
   BSD-2-Clause-Darwin: 1 component(s)
   BSD-2-Clause-Patent: 1 component(s)
-  BSD-3-Clause: 33 component(s)
+  BSD-3-Clause: 32 component(s)
   BSD-3-Clause AND GPL-2.0-only AND BSD-3-Clause OR GPL-2.0-or-later AND GPL-1.0-or-later: 1 component(s)
   BSD-3-Clause AND ISC AND ISC AND MIT AND MIT: 1 component(s)
   BSD-3-Clause-LBNL: 1 component(s)
@@ -116,7 +116,6 @@ LICENSE SUMMARY
   ICU: 1 component(s)
   ISC: 2 component(s)
   ISC AND BSD-Source-Code AND BSD-3-Clause AND BSD-2-Clause AND Zlib: 1 component(s)
-  Jam: 1 component(s)
   LGPL-2.0-only [COPYLEFT]: 1 component(s)
   LGPL-2.0-or-later AND LGPL-2.1-or-later: 1 component(s)
   LGPL-2.1-only [COPYLEFT]: 3 component(s)
@@ -284,32 +283,6 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2017; Juan Pedro Bolivar Puente
     Copyright (c) 2017; Randolph Voorhies; Shane Grant
     Copyright (c) 2018; Shane Grant
-  License: BSD-3-Clause
-
-  chemicalfun
-  Version: v0.1.8
-  Source: https://bitbucket.org/gems4/chemicalfun/get/v0.1.8.zip
-  PURL: pkg:bitbucket/gems4/chemicalfun
-  Copyright:
-    Copyright 2005 Google Inc. All Rights Reserved
-    Copyright 2009 Google Inc. All Rights Reserved
-    Copyright 2015 Google Inc. All rights reserved
-    Copyright 2018 Google LLC. All rights reserved
-    Copyright 2019 Google LLC. All Rights Reserved
-    Copyright 2020 Google Inc. All Rights Reserved
-    Copyright 2021 Google Inc. All Rights Reserved
-    Copyright 2005 Google Inc.
-    Copyright 2006; Google Inc.
-    Copyright 2007; Google Inc.
-    Copyright 2008; Google Inc.
-    Copyright 2009 Google Inc.
-    Copyright 2013; Google Inc.
-    Copyright 2015 Google Inc.
-    Copyright 2018 Google LLC.
-    Copyright 2019 Google LLC.
-    Copyright 2019; Google Inc.
-    Copyright 2020 Google Inc.
-    Copyright 2021 Google Inc.
   License: BSD-3-Clause
 
   chemicalfun
@@ -637,7 +610,7 @@ COMPONENT ATTRIBUTIONS
   License: BSD-3-Clause
 
   gperftools
-  Version: ab49985
+  Version: a81b2eb
   Source: https://github.com/alk/gperftools
   PURL: pkg:github/alk/gperftools
   Copyright:
@@ -646,18 +619,14 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2000; Google Inc.
     Copyright (c) 2003; Google Inc.
     Copyright (c) 2004; Google Inc.
-    Copyright (c) 2006; Google Inc.
     Copyright (c) 2007; Google Inc.
     Copyright (c) 2008-2009; Google Inc.
     Copyright (c) 2008; Google Inc.
-    Copyright (c) 2009; Google Inc.
-    Copyright (c) 2010 The Chromium Authors
-    Copyright (c) 2010 The Chromium Authors. All rights reserved.
     Copyright (c) 2011; Google Inc.
-    Copyright (c) 2013; Google Inc.
     Copyright (c) 2014; 2024; gperftools Contributors
     Copyright (c) 2014; gperftools Contributors
     Copyright (c) 2024; gperftools Contributors
+    Copyright 2009 Google Inc.
     Copyright 2009 Google Inc. All Rights Reserved.
   License: BSD-3-Clause
 
@@ -965,15 +934,6 @@ COMPONENT ATTRIBUTIONS
   License: MIT
 
   nurikit
-  Version: v0.1.0a14.post0
-  Source: https://github.com/seoklab/nurikit
-  PURL: pkg:github/seoklab/nurikit
-  Copyright:
-    Copyright 2017 Google Inc
-    Copyright 2007; Google Inc.
-  License: Apache-2.0
-
-  nurikit
   Version: 0.1.0a14.post0
   Source: https://pypi.org/project/nurikit
   PURL: pkg:pypi/nurikit
@@ -1055,7 +1015,7 @@ COMPONENT ATTRIBUTIONS
   Copyright:
     Copyright 2015 Google Inc. All rights reserved
     Copyright 2015 Google Inc.
-  License: Apache-2.0, Jam
+  License: Apache-2.0
 
   platform/external/googletest
   Version: studio-2024.3.1
@@ -10403,14 +10363,4 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-
---- Jam ---
-
-License is hereby granted to use this software and distribute it freely,
-as long as this copyright notice is retained and modifications are
-clearly marked.
-
-ALL WARRANTIES ARE HEREBY DISCLAIMED.
-
 
