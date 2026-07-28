@@ -414,37 +414,29 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && exec $SHELL
 fog --help
 ```
 
-### 4. Log in and submit a job
+### 4. Log in and submit a sample job
 
 ```bash
 fog init                                    # optional: write ~/.fog/config with defaults
 fog login -u you@example.com                # prompts for password; mints + stores an API key
-fog submit ./build/examples/mult_server mult_keys --target=FOG
+cd build/examples
+./mult_client mult_keys 7 13 65536          # will create the mult_keys directory, generate keys, and encrypt(ring dimension of 2^16)
+fog submit ./mult_server mult_keys --target=FOG
 fog list                                    # watch your jobs
+./mult_decrypt mult_keys                    #decrypt the results
 ```
 
 `fog submit ./app --target=FOG …` provisions a Fog job, blocks until a worker is
 assigned, then `exec`s `./app` with `NBCC_FHETCH_SERVER`/`NBCC_FHETCH_TOKEN` set
 so its `replay()` runs on that worker. Everything after the program name is
-passed straight through to your app; `--target` is the one flag `fog` itself
-reads.
-
-### 5. End-to-end: the `mult` example on Fog
+passed straight through to your app. 
 
 The `mult_*` example is a three-step client → server → decrypt split. The client
 generates keys and encrypts two integers, the server multiplies them on a Fog
-worker, and decrypt reveals the product. Run it from `build/examples`:
-
-```bash
-cd build/examples
-./mult_client mult_keys 7 13 65536              # keygen + encrypt (ring dim 2^16)
-fog submit ./mult_server mult_keys --target=FOG # multiply on a Fog worker
-./mult_decrypt mult_keys                         # → 91
-```
-
-`mult_client`'s last argument is the ring dimension (`65536` = 2^16); the two
-integers before it are the operands. `fog submit` wraps `mult_server` so its
-`replay()` dispatches to the assigned worker instead of the local simulator.
+worker, and decrypt reveals the product. `mult_client`'s last argument is the ring 
+dimension (`65536` = 2^16); the two integers before it are the operands. 
+`fog submit` wraps `mult_server` so its `replay()` dispatches to the assigned worker 
+instead of the local simulator.
 
 ### `fog` command reference
 
