@@ -179,20 +179,46 @@ int main(int argc, char** argv) {
     // the whole trace never sits in RAM — the archive dominates forwarder
     // memory. stream_archive() emits everything in one provider invocation,
     // then we signal completion via sink.done().
+    //
+    // Progress: the emit lambda sees every byte on its way to the socket, so a
+    // running total against body_len is all it takes — no need for httplib's
+    // UploadProgress (which would mean giving up the unknown-length overload).
+    // ponytail: reprint only when the whole percent changes; stream_archive
+    // emits at 1 MiB granularity, so per-write printing would be ~1 line/MiB.
+    std::uint64_t sent = 0;
+    int last_pct = -1;
     auto res = cli.Post(
         replay_path, headers,
-        [&entries](std::size_t /*offset*/, httplib::DataSink& sink) -> bool {
+        [&](std::size_t /*offset*/, httplib::DataSink& sink) -> bool {
             try {
                 if (!nft::stream_archive(entries,
-                        [&sink](const char* d, std::size_t n) {
-                            return sink.write(d, n);
+                        [&](const char* d, std::size_t n) {
+                            if (!sink.write(d, n)) return false;
+                            sent += n;
+                            const int pct = body_len
+                                ? static_cast<int>(sent * 100 / body_len) : 100;
+                            if (pct != last_pct) {
+                                last_pct = pct;
+                                std::fprintf(stderr,
+                                    "\r[fog] upload %llu/%llu MB (%d%%)",
+                                    static_cast<unsigned long long>(sent >> 20),
+                                    static_cast<unsigned long long>(body_len >> 20),
+                                    pct);
+                            }
+                            return true;
                         })) {
+                    std::fprintf(stderr, "\n");
                     return false;  // sink closed
                 }
                 sink.done();
+                // Last output before the Post() call blocks on the response —
+                // say what we're waiting on so a long replay doesn't look hung.
+                std::fprintf(stderr,
+                    "\n[fog] upload complete — replaying on target %s, "
+                    "waiting for the server\n", args.target.c_str());
                 return true;
             } catch (const std::exception& e) {
-                std::cerr << "[nbcc_fhetch_replay] stream failed: "
+                std::cerr << "\n[nbcc_fhetch_replay] stream failed: "
                           << e.what() << "\n";
                 return false;
             }
