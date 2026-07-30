@@ -1770,25 +1770,59 @@ endforeach()
                 self._emit_ct_io(action, f'"{base}"', f"result.{f.name}")
             elif (ann and isinstance(ann, ast.VecType) and ann.elem
                   and isinstance(ann.elem, ast.EncType)):
-                self.wl(f"for (size_t _i = 0; _i < result.{f.name}.size(); ++_i) {{")
-                self.indent()
-                self._emit_ct_io(action,
-                                 f'"{base}_" + std::to_string(_i)',
-                                 f"result.{f.name}[_i]")
-                self.dedent()
-                self.wl("}")
+                if action == "probe":
+                    self.wl(f"for (size_t _i = 0; _i < result.{f.name}.size(); ++_i) {{")
+                    self.indent()
+                    self._emit_ct_io(action,
+                                     f'"{base}_" + std::to_string(_i)',
+                                     f"result.{f.name}[_i]")
+                    self.dedent()
+                    self.wl("}")
+                else:
+                    # Replay branch: the stage body never ran, so result.{f.name}
+                    # is an empty vector — a .size()-driven loop would rehydrate
+                    # nothing (only scalar fields would round-trip, and the
+                    # per-element .bin files would never be written). Grow the
+                    # vector by rehydrating result_<field>_<i> until a probe is
+                    # absent (result() returns false, printing one benign
+                    # "not found" line, at index == count).
+                    self.wl(f"for (size_t _i = 0; ; ++_i) {{")
+                    self.indent()
+                    self.wl("Ciphertext<DCRTPoly> _rehydrated;")
+                    self.wl(f'if (!niobium::compiler().result(cc, "{base}_" + std::to_string(_i), _rehydrated)) break;')
+                    self.wl(f"result.{f.name}.push_back(_rehydrated);")
+                    self.dedent()
+                    self.wl("}")
             elif (ann and isinstance(ann, ast.VecType) and ann.elem
                   and isinstance(ann.elem, ast.VecType)
                   and ann.elem.elem and isinstance(ann.elem.elem, ast.EncType)):
                 # vec<vec<enc>> — e.g. EncryptedDB rows/payloads
-                self.wl(f"for (size_t _b = 0; _b < result.{f.name}.size(); ++_b)")
-                self.wl(f"for (size_t _i = 0; _i < result.{f.name}[_b].size(); ++_i) {{")
-                self.indent()
-                self._emit_ct_io(action,
-                                 f'"{base}_" + std::to_string(_b) + "_" + std::to_string(_i)',
-                                 f"result.{f.name}[_b][_i]")
-                self.dedent()
-                self.wl("}")
+                if action == "probe":
+                    self.wl(f"for (size_t _b = 0; _b < result.{f.name}.size(); ++_b)")
+                    self.wl(f"for (size_t _i = 0; _i < result.{f.name}[_b].size(); ++_i) {{")
+                    self.indent()
+                    self._emit_ct_io(action,
+                                     f'"{base}_" + std::to_string(_b) + "_" + std::to_string(_i)',
+                                     f"result.{f.name}[_b][_i]")
+                    self.dedent()
+                    self.wl("}")
+                else:
+                    # Replay branch: grow both dimensions until probes run out
+                    # (see the vec<enc> case above for why .size() can't drive it).
+                    self.wl(f"for (size_t _b = 0; ; ++_b) {{")
+                    self.indent()
+                    self.wl("std::vector<Ciphertext<DCRTPoly>> _row;")
+                    self.wl(f"for (size_t _i = 0; ; ++_i) {{")
+                    self.indent()
+                    self.wl("Ciphertext<DCRTPoly> _rehydrated;")
+                    self.wl(f'if (!niobium::compiler().result(cc, "{base}_" + std::to_string(_b) + "_" + std::to_string(_i), _rehydrated)) break;')
+                    self.wl("_row.push_back(_rehydrated);")
+                    self.dedent()
+                    self.wl("}")
+                    self.wl("if (_row.empty()) break;")
+                    self.wl(f"result.{f.name}.push_back(_row);")
+                    self.dedent()
+                    self.wl("}")
 
     def _emit_ct_io(self, action: str, name_expr: str, lvalue: str):
         if action == "probe":
