@@ -103,7 +103,7 @@ NATIVEOPT ?= OFF
 # Targets
 # ==============================================================================
 
-.PHONY: help sync sync-submodules update-openfhe update-niobium-fhetch \
+.PHONY: help sync sync-submodules sync-fhetch sync-haze sync-skill update-openfhe update-niobium-fhetch \
         config config-release build build-release release \
         config-openfhe config-openfhe-release build-openfhe build-openfhe-release \
         config-client config-client-release \

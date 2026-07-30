@@ -27,8 +27,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-git clone --quiet "$REPO_URL" "$TMP/niobium-skills"
-git -C "$TMP/niobium-skills" checkout --quiet "$SKILL_REF"
+# Shallow-clone the ref directly when it is a branch or tag; fall back to a
+# full clone + checkout for a pinned commit SHA (which --branch cannot fetch).
+if git clone --quiet --depth 1 --branch "$SKILL_REF" "$REPO_URL" "$TMP/niobium-skills" 2>/dev/null; then
+  :
+else
+  git clone --quiet "$REPO_URL" "$TMP/niobium-skills"
+  git -C "$TMP/niobium-skills" checkout --quiet "$SKILL_REF"
+fi
 RESOLVED="$(git -C "$TMP/niobium-skills" rev-parse HEAD)"
 
 for dest in .claude/skills .agents/skills; do
