@@ -39,7 +39,7 @@ There are four ways in, by audience:
 
 | You are… | Entry point | Start here |
 |---|---|---|
-| **An AI coding agent** (or pairing with one) | **nb DSL + design skill** — an 8-stage FHE design methodology that auto-loads for Claude Code, OpenAI Codex, and other agentskills.io-compatible agents, paired with a compact DSL whose compiler generates all the plumbing | [`dsl_fhe/`](dsl_fhe/README.md), [`.claude/skills/`](.claude/skills/fhe-application-design) & [`.agents/skills/`](.agents/skills/fhe-application-design) |
+| **An AI coding agent** (or pairing with one) | **nb DSL + design skill** — a staged FHE design methodology that auto-loads for Claude Code, OpenAI Codex, and other agentskills.io-compatible agents, paired with a compact DSL whose compiler generates all the plumbing | [`dsl_fhe/`](dsl_fhe/README.md), [`.claude/skills/`](.claude/skills/fhe-application-design) & [`.agents/skills/`](.agents/skills/fhe-application-design) |
 | **An application developer** with OpenFHE C++ | **Instrumented OpenFHE** — write standard `EvalMult`/`EvalAdd`/… code, bracket it with `niobium::compiler()` calls; probes record everything | [Instrumenting an OpenFHE application](#entry-point-2--openfhe-for-application-developers), [`examples/`](examples/) |
 | **A compiler / code-generator author** | **FHETCH Polynomial IR** — emit the IR directly through the recording API (or the text trace format) and use the session, replay, and transport machinery as your backend | [`niobium-fhetch`](https://github.com/NiobiumInc/niobium-fhetch), [`src/fhetch_transport/`](src/fhetch_transport/) |
 | **An FHE library integrator** (GPU/accelerator back-ends) | **HAZE** — a CUDA-shaped C API (`hazeMalloc`/`hazeMemcpy`/`hazeNTT`/…): each call records one polynomial-level IR op, so CUDA-targeting FHE libraries port with minimal effort | [`vendor/niobium-haze`](https://github.com/NiobiumInc/niobium-haze) |
@@ -98,13 +98,13 @@ internals, see the companion repository:
 The combination is designed so an AI coding agent can take an application from
 *privacy model* to *verified encrypted pipeline* in one session:
 
-- **The design skill** (vendored from the
+- **The design skill** (installed from the
   [`niobium-skills`](https://github.com/NiobiumInc/niobium-skills)
-  catalog into both [`.claude/skills/fhe-application-design`](.claude/skills/fhe-application-design)
+  catalog via `make sync-skill` into both [`.claude/skills/fhe-application-design`](.claude/skills/fhe-application-design)
   and [`.agents/skills/fhe-application-design`](.agents/skills/fhe-application-design))
   auto-loads in this repository for Claude Code (from `.claude/skills/`), OpenAI
   Codex, and other agentskills.io-compatible agents (from `.agents/skills/`). It
-  walks the 8-stage methodology — privacy model, feasibility, plaintext ground truth, scheme
+  walks the staged methodology — privacy model, feasibility, plaintext ground truth, scheme
   selection, circuit design, parameter selection, implementation, protocol
   spec — and its Stage 7 "Track A" targets the DSL below.
 
@@ -332,25 +332,28 @@ one tree.
   `vendor/niobium-fhetch/vendor/openfhe`)
 - Python 3 (DSL compiler + example harnesses)
 
-### Updating the vendored design skill
+### Installing the design skill
 
-The FHE design skill is **vendored** (its files are committed into
-`.claude/skills/fhe-application-design/` and `.agents/skills/fhe-application-design/`),
-not mounted as a submodule — the skill lives in a `skills/<name>/` subdirectory
-of the upstream catalog, which a submodule can't mount, and committing the files
-keeps a plain `git clone` working on every platform. Each copy records the
+The FHE design skill is **installed on demand**, not committed. It lives in a
+`skills/<name>/` subdirectory of the upstream catalog (which a submodule can't
+mount), so `make sync-skill` copies it into both
+`.claude/skills/fhe-application-design/` and
+`.agents/skills/fhe-application-design/` (both gitignored). Each copy records the
 upstream commit it came from in a `.vendored-from` file.
 
-To bump the skill to a newer upstream commit, run the refresh script with a ref
-and commit the result:
+Run it any time to install or update — it re-fetches the catalog and overwrites
+the installed copies in place:
 
 ```bash
-scripts/update-fhe-skill.sh <git-ref>   # re-vendors both copies, updates .vendored-from
-git add .claude/skills/fhe-application-design .agents/skills/fhe-application-design
-git commit -m "chore: bump fhe-application-design skill to <git-ref>"
+make sync-skill                          # install or update from the default branch
+scripts/update-fhe-skill.sh <git-ref>    # install or update from a specific commit, tag, or branch
 ```
 
-It is a manual step — nothing fetches the skill at build or clone time.
+Catalog end users can instead install with the skills.sh CLI:
+
+```bash
+npx skills add NiobiumInc/niobium-skills --skill fhe-application-design
+```
 
 ## Fog quickstart
 
@@ -396,10 +399,16 @@ sudo apt install -y build-essential cmake libssl-dev python3 git
 ### 3. Build and install the CLI
 
 ```bash
-make sync         # fetch submodules: niobium-fhetch + nested OpenFHE + json
+make sync         # fetch submodules: niobium-fhetch + nested OpenFHE + json + niobium-haze
 make release      # build OpenFHE + libnbfhetch + transport client + examples (Release)
 make install-cli  # install fog + nbcc_fhetch_replay to ~/.local/bin
+make sync-skill   # install the FHE design skill into .claude + .agents
 ```
+
+Use `make sync-fhetch` in place of `make sync` to fetch only niobium-fhetch and
+its nested OpenFHE, skipping the GPU-oriented `niobium-haze` submodule (nothing
+in the default build needs it). `make sync-haze` fetches haze on its own for
+GPU-oriented applications.
 
 `make install-cli` copies the standalone `fog` script plus the
 `nbcc_fhetch_replay` transport client that `fog` hands each job off to at submit
@@ -490,10 +499,10 @@ a bundle to verify against; otherwise it uses the OS trust store and honors
 
 ```
 niobium-client/
-  .claude/skills/
-    fhe-application-design/   # vendored: the 8-stage FHE design skill (AI agents)
-  .agents/skills/
-    fhe-application-design/   # same skill, .agents/ convention (Codex / agentskills.io)
+  .claude/skills/             # installed by `make sync-skill` (gitignored)
+    fhe-application-design/   # the FHE design skill (AI agents)
+  .agents/skills/             # same skill, .agents/ convention (Codex / agentskills.io)
+    fhe-application-design/
   dsl_fhe/                    # nb DSL + cross-compiler (nbc) — entry point 1
     xcomp/                    # the compiler: lexer, parser, semantic, codegen
     tools/                    # replay-integrity verifier, ...
