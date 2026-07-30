@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Refresh the vendored fhe-application-design skill from the niobium-skills catalog.
+# Install the fhe-application-design skill from the niobium-skills catalog into
+# both .claude/skills/ and .agents/skills/.
 #
-# The skill is vendored (committed) into both .claude/skills/ and .agents/skills/
-# rather than mounted as a submodule, because the catalog keeps the skill under
-# skills/<name>/ (a submodule can't mount a subdirectory) and symlinks are
-# Windows-fragile. This script re-vendors both copies from a pinned ref and
-# records the provenance in each copy's .vendored-from file.
+# The skill is installed on demand (via `make sync-skill`) rather than committed
+# or mounted as a submodule: the catalog keeps the skill under skills/<name>/
+# (a submodule can't mount a subdirectory) and symlinks are Windows-fragile. The
+# installed copies are gitignored. This script writes both copies from the given
+# ref and records the provenance in each copy's .vendored-from file.
 #
 # Usage:
 #   scripts/update-fhe-skill.sh [<git-ref>]
@@ -15,10 +16,7 @@
 # Tool-agnostic on purpose: plain `git clone` + `tar`, no npx / network-quirk
 # dependencies, so it runs the same locally and in restricted CI.
 #
-# NOTE: the catalog layout (skills/<name>/) currently lives on the
-# refactor/skill-directory-layout branch, not main, so until it merges pass an
-# explicit ref:
-#   scripts/update-fhe-skill.sh refactor/skill-directory-layout
+# Wired into `make sync-skill`, which runs this with the default ref.
 set -euo pipefail
 
 REPO_URL="https://github.com/NiobiumInc/niobium-skills"

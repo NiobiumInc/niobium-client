@@ -128,6 +128,15 @@ sync: sync-submodules ## Sync all submodules (recursive) — niobium-fhetch + it
 sync-submodules: ## Sync niobium-fhetch and its nested submodules
 	git submodule update --init --recursive
 
+sync-fhetch: ## Sync only niobium-fhetch + its nested submodules (openfhe/json; no haze)
+	git submodule update --init --recursive vendor/niobium-fhetch
+
+sync-haze: ## Sync only niobium-haze + its nested submodules (GPU / FIDESlib integrators)
+	git submodule update --init --recursive vendor/niobium-haze
+
+sync-skill: ## Install the fhe-application-design skill (latest main) into .claude + .agents
+	scripts/update-fhe-skill.sh
+
 update-niobium-fhetch: ## Update niobium-fhetch to latest remote commit on main
 	cd $(FHETCH_DIR) && git fetch origin && git checkout main && git pull origin main
 

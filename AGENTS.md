@@ -4,11 +4,16 @@ Guidance for Claude Code (and other agents) working in this repository.
 
 > **Designing or building an FHE application? Read
 > [`.claude/skills/fhe-application-design/SKILL.md`](.claude/skills/fhe-application-design/SKILL.md)
-> first — do not skip the design stages.** It is an 8-stage design guide (privacy
+> first — do not skip the design stages.** It is a staged design guide (privacy
 > model → feasibility → scheme → circuit → SIMD data layout → parameters →
 > codegen). This applies whether you enter through the nb DSL (`dsl_fhe/`),
 > instrumented OpenFHE (`examples/`), or direct FHETCH IR — the design work comes
 > before the code either way.
+>
+> The skill is installed on demand, not committed: run `make sync-skill` to
+> install it into `.claude/skills/` and `.agents/skills/` (both gitignored). End
+> users of the catalog can instead run `npx skills add NiobiumInc/niobium-skills
+> --skill fhe-application-design`.
 
 ## Project Overview
 
@@ -36,7 +41,10 @@ See [`README.md`](README.md) for the full narrative and diagrams.
 ## Development Commands
 
 ```bash
-make sync                 # git submodule update --init --recursive
+make sync                 # git submodule update --init --recursive (includes niobium-haze)
+make sync-fhetch          # sync only niobium-fhetch + nested openfhe/json (skip haze)
+make sync-haze            # sync only niobium-haze (GPU / FIDESlib integrators)
+make sync-skill           # install the fhe-application-design skill into .claude + .agents
 
 make release              # configure + build OpenFHE + libnbfhetch + examples (Release)
 make config && make build # same, Debug (config once, then build)
@@ -103,10 +111,10 @@ niobium-client/
     fhetch_transport/       # trace transport client/server + archive
   examples/                 # hand-written OpenFHE examples (bootstrap, mult, simple_ops, ...)
   dsl_fhe/                  # DSL + cross-compiler (nbc); see dsl_fhe/README.md
-  .claude/skills/
-    fhe-application-design/ # vendored: 8-stage FHE design skill (AI agents)
-  .agents/skills/
-    fhe-application-design/ # same skill, .agents/ convention (Codex / agentskills.io)
+  .claude/skills/           # installed by `make sync-skill` (gitignored)
+    fhe-application-design/ # FHE design skill (AI agents)
+  .agents/skills/           # same skill, .agents/ convention (Codex / agentskills.io)
+    fhe-application-design/
   vendor/
     niobium-fhetch/         # submodule: libnbfhetch + fhetch_sim + API headers
       vendor/openfhe/       # nested submodule: Niobium-instrumented OpenFHE
