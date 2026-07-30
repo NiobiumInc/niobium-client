@@ -4,7 +4,7 @@ Guidance for Claude Code (and other agents) working in this repository.
 
 > **Designing or building an FHE application? Read
 > [`.claude/skills/fhe-application-design/SKILL.md`](.claude/skills/fhe-application-design/SKILL.md)
-> first — do not skip the design stages.** It is a staged design guide (privacy
+> first (run `make sync-skill` to install it) — do not skip the design stages.** It is a staged design guide (privacy
 > model → feasibility → scheme → circuit → SIMD data layout → parameters →
 > codegen). This applies whether you enter through the nb DSL (`dsl_fhe/`),
 > instrumented OpenFHE (`examples/`), or direct FHETCH IR — the design work comes
