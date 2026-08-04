@@ -112,7 +112,18 @@ LD_LIBRARY_PATH="$OPENFHE_LIB" "$mult_server" mult_keys --target="$TARGET" --no-
 
 echo
 echo "=== [4/5] mult_decrypt ==="
-if ! LD_LIBRARY_PATH="$OPENFHE_LIB" "$mult_decrypt" mult_keys | tee /dev/stderr | grep -q '^\[PASS\]'; then
+# Capture instead of `| tee /dev/stderr |`: /dev/stderr is a magic symlink to
+# /proc/self/fd/2, so tee re-opens the underlying inode and needs write
+# permission on it. In a container whose stderr pipe is owned by root while the
+# script runs as a non-root uid, that fails with EACCES. Reprinting through the
+# already-open fd 2 avoids the re-open. It also drops the grep -q/pipefail
+# race, where grep exiting on match could SIGPIPE tee and fail a passing run.
+set +e
+decrypt_out=$(LD_LIBRARY_PATH="$OPENFHE_LIB" "$mult_decrypt" mult_keys 2>&1)
+decrypt_rc=$?
+set -e
+printf '%s\n' "$decrypt_out" >&2
+if [ "$decrypt_rc" -ne 0 ] || ! grep -q '^\[PASS\]' <<<"$decrypt_out"; then
   echo
   echo "=== ✗ transport round-trip FAIL (decrypt) ==="
   exit 1
