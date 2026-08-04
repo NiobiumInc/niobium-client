@@ -595,8 +595,32 @@ test-fhetch-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Run the fhetch submodule's 
 # Override AUTO_OP=MUL AUTO_EXPECTED=21 to exercise the known-failing
 # relin path inside the auto-facade test.
 
+# ==============================================================================
+# test-transport-hardening-release — input-validation regressions for the daemon
+#
+# Drives nbcc_fhetch_replay_server with hostile input (X-Target traversal, shell
+# metacharacters in archive entry names, absurd length fields) and asserts the
+# refusals fire. Complements test-mult-transport-release, which only proves the
+# happy path.
+#
+# Needs no compiler: every case is refused before the server spawns anything, so
+# the script supplies a stub --exec. Pass PROJECT=<dir> together with a real
+# compiler to additionally verify the per-job timing dir:
+#
+#   make test-transport-hardening-release \
+#        COMPILER_BIN=$(NIOBIUM_COMPILER_ROOT)/build/nbcc_fhetch_replay \
+#        PROJECT=mult_server_workload_ckks_mult
+# ==============================================================================
+
+test-transport-hardening-release: build-release ## Security regressions for the transport server (no compiler needed)
+	$(call set-build-config,Release,build)
+	@$(PYTHON) scripts/test_transport_hardening.py \
+	    --server-bin build/src/fhetch_transport/nbcc_fhetch_replay_server \
+	    $(if $(COMPILER_BIN),--exec $(COMPILER_BIN),) \
+	    $(if $(PROJECT),--project $(PROJECT),)
+
 ## Run all client-level Release tests (CI target — no fhetch submodule)
-test-client-release: test-simple-ops-release test-mult-release test-auto-ciphers-release test-bootstrap-release test-plaintext-add-release test-ring-dim-check-release
+test-client-release: test-simple-ops-release test-mult-release test-auto-ciphers-release test-bootstrap-release test-plaintext-add-release test-ring-dim-check-release test-transport-hardening-release
 
 ## Run all currently-passing Release tests (client + fhetch submodule) — internal server only, do not run in CI
 test-release: test-client-release test-fhetch-release

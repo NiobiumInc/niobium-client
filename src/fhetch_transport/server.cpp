@@ -21,6 +21,8 @@
 
 #include "httplib.h"
 
+#include <algorithm>
+#include <cerrno>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -33,7 +35,14 @@
 #include <system_error>
 #include <vector>
 
-#include <unistd.h>  // mkdtemp (macOS/BSD), getpid
+#include <spawn.h>     // posix_spawnp — replaces popen()/system()
+#include <sys/wait.h>  // waitpid, WIFEXITED/WEXITSTATUS
+#include <unistd.h>    // mkdtemp (macOS/BSD), pipe, read, close
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+// -- POSIX defines environ as char**; it cannot be const-qualified and still be
+//    the thing posix_spawnp() accepts. Not ours to change.
+extern char** environ;
 
 namespace {
 
@@ -45,6 +54,10 @@ struct ServerArgs {
     int         port = nft::kDefaultPort;
     std::string compiler_bin;
     std::string timing_root;  // NBCC_FHETCH_TIMING_ROOT; empty → feature off
+    // Include compiler/unpacker output in HTTP error bodies. Off by default so
+    // the daemon does not hand server-side paths and internals to whoever can
+    // reach the port; a server-side flag, never settable from a request.
+    bool        return_logs = false;
 };
 
 void print_usage() {
@@ -56,7 +69,11 @@ void print_usage() {
         "  --bind addr         Bind address (default 0.0.0.0).\n"
         "  --exec PATH         Compiler binary to invoke per request.\n"
         "                      Falls back to $NBCC_FHETCH_COMPILER_BIN,\n"
-        "                      then to \"nbcc_fhetch_replay\" on PATH.\n";
+        "                      then to \"nbcc_fhetch_replay\" on PATH.\n"
+        "  --return-logs       Include compiler/unpacker output in HTTP error\n"
+        "                      bodies. Off by default: those messages disclose\n"
+        "                      server-side paths. Intended for CI and local\n"
+        "                      debugging, not for a shared deployment.\n";
 }
 
 ServerArgs parse(int argc, char** argv) {
@@ -75,6 +92,7 @@ ServerArgs parse(int argc, char** argv) {
         else if (a == "--bind" && i + 1 < argc)       out.bind = argv[++i];
         else if (a.rfind("--exec=", 0) == 0)          out.compiler_bin = a.substr(7);
         else if (a == "--exec" && i + 1 < argc)       out.compiler_bin = argv[++i];
+        else if (a == "--return-logs")                out.return_logs = true;
         else if (a == "-h" || a == "--help") {
             print_usage();
             std::exit(0);
@@ -101,6 +119,26 @@ bool is_safe_cli_token(const std::string& s) {
             (c >= '0' && c <= '9') ||
              c == '_' || c == '.' || c == '/' || c == '-' || c == '=' ||
              c == '+' || c == ':' || c == ',')
+            continue;
+        return false;
+    }
+    return true;
+}
+
+// The target is stricter than is_safe_cli_token() because it does not stay a
+// CLI token: the compiler resolves it as a *path component* (devices/<target>/
+// spec.yaml). is_safe_cli_token() permits '/' and does not reject "..", so a
+// value that is perfectly safe to hand to a shell can still walk out of the
+// devices directory and load an attacker-chosen spec.yaml. Restrict to 
+// letters, digits, '_' and '.' and ban any ".." sequence or leading/trailing
+// dot
+bool is_safe_target(const std::string& s) {
+    if (s.empty() || s.size() > 64) return false;
+    if (s.front() == '.' || s.back() == '.') return false;
+    if (s.find("..") != std::string::npos) return false;
+    for (char c : s) {
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9') || c == '_' || c == '.')
             continue;
         return false;
     }
@@ -142,9 +180,152 @@ std::string unique_tempdir(const std::string& prefix) {
     return buf.data();
 }
 
+// Sentinel: the child could not be started at all (bad path, no exec perm, out
+// of fds). Distinct from any status a started child can report.
+constexpr int kSpawnFailed = -1;
+
+// Run `bin` with `args` as argv[1..], capturing the child's stdout+stderr into
+// `log` (may be null to discard). Returns the child's exit status, 128+signal
+// if it was killed, or kSpawnFailed.
+//
+// No shell is involved. posix_spawnp() receives an explicit argv array, so a
+// value that would be a metacharacter to `sh` is inert here: it arrives at the
+// child as one literal argument. That removes quoting/injection concerns for 
+// every value on this command line
+//
+// `extra_env` holds "KEY=VALUE" assignments layered over the parent
+// environment, replacing any inherited assignment of the same key. argv and
+// envp are both built in the parent because posix_spawn() gives us no window to
+// allocate in the child — and the request threads make post-fork malloc unsafe.
+int run_capture(const std::string& bin,
+                const std::vector<std::string>& args,
+                const std::vector<std::string>& extra_env,
+                std::string* log) {
+    int fds[2];
+    if (::pipe(fds) != 0) {
+        return kSpawnFailed;
+    }
+
+
+    // posix_spawnp() wants char*, so keep our own mutable copies and hand out
+    // data() rather than casting away const on the caller's strings. Pointers
+    // are taken only once argv_storage has stopped growing.
+    std::vector<std::string> argv_storage;
+    argv_storage.reserve(args.size() + 1);
+    argv_storage.push_back(bin);
+    for (const auto& arg : args) {
+        argv_storage.push_back(arg);
+    }
+    std::vector<char*> argv;
+    argv.reserve(argv_storage.size() + 1);
+    for (auto& entry : argv_storage) {
+        argv.push_back(entry.data());
+    }
+    argv.push_back(nullptr);
+
+    // Environment: inherit the parent's unchanged in the common case. Only when
+    // a caller asks for an extra assignment do we build a private copy for this
+    // child.
+    //
+    // do NOT do: setenv() in the server process. mutating our own environment
+    // would race between concurrent requests and could route one job's telemetry
+    // into another job's directory. Per-child envp has no such coupling.
+    char** envp = environ;
+    std::vector<std::string> env_storage;  // outlives the spawn below
+    std::vector<char*>       env_ptrs;
+    if (!extra_env.empty()) {
+        for (char** ep = environ; ep != nullptr && *ep != nullptr; ++ep) {
+            const std::string inherited(*ep);
+            // Drop an inherited assignment that extra_env is about to replace.
+            const bool overridden = std::any_of(
+                extra_env.begin(), extra_env.end(),
+                [&inherited](const std::string& assignment) {
+                    const auto eq = assignment.find('=');
+                    return eq != std::string::npos &&
+                           inherited.compare(0, eq + 1, assignment, 0, eq + 1) == 0;
+                });
+            if (!overridden) {
+                env_storage.push_back(inherited);
+            }
+        }
+        for (const auto& assignment : extra_env) {
+            env_storage.push_back(assignment);
+        }
+        // Pointers are taken only after env_storage stops growing.
+        env_ptrs.reserve(env_storage.size() + 1);
+        for (auto& entry : env_storage) {
+            env_ptrs.push_back(entry.data());
+        }
+        env_ptrs.push_back(nullptr);
+        envp = env_ptrs.data();
+    }
+
+    posix_spawn_file_actions_t actions;
+    posix_spawn_file_actions_init(&actions);
+    posix_spawn_file_actions_addclose(&actions, fds[0]);
+    posix_spawn_file_actions_adddup2(&actions, fds[1], STDOUT_FILENO);
+    posix_spawn_file_actions_adddup2(&actions, fds[1], STDERR_FILENO);
+    posix_spawn_file_actions_addclose(&actions, fds[1]);
+
+    pid_t pid = 0;
+    const int spawn_rc = ::posix_spawnp(&pid, bin.c_str(), &actions, nullptr,
+                                        argv.data(), envp);
+    posix_spawn_file_actions_destroy(&actions);
+
+    // The parent must drop the write end or the read below never sees EOF.
+    ::close(fds[1]);
+    if (spawn_rc != 0) {
+        ::close(fds[0]);
+        return kSpawnFailed;
+    }
+
+    char buf[4096];
+    while (true) {
+        const ssize_t n = ::read(fds[0], buf, sizeof(buf));
+        if (n > 0) {
+            if (log != nullptr) {
+                log->append(buf, static_cast<std::size_t>(n));
+            }
+            continue;
+        }
+        if (n < 0 && errno == EINTR) {
+            continue;
+        }
+        break;
+    }
+    ::close(fds[0]);
+
+    int status = 0;
+    while (::waitpid(pid, &status, 0) < 0 && errno == EINTR) {
+        // retry
+    }
+    if (WIFEXITED(status)) {
+        return WEXITSTATUS(status);
+    }
+    if (WIFSIGNALED(status)) {
+        return 128 + WTERMSIG(status);
+    }
+    return kSpawnFailed;
+}
+
 struct Handler {
     std::string compiler_bin;
     std::string timing_root;  // empty → per-job timing dir disabled
+    bool        return_logs = false;  // --return-logs; see ServerArgs
+
+    // Compose an error body for the client. `summary` is always safe to send;
+    // `detail` (a compiler log, or an unpacker message carrying our temp path)
+    // is appended only when the operator opted in with --return-logs. Logs
+    // contain server internal info and should not be passed to the client
+
+    std::string detail_for_client(const std::string& summary,
+                                  const std::string& detail) const {
+        if (!return_logs) {
+            return summary + "\n(server log withheld; run the server with "
+                             "--return-logs to include it)\n";
+        }
+        return summary + "\n---log---\n" + detail;
+    }
 
     void operator()(const httplib::Request& req, httplib::Response& res,
                     const httplib::ContentReader& content_reader) const {
@@ -166,8 +347,13 @@ struct Handler {
             reject(400, "missing header " + std::string(nft::kTargetHeader) + "\n");
             return;
         }
-        if (!is_safe_cli_token(target) ||
-            (!project.empty() && !is_safe_cli_token(project))) {
+        if (!is_safe_target(target)) {
+            reject(400, "header " + std::string(nft::kTargetHeader) +
+                        " must match [A-Za-z0-9_.]+ (no '..', no leading/"
+                        "trailing '.')\n");
+            return;
+        }
+        if (!project.empty() && !is_safe_cli_token(project)) {
             reject(400, "header values must match [A-Za-z0-9_.+=/,:-]+\n");
             return;
         }
@@ -225,61 +411,65 @@ struct Handler {
                       << " files into " << tempdir
                       << " (target=" << target << ")\n";
         } catch (const std::exception& e) {
+            // ArchiveUnpacker embeds the output path in its errors, so what()
+            // discloses our mkdtemp directory — gate it like any other detail.
+            std::cerr << "[nbcc_fhetch_replay_server] archive unpack failed: "
+                      << e.what() << "\n";
             res.status = 400;
-            res.set_content(std::string("archive unpack failed: ") + e.what() + "\n",
+            res.set_content(detail_for_client("archive unpack failed", e.what()),
                             "text/plain");
+            // Drop the partially-extracted tree: leaving it behind both grows
+            // unboundedly and preserves attacker-planted files at a path the
+            // error above would otherwise have just disclosed.
+            if (!tempdir.empty()) {
+                std::error_code ec; fs::remove_all(tempdir, ec);
+            }
             return;
         }
 
         // ---- Invoke the compiler binary -----------------------------
-        // We build a shell command with pre-validated tokens only and
-        // capture stderr alongside stdout so failure diagnostics come
-        // back to the client without a second round trip.
-        std::ostringstream cmd;
+        // argv is assembled as a vector, not a shell string: see run_capture().
+        std::vector<std::string> args{"--project=" + tempdir,
+                                      "--target=" + target};
+        if (!opt_flag.empty()) args.push_back(opt_flag);  // pre-validated -O<n>
+
         // Optional per-job timing dir → NB_TIMING_SUMMARY_DIR for the compiler.
         // Path is <root>/<job-id>, both server-controlled (root from env, job id
-        // validated to [A-Za-z0-9-]+), so it's safe to inline as a `sh` env
-        // assignment. Create it so the compiler can write; the caller (Fog
-        // worker) collects and removes it after the run.
+        // validated to [A-Za-z0-9-]+). Create it so the compiler can write; the
+        // caller (Fog worker) collects and removes it after the run.
+        std::vector<std::string> extra_env;
         if (!timing_dir.empty()) {
             std::error_code ec;
             fs::create_directories(timing_dir, ec);
-            if (ec)
+            if (ec) {
                 std::cerr << "[nbcc_fhetch_replay_server] could not create timing dir "
                           << timing_dir << ": " << ec.message() << " (skipping)\n";
-            else
-                cmd << "NB_TIMING_SUMMARY_DIR=" << timing_dir << " ";
+            } else {
+                extra_env.push_back("NB_TIMING_SUMMARY_DIR=" + timing_dir);
+            }
         }
-        cmd << compiler_bin
-            << " --project=" << tempdir
-            << " --target="  << target;
-        if (!opt_flag.empty()) cmd << " " << opt_flag;  // pre-validated -O<n>
-        cmd << " 2>&1";
 
         std::string log;
-        int exit_code = -1;
-        {
-            FILE* pipe = ::popen(cmd.str().c_str(), "r");
-            if (!pipe) {
-                res.status = 500;
-                res.set_content("could not spawn compiler binary\n", "text/plain");
-                std::error_code ec; fs::remove_all(tempdir, ec);
-                return;
-            }
-            char buf[4096];
-            while (std::size_t n = std::fread(buf, 1, sizeof(buf), pipe)) {
-                log.append(buf, n);
-            }
-            exit_code = ::pclose(pipe);
-            if (WIFEXITED(exit_code)) exit_code = WEXITSTATUS(exit_code);
-        }
+        const int exit_code = run_capture(compiler_bin, args, extra_env, &log);
+
+        // The log always goes to the server's own stdout; whether any of it
+        // reaches the client is the operator's call (--return-logs).
         std::cout << log;
+
+        if (exit_code == kSpawnFailed) {
+            res.status = 500;
+            res.set_content("could not spawn compiler binary\n", "text/plain");
+            std::error_code ec; fs::remove_all(tempdir, ec);
+            return;
+        }
 
         if (exit_code != 0) {
             res.status = 500;
-            std::string msg = "nbcc_fhetch_replay exited " +
-                              std::to_string(exit_code) + "\n---log---\n" + log;
-            res.set_content(msg, "text/plain");
+            res.set_content(detail_for_client(
+                                "nbcc_fhetch_replay exited " +
+                                    std::to_string(exit_code),
+                                log),
+                            "text/plain");
             std::error_code ec; fs::remove_all(tempdir, ec);
             return;
         }
@@ -288,8 +478,10 @@ struct Handler {
         fs::path probes = fs::path(tempdir) / "serialized_probes";
         if (!fs::exists(probes)) {
             res.status = 500;
-            res.set_content("compiler succeeded but wrote no serialized_probes/\n"
-                            "---log---\n" + log, "text/plain");
+            res.set_content(detail_for_client(
+                                "compiler succeeded but wrote no serialized_probes/",
+                                log),
+                            "text/plain");
             std::error_code ec; fs::remove_all(tempdir, ec);
             return;
         }
@@ -342,7 +534,7 @@ int main(int argc, char** argv) {
     std::signal(SIGINT,  shutdown_handler);
     std::signal(SIGTERM, shutdown_handler);
 
-    Handler handler{args.compiler_bin, args.timing_root};
+    Handler handler{args.compiler_bin, args.timing_root, args.return_logs};
     srv.Post(nft::kReplayPath,
              [&handler](const httplib::Request& req, httplib::Response& res,
                         const httplib::ContentReader& content_reader) {
@@ -354,15 +546,16 @@ int main(int argc, char** argv) {
                 res.set_content("ok\n", "text/plain");
             });
 
-    // Pre-flight: resolve the compiler binary exactly the way popen() will,
-    // and fail loud at startup if it's not callable. Much better than
-    // handing every incoming replay an opaque 500. We let `sh -c "<bin>
-    // --help"` do the work so PATH lookup and shebang handling match the
-    // actual invocation site. Exit status 127 from sh means "not found".
+    // Pre-flight: resolve the compiler binary exactly the way the request path
+    // will, and fail loud at startup if it's not callable. Much better than
+    // handing every incoming replay an opaque 500. Reusing run_capture() keeps
+    // PATH lookup identical to the actual invocation site; a kSpawnFailed here
+    // is precisely "could not be executed" (what `sh` used to report as 127).
+    // The child's own exit status is ignored — some binaries exit non-zero on
+    // --help, and that was never what this check was about.
     {
-        std::string probe = args.compiler_bin + " --help >/dev/null 2>&1";
-        int rc = std::system(probe.c_str());
-        if (WIFEXITED(rc) && WEXITSTATUS(rc) == 127) {
+        const int rc = run_capture(args.compiler_bin, {"--help"}, {}, nullptr);
+        if (rc == kSpawnFailed) {
             std::cerr << "[nbcc_fhetch_replay_server] compiler binary not found: '"
                       << args.compiler_bin << "'\n"
                       << "  set NBCC_FHETCH_COMPILER_BIN or pass --exec "
