@@ -15,6 +15,13 @@ namespace {
 
 constexpr const char  kMagic[4] = {'N', 'B', 'A', 'R'};
 
+// Upper bound on a single entry's name. Real fhetch projects nest a handful of
+// levels (epoch_N/serialized_probes/<probe>.ct); 4 KiB is far past anything
+// legitimate and keeps a bogus name_len from being buffered before we can
+// reject it.
+constexpr std::uint32_t kMaxEntryNameLen   = 4096;
+constexpr std::size_t   kMaxEntryNameParts = 64;
+
 // Append n bytes of `value` (little-endian) to `out`.
 template <typename T>
 void append_le(std::string& out, T value) {
@@ -56,6 +63,57 @@ void validate_relative_path(const std::filesystem::path& rel) {
                                      + rel.string() + "'");
         }
     }
+}
+
+// Ingress-only name check, layered on top of validate_relative_path().
+//
+// Traversal is not the whole risk for a name we did not produce. Because the
+// format stores names verbatim, an archive arriving over the network can create
+// files whose names contain spaces, quotes, newlines, `;`, `$(...)`, or a
+// leading `-` inside the extraction root. None of that escapes the root, but it
+// turns into an injection or an argument-smuggle the moment anything downstream
+// globs or shells over the extracted tree. So allowlist the characters real
+// fhetch projects actually use and reject everything else.
+//
+// Deliberately NOT applied to pack_directory(): those names come from probe
+// tags that the compiler has already produced, and aborting a completed run
+// over a probe name would trade a live-path regression for no security gain.
+// The trust asymmetry is the point — this guards bytes off the wire.
+void validate_untrusted_entry_name(const std::filesystem::path& rel,
+                                   const std::string& raw) {
+    auto bad = [&raw](const char* why) {
+        return std::runtime_error(std::string("archive entry name rejected (")
+                                  + why + "): '" + raw + "'");
+    };
+
+    if (raw.size() > kMaxEntryNameLen) {
+        throw bad("too long");
+    }
+
+    std::size_t parts = 0;
+    for (const auto& part : rel) {
+        const auto component = part.string();
+        if (component == ".") {
+            continue;  // harmless "./" noise; not a component
+        }
+        if (++parts > kMaxEntryNameParts) {
+            throw bad("too deeply nested");
+        }
+        // A leading '-' would be read as an option flag by any tool that later
+        // receives this name as an argument.
+        if (component[0] == '-') {
+            throw bad("component starts with '-'");
+        }
+        for (unsigned char c : component) {
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                (c >= '0' && c <= '9') ||
+                 c == '_' || c == '.' || c == '-' || c == '+' ||
+                 c == '=' || c == ',' || c == '@')
+                continue;
+            throw bad("illegal character");
+        }
+    }
+    if (parts == 0) throw bad("no usable path component");
 }
 
 }  // namespace
@@ -213,6 +271,12 @@ ArchiveUnpacker::feed(const char* data, std::size_t len) {
             case State::NameLen: {
                 std::size_t pos = 0;
                 const auto name_len = read_le<uint32_t>(pending_, pos);
+                // Reject before `need_` commits us to buffering that many bytes.
+                if (name_len == 0 || name_len > kMaxEntryNameLen) {
+                    throw std::runtime_error(
+                        "ArchiveUnpacker: implausible entry name length: "
+                        + std::to_string(name_len));
+                }
                 state_ = State::Name; need_ = name_len; pending_.clear();
                 break;
             }
@@ -228,6 +292,7 @@ ArchiveUnpacker::feed(const char* data, std::size_t len) {
 
                 fs::path rel(cur_name_);
                 validate_relative_path(rel);
+                validate_untrusted_entry_name(rel, cur_name_);
                 fs::path out_path = dest_ / rel;
                 fs::create_directories(out_path.parent_path());
                 cur_file_.open(out_path, std::ios::binary | std::ios::trunc);
@@ -292,6 +357,7 @@ unpack_into(const std::string& archive,
 
         fs::path rel(name);
         validate_relative_path(rel);
+        validate_untrusted_entry_name(rel, name);
         fs::path out_path = dest / rel;
         fs::create_directories(out_path.parent_path());
 
