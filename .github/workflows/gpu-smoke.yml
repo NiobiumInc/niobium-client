@@ -1,0 +1,28 @@
+# GPU runner smoke test — verifies the g2-* menu sizes end-to-end:
+# webhook spawn -> L4 VM -> driver + CUDA toolkit in the baked image.
+# Run manually: gh workflow run gpu-smoke.yml --ref ci/gpu-smoke
+name: gpu-smoke
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  gpu-smoke:
+    name: GPU smoke (g2-standard-4, 1x L4)
+    runs-on: [self-hosted, Linux, X64, gcp-ephemeral, g2-standard-4]
+    timeout-minutes: 15
+    steps:
+      - name: Driver sees the GPU
+        run: nvidia-smi
+      - name: Toolkit present
+        run: nvcc --version
+      - name: Compile + launch a kernel
+        run: |
+          cat > "$RUNNER_TEMP/hello.cu" <<'CU'
+          #include <cstdio>
+          __global__ void k(){}
+          int main(){k<<<1,1>>>(); cudaError_t e=cudaDeviceSynchronize();
+            printf("cuda: %s\n", cudaGetErrorString(e)); return e!=cudaSuccess;}
+          CU
+          nvcc -o "$RUNNER_TEMP/hello" "$RUNNER_TEMP/hello.cu"
+          "$RUNNER_TEMP/hello"
