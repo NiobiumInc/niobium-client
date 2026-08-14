@@ -410,6 +410,20 @@ struct Handler {
             std::cout << "[nbcc_fhetch_replay_server] unpacked " << n
                       << " files into " << tempdir
                       << " (target=" << target << ")\n";
+        } catch (const nft::IntegrityError& e) {
+            // The artifacts did not hash to what the client's manifest claimed.
+            // Unlike a malformed-archive error, this message holds only names
+            // and digests the client itself sent, so it goes back verbatim —
+            // the caller needs to know *which* artifact to re-ship.
+            std::cerr << "[nbcc_fhetch_replay_server] integrity check failed: "
+                      << e.what() << "\n";
+            res.status = 400;
+            res.set_content(std::string("artifact integrity check failed\n")
+                            + e.what() + "\n", "text/plain");
+            if (!tempdir.empty()) {
+                std::error_code ec; fs::remove_all(tempdir, ec);
+            }
+            return;
         } catch (const std::exception& e) {
             // ArchiveUnpacker embeds the output path in its errors, so what()
             // discloses our mkdtemp directory — gate it like any other detail.

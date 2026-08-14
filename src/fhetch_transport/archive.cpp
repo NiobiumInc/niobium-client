@@ -118,6 +118,65 @@ void validate_untrusted_entry_name(const std::filesystem::path& rel,
 
 }  // namespace
 
+// ---- SHA-1 (OpenSSL EVP) ---------------------------------------------------
+
+namespace {
+
+// EVP_sha1() returns a static descriptor from the default provider — no fetch,
+// no free, no per-call cost. It can still come back null on a build configured
+// with a provider that withholds SHA-1, which must be a hard failure here: a
+// missing digest would silently disarm the integrity gate.
+const EVP_MD* sha1_md() {
+    const EVP_MD* md = EVP_sha1();
+    if (md == nullptr) {
+        throw std::runtime_error("OpenSSL: SHA-1 digest unavailable "
+                                 "(provider configuration?)");
+    }
+    return md;
+}
+
+}  // namespace
+
+Sha1::Sha1() : ctx_(EVP_MD_CTX_new()) {
+    if (ctx_ == nullptr) {
+        throw std::runtime_error("OpenSSL: EVP_MD_CTX_new failed");
+    }
+    if (EVP_DigestInit_ex(ctx_, sha1_md(), nullptr) != 1) {
+        EVP_MD_CTX_free(ctx_);
+        throw std::runtime_error("OpenSSL: SHA-1 init failed");
+    }
+}
+
+Sha1::~Sha1() { EVP_MD_CTX_free(ctx_); }
+
+void Sha1::reset() {
+    if (EVP_DigestInit_ex(ctx_, sha1_md(), nullptr) != 1) {
+        throw std::runtime_error("OpenSSL: SHA-1 re-init failed");
+    }
+}
+
+void Sha1::update(const void* data, std::size_t len) {
+    if (EVP_DigestUpdate(ctx_, data, len) != 1) {
+        throw std::runtime_error("OpenSSL: SHA-1 update failed");
+    }
+}
+
+std::string Sha1::hex() {
+    unsigned char md[EVP_MAX_MD_SIZE];
+    unsigned int  n = 0;
+    if (EVP_DigestFinal_ex(ctx_, md, &n) != 1 || n * 2 != kSha1HexLen) {
+        throw std::runtime_error("OpenSSL: SHA-1 finalize failed");
+    }
+    static constexpr char kHex[] = "0123456789abcdef";
+    std::string out;
+    out.reserve(kSha1HexLen);
+    for (unsigned int i = 0; i < n; ++i) {
+        out.push_back(kHex[md[i] >> 4]);
+        out.push_back(kHex[md[i] & 0xF]);
+    }
+    return out;
+}
+
 std::vector<ArchiveEntry>
 scan_directory(const std::filesystem::path& root,
                const std::function<bool(const std::filesystem::path& rel)>& filter) {
@@ -141,6 +200,18 @@ scan_directory(const std::filesystem::path& root,
     return entries;
 }
 
+void
+add_sha1_manifest(std::vector<ArchiveEntry>& entries) {
+    // "<40 hex><2 spaces><name><newline>" per artifact — fixed width but for
+    // the name, which we already know, so the total is exact before any file
+    // is read. An empty `abs` marks the entry as synthesized by stream_archive.
+    std::uint64_t size = 0;
+    for (const auto& e : entries) {
+        size += kSha1HexLen + 2 + e.rel.size() + 1;
+    }
+    entries.push_back({{}, kSha1ManifestName, size});
+}
+
 std::uint64_t
 archive_content_length(const std::vector<ArchiveEntry>& entries) {
     std::uint64_t total = sizeof(kMagic) + sizeof(uint32_t);  // magic + count
@@ -152,7 +223,8 @@ archive_content_length(const std::vector<ArchiveEntry>& entries) {
 
 bool
 stream_archive(const std::vector<ArchiveEntry>& entries,
-               const std::function<bool(const char* data, std::size_t len)>& emit) {
+               const std::function<bool(const char* data, std::size_t len)>& emit,
+               std::string* manifest_out) {
     // Header: magic + entry count.
     std::string hdr;
     hdr.append(kMagic, sizeof(kMagic));
@@ -161,6 +233,7 @@ stream_archive(const std::vector<ArchiveEntry>& entries,
 
     constexpr std::size_t kChunk = 1u << 20;  // 1 MiB read/emit granularity
     std::vector<char> buf(kChunk);
+    std::string manifest;  // "<sha1>  <name>\n" per artifact, in emit order
 
     for (const auto& e : entries) {
         // Per-entry framing: name_len + name + data_len.
@@ -170,11 +243,24 @@ stream_archive(const std::vector<ArchiveEntry>& entries,
         append_le<uint64_t>(frame, e.size);
         if (!emit(frame.data(), frame.size())) return false;
 
+        // The trailing manifest (add_sha1_manifest) has no file behind it: its
+        // bytes are the digests accumulated from every entry emitted above.
+        if (e.abs.empty()) {
+            if (manifest.size() != e.size) {
+                throw std::runtime_error(
+                    "stream_archive: manifest is " + std::to_string(manifest.size())
+                    + " bytes but " + std::to_string(e.size) + " were declared");
+            }
+            if (!emit(manifest.data(), manifest.size())) return false;
+            continue;
+        }
+
         std::ifstream f(e.abs, std::ios::binary);
         if (!f.is_open()) {
             throw std::runtime_error("stream_archive: cannot open "
                                      + e.abs.string());
         }
+        Sha1 sha;
         std::uint64_t remaining = e.size;
         while (remaining > 0) {
             const std::size_t n = static_cast<std::size_t>(
@@ -184,20 +270,30 @@ stream_archive(const std::vector<ArchiveEntry>& entries,
                 throw std::runtime_error("stream_archive: short read on "
                                          + e.abs.string());
             }
+            // Fingerprint on the way to the socket — the bytes are already in
+            // hand, so this costs no extra read of the artifact.
+            sha.update(buf.data(), n);
             if (!emit(buf.data(), n)) return false;
             remaining -= n;
         }
+        manifest += sha.hex();
+        manifest += "  ";
+        manifest += e.rel;
+        manifest += '\n';
     }
+    if (manifest_out) *manifest_out = manifest;
     return true;
 }
 
 std::string
 pack_directory(const std::filesystem::path& root,
-               const std::function<bool(const std::filesystem::path& rel)>& filter) {
+               const std::function<bool(const std::filesystem::path& rel)>& filter,
+               bool sha1_manifest) {
     // Buffered pack: reuse the streaming path, appending every span into one
     // contiguous buffer. Kept for callers (e.g. the small probe-response path)
     // that want the archive materialized.
-    const auto entries = scan_directory(root, filter);
+    auto entries = scan_directory(root, filter);
+    if (sha1_manifest) add_sha1_manifest(entries);
     std::string out;
     out.reserve(static_cast<std::size_t>(archive_content_length(entries)));
     stream_archive(entries, [&out](const char* data, std::size_t len) {
@@ -225,6 +321,8 @@ ArchiveUnpacker::feed(const char* data, std::size_t len) {
                 throw std::runtime_error("ArchiveUnpacker: short write on '"
                                          + cur_name_ + "'");
             }
+            cur_sha_.update(data + off, n);
+            if (cur_name_ == kSha1ManifestName) manifest_.append(data + off, n);
             off += n;
             data_remaining_ -= n;
             if (data_remaining_ == 0) {
@@ -233,10 +331,7 @@ ArchiveUnpacker::feed(const char* data, std::size_t len) {
                     throw std::runtime_error("ArchiveUnpacker: flush failed on '"
                                              + cur_name_ + "'");
                 }
-                ++done_count_;
-                state_ = (done_count_ == count_) ? State::Done : State::NameLen;
-                need_ = 4;
-                pending_.clear();
+                finish_entry();
             }
             continue;
         }
@@ -300,11 +395,10 @@ ArchiveUnpacker::feed(const char* data, std::size_t len) {
                     throw std::runtime_error("ArchiveUnpacker: cannot open output "
                                              "file: " + out_path.string());
                 }
+                cur_sha_.reset();
                 if (data_remaining_ == 0) {  // empty file: nothing to stream
                     cur_file_.close();
-                    ++done_count_;
-                    state_ = (done_count_ == count_) ? State::Done : State::NameLen;
-                    need_ = 4;
+                    finish_entry();
                 } else {
                     state_ = State::Data;
                 }
@@ -316,12 +410,68 @@ ArchiveUnpacker::feed(const char* data, std::size_t len) {
     }
 }
 
+void
+ArchiveUnpacker::finish_entry() {
+    if (cur_name_ == kSha1ManifestName) {
+        manifest_seen_ = true;
+    } else {
+        observed_[cur_name_] = cur_sha_.hex();
+    }
+    ++done_count_;
+    state_ = (done_count_ == count_) ? State::Done : State::NameLen;
+    need_ = 4;
+    pending_.clear();
+}
+
+// The integrity gate (§9c of FOG_ARCHITECTURE_CLIENT_PROPOSED): every artifact
+// the producer fingerprinted is re-hashed here from the bytes that actually
+// arrived, so a swapped or truncated artifact is rejected before anything
+// downstream reads the extracted tree. Archives with no manifest (the legacy
+// producers) skip the gate entirely — this is additive, never a new refusal
+// for a stream that used to work.
+void
+ArchiveUnpacker::verify_manifest() const {
+    std::size_t checked = 0;
+    for (std::size_t pos = 0; pos < manifest_.size();) {
+        auto eol = manifest_.find('\n', pos);
+        if (eol == std::string::npos) eol = manifest_.size();
+        const std::string line = manifest_.substr(pos, eol - pos);
+        pos = eol + 1;
+        if (line.empty()) continue;
+
+        if (line.size() < kSha1HexLen + 3 ||
+            line.compare(kSha1HexLen, 2, "  ") != 0) {
+            throw IntegrityError("SHA-1 manifest: malformed line");
+        }
+        const std::string want = line.substr(0, kSha1HexLen);
+        const std::string name = line.substr(kSha1HexLen + 2);
+
+        const auto it = observed_.find(name);
+        if (it == observed_.end()) {
+            throw IntegrityError("SHA-1 manifest lists '" + name
+                                     + "' but the archive did not carry it");
+        }
+        if (it->second != want) {
+            throw IntegrityError("SHA-1 mismatch on '" + name + "': manifest "
+                                     "claims " + want + ", received bytes hash to "
+                                     + it->second);
+        }
+        ++checked;
+    }
+    if (checked != observed_.size()) {
+        throw IntegrityError("SHA-1 manifest covers " + std::to_string(checked)
+                                 + " of " + std::to_string(observed_.size())
+                                 + " archived artifacts");
+    }
+}
+
 std::size_t
 ArchiveUnpacker::finish() {
     if (state_ != State::Done) {
         throw std::runtime_error("ArchiveUnpacker: archive truncated "
                                  "(incomplete stream)");
     }
+    if (manifest_seen_) verify_manifest();
     return done_count_;
 }
 

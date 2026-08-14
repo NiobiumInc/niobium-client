@@ -133,6 +133,11 @@ int main(int argc, char** argv) {
         std::cerr << "[nbcc_fhetch_replay] scan failed: " << e.what() << "\n";
         return 2;
     }
+    // Fingerprint every artifact we ship (trace, cryptocontext, keys,
+    // ciphertexts) as a trailing sha1sum-format manifest entry. Digests are
+    // computed in the same pass that streams the bytes, and the server
+    // recomputes them before it runs anything.
+    nft::add_sha1_manifest(entries);
     const std::uint64_t body_len = nft::archive_content_length(entries);
 
     // POST path: honor a path baked into NBCC_FHETCH_SERVER (the Fog wrapper
@@ -187,6 +192,7 @@ int main(int argc, char** argv) {
     // emits at 1 MiB granularity, so per-write printing would be ~1 line/MiB.
     std::uint64_t sent = 0;
     int last_pct = -1;
+    std::string manifest;  // "<sha1>  <artifact>" lines, for the run log
     auto res = cli.Post(
         replay_path, headers,
         [&](std::size_t /*offset*/, httplib::DataSink& sink) -> bool {
@@ -206,15 +212,18 @@ int main(int argc, char** argv) {
                                     pct);
                             }
                             return true;
-                        })) {
+                        }, &manifest)) {
                     std::fprintf(stderr, "\n");
                     return false;  // sink closed
                 }
                 sink.done();
+                // Provenance for the run log: one SHA-1 per artifact shipped.
+                std::fprintf(stderr, "\n[fog] artifact fingerprints (sha1):\n%s",
+                             manifest.c_str());
                 // Last output before the Post() call blocks on the response —
                 // say what we're waiting on so a long replay doesn't look hung.
                 std::fprintf(stderr,
-                    "\n[fog] upload complete — replaying on target %s, "
+                    "[fog] upload complete — replaying on target %s, "
                     "waiting for the server\n", args.target.c_str());
                 return true;
             } catch (const std::exception& e) {
