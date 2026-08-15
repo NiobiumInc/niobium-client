@@ -66,21 +66,67 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: NiobiumInc/fetch-by-similarity-submission
-          submodules: recursive
           path: fbs
+          # Deliberately NOT `submodules: recursive` — the next step does it.
+          #
+          # This step used to clone the whole niobium-client subtree at fbs's
+          # *current* pin, only for the next step to repoint niobium-client and
+          # re-init it, cloning that same subtree a second time. fbs has exactly
+          # one submodule, so nearly all of that first pass was thrown away.
+          #
+          # That matters because these runners have no external IP and egress
+          # through a NAT with a per-VM port budget. Every clone holds a port
+          # for the NAT's TIME_WAIT window after it finishes, so the duplicate
+          # pass roughly doubled the ports a single job needs. Past the budget
+          # connections are dropped silently and git sits in SYN retry until the
+          # kernel gives up — which is why this surfaced as a ~135s "Failed to
+          # connect to github.com port 443: Connection timed out" at varying
+          # points, rather than as a fast refusal.
+          #
+          # This is a mitigation, not the fix: it lowers the port count enough
+          # to stay under the budget. The real fix is on the NAT itself (raise
+          # min-ports-per-vm, enable dynamic port allocation, shorten
+          # tcp-time-wait-timeout) in NiobiumInc/gcp-github-runners.
+          submodules: false
 
       - name: Point fbs's niobium-client submodule at this commit
-        working-directory: fbs/submission/niobium-client
+        working-directory: fbs
         run: |
+          # Retry the network steps. The port budget is per-VM and shared with
+          # everything else the job does, so we can still lose. Ports come back
+          # on the NAT's TIME_WAIT timer, so a retry has to wait that out — a
+          # few-second backoff would just burn attempts against a full table.
+          retry() {
+            n=1
+            until "$@"; do
+              if [ "$n" -ge 3 ]; then
+                echo "::error::network step failed after $n attempts: $*"
+                return 1
+              fi
+              n=$((n + 1))
+              echo "network step failed; waiting 130s for NAT ports to free (attempt $n/3)"
+              sleep 130
+            done
+          }
+
+          # Init just the one submodule, non-recursively: fetching its nested
+          # tree at the old pin is wasted when we are about to repoint it.
+          retry git submodule update --init submission/niobium-client
+
+          cd submission/niobium-client
           # refs/pull/<N>/head always exists on the base repo, for PRs from
           # forks too, so this works regardless of who opened the PR.
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch --no-tags --depth=1 origin "refs/pull/${{ github.event.pull_request.number }}/head"
+            retry git fetch --no-tags --depth=1 origin "refs/pull/${{ github.event.pull_request.number }}/head"
           else
-            git fetch --no-tags --depth=1 origin "${{ github.sha }}"
+            retry git fetch --no-tags --depth=1 origin "${{ github.sha }}"
           fi
           git checkout --detach FETCH_HEAD
-          git submodule update --init --recursive
+
+          # Runs inside the submodule, as before. From the fbs root this would
+          # reset niobium-client back to fbs's pinned commit and undo the
+          # checkout above.
+          retry git submodule update --init --recursive
 
       - name: Verify SDK is mounted (no version printed)
         run: |
