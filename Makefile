@@ -40,6 +40,28 @@ ifndef NUM_CPUS
   endif
 endif
 
+# ==============================================================================
+# RUN_WITHOUT_LIBRARY_PATH — prefix to run a command with the loader search
+# path cleared
+#
+# The exports above make this repo's own OpenFHE install visible to every
+# recipe, which is what our examples need. But an example that dispatches to
+# the compiler's replay binary spawns it as a child process, and the child
+# inherits that environment. The replay binary ships alongside the OpenFHE it
+# was linked against and finds it through its own baked-in rpath; an inherited
+# search path takes precedence over that rpath and makes it load ours instead.
+# The two are independent builds, so that substitution is not safe.
+#
+# Both sides already resolve their own libraries without help — our examples
+# via the rpath set by set_openfhe_rpath() in examples/CMakeLists.txt, the
+# replay binary via its own. So clear the variables for the dispatching
+# process and let each side use its own rpath.
+#
+# Use this for any example invoked with a niobium target; plain client-only
+# examples do not need it.
+# ==============================================================================
+RUN_WITHOUT_LIBRARY_PATH := env -u LD_LIBRARY_PATH -u DYLD_LIBRARY_PATH
+
 # Self-locating rpath token for the OpenFHE .so install (see config-openfhe).
 ifeq ($(UNAME_S), Darwin)
   OPENFHE_ORIGIN_RPATH := @loader_path
@@ -450,7 +472,7 @@ test-mult-target-release: build-release ## Run mult with --target=$(TARGET). Ove
 	@echo ""
 	@echo "=== [2/3] mult_server --target=$(TARGET) (hollow record → dispatch to compiler) ==="
 	NBCC_FHETCH_REPLAY=$(NIOBIUM_COMPILER_ROOT)/build/nbcc_fhetch_replay \
-	LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib:$(NIOBIUM_COMPILER_ROOT)/build:$(NIOBIUM_COMPILER_ROOT)/deps/photovoltaic/build/ntl/lib:$(LD_LIBRARY_PATH) \
+	$(RUN_WITHOUT_LIBRARY_PATH) \
 		$(BUILD_DIR)/examples/mult_server mult_keys --target=$(TARGET) --no-ring-dim-check
 	@echo ""
 	@echo "=== [3/3] mult_decrypt ==="

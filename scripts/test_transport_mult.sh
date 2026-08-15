@@ -108,7 +108,14 @@ echo "=== [3/5] mult_server --target=$TARGET (through transport) ==="
 # hits it — matches the production install layout.
 export PATH="$TRANSPORT_DIR:$PATH"
 export NBCC_FHETCH_SERVER="http://127.0.0.1:$PORT"
-LD_LIBRARY_PATH="$OPENFHE_LIB" "$mult_server" mult_keys --target="$TARGET" --no-ring-dim-check
+# Clear the loader search path for this one: mult_server dispatches to the
+# compiler's replay binary, and a child process inherits our search path,
+# which would override the rpath the replay binary uses to find the OpenFHE
+# it was built against. Both binaries resolve their own libraries via rpath,
+# so no search path is needed here. (mult_client / mult_decrypt above and
+# below are client-only and keep theirs.)
+env -u LD_LIBRARY_PATH -u DYLD_LIBRARY_PATH \
+  "$mult_server" mult_keys --target="$TARGET" --no-ring-dim-check
 
 echo
 echo "=== [4/5] mult_decrypt ==="
