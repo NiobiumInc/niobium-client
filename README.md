@@ -39,7 +39,7 @@ There are four ways in, by audience:
 
 | You are… | Entry point | Start here |
 |---|---|---|
-| **An AI coding agent** (or pairing with one) | **nb DSL + design skill** — a staged FHE design methodology that auto-loads for Claude Code, OpenAI Codex, and other agentskills.io-compatible agents, paired with a compact DSL whose compiler generates all the plumbing | [`dsl_fhe/`](dsl_fhe/README.md), [`.claude/skills/`](.claude/skills/fhe-application-design) & [`.agents/skills/`](.agents/skills/fhe-application-design) |
+| **An AI coding agent** (or pairing with one) | **nb DSL + design skill** — a staged FHE design methodology that auto-loads for Claude Code, OpenAI Codex, and other agentskills.io-compatible agents, paired with a compact DSL whose compiler generates all the plumbing | [`dsl_fhe/`](dsl_fhe/README.md), [`niobium-skills`](https://github.com/NiobiumInc/niobium-skills) |
 | **An application developer** with OpenFHE C++ | **Instrumented OpenFHE** — write standard `EvalMult`/`EvalAdd`/… code, bracket it with `niobium::compiler()` calls; probes record everything | [Instrumenting an OpenFHE application](#entry-point-2--openfhe-for-application-developers), [`examples/`](examples/) |
 | **A compiler / code-generator author** | **FHETCH Polynomial IR** — emit the IR directly through the recording API (or the text trace format) and use the session, replay, and transport machinery as your backend | [`niobium-fhetch`](https://github.com/NiobiumInc/niobium-fhetch), [`src/fhetch_transport/`](src/fhetch_transport/) |
 | **An FHE library integrator** (GPU/accelerator back-ends) | **HAZE** — a CUDA-shaped C API (`hazeMalloc`/`hazeMemcpy`/`hazeNTT`/…): each call records one polynomial-level IR op, so CUDA-targeting FHE libraries port with minimal effort | [`vendor/niobium-haze`](https://github.com/NiobiumInc/niobium-haze) |
@@ -100,8 +100,8 @@ The combination is designed so an AI coding agent can take an application from
 
 - **The design skill** (installed from the
   [`niobium-skills`](https://github.com/NiobiumInc/niobium-skills)
-  catalog via `make sync-skill` into both [`.claude/skills/fhe-application-design`](.claude/skills/fhe-application-design)
-  and [`.agents/skills/fhe-application-design`](.agents/skills/fhe-application-design))
+  catalog via `make sync-skill` into both `.claude/skills/fhe-application-design`
+  and `.agents/skills/fhe-application-design`)
   auto-loads in this repository for Claude Code (from `.claude/skills/`), OpenAI
   Codex, and other agentskills.io-compatible agents (from `.agents/skills/`). It
   walks the staged methodology — privacy model, feasibility, plaintext ground truth, scheme
@@ -506,7 +506,7 @@ want.** Need an idea?
 
 The skill asks about your FHE expertise as well as additional pertinent questions, including which niobium-client install (or container) you would like to use, how you would like to source any required data, and whether you would like your app written using OpenFHE or the Niobium FHE domain-specific language (DSL).
 
-**d. Validate it on your own machine.** The skill generates a full FHE application with each of the major components properly segmented. That means that it generates the following separate programs:
+**d. Validate it on your own machine.** The skill generates a full FHE application with each of the major components properly segmented. That means that it generates the following separate programs (exact names depend on your stage declarations):
 
 - keygen
 - encrypt
