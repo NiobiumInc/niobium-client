@@ -4,11 +4,13 @@ A domain-specific language and cross-compiler for writing Fully Homomorphic Encr
 applications. The DSL compiles `.niob` source files to C++ with openFHE, producing
 self-contained binaries for a client-server FHE pipeline.
 
-> **Designing a new app? Load the design skill first.** Before writing `.niob`,
-> read [`../.claude/skills/fhe-application-design/SKILL.md`](../.claude/skills/fhe-application-design/SKILL.md)
-> — an 8-stage guide from problem statement through privacy model, feasibility,
-> scheme selection, circuit design, data layout, and parameter selection. The DSL
-> is how you *express* an FHE app; the skill is how you *design* one correctly.
+> **Designing a new app? Install the design skill first.** Before writing
+> `.niob`, run `make sync-skill` at the repository root to install the
+> `fhe-application-design` skill (into `../.claude/skills/` and
+> `../.agents/skills/`; it auto-loads once installed) — a staged guide from
+> problem statement through privacy model, feasibility, scheme selection,
+> circuit design, data layout, and parameter selection. The DSL is how you
+> *express* an FHE app; the skill is how you *design* one correctly.
 
 ## Motivation
 
