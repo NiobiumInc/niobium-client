@@ -2,25 +2,26 @@
 
 Guidance for Claude Code (and other agents) working in this repository.
 
-> **Designing or building an FHE application? Read
-> [`.claude/skills/fhe-application-design/SKILL.md`](.claude/skills/fhe-application-design/SKILL.md)
-> first (run `make sync-skill` to install it) — do not skip the design stages.** It is a staged design guide (privacy
-> model → feasibility → scheme → circuit → SIMD data layout → parameters →
-> codegen). This applies whether you enter through the nb DSL (`dsl_fhe/`),
-> instrumented OpenFHE (`examples/`), or direct FHETCH IR — the design work comes
-> before the code either way.
+> **Designing or building an FHE application? Install and follow the
+> `fhe-application-design` skill — do not skip the design stages.** It walks
+> privacy model, feasibility, scheme and parameter selection, a plaintext twin
+> validated against your own reference computation, then the encrypted program
+> and its Fog deployment. This applies whether you enter through the nb DSL
+> (`dsl_fhe/`), instrumented OpenFHE (`examples/`), or direct FHETCH IR — the
+> design work comes before the code either way.
 >
 > The skill is installed on demand, not committed: run `make sync-skill` to
-> install it into `.claude/skills/` and `.agents/skills/` (both gitignored). End
-> users of the catalog can instead run `npx skills add NiobiumInc/niobium-skills
-> --skill fhe-application-design`.
+> install it into `.claude/skills/` (Claude Code) and `.agents/skills/` (Open
+> Agent standard: Codex, Cursor, Copilot, Gemini, and others), both gitignored;
+> once installed it auto-loads. End users of the catalog can instead run
+> `npx skills add NiobiumInc/niobium-skills --skill fhe-application-design`.
 
 ## Project Overview
 
 **Niobium Client** is the open-source client stack for the Niobium Mistic FHE
 accelerator, with four entry points converging on one FHETCH Polynomial IR
-trace: the **nb DSL + design skill** (AI-agent coding, `dsl_fhe/` +
-`.claude/skills/fhe-application-design`), **instrumented OpenFHE**
+trace: the **nb DSL + design skill** (AI-agent coding, `dsl_fhe/` + the
+`fhe-application-design` skill), **instrumented OpenFHE**
 (application developers, `examples/`), **direct FHETCH IR emission** (compiler
 writers, via `libnbfhetch` + `src/fhetch_transport/`), and **HAZE** (FHE
 library integrators, CUDA-shaped C API, `vendor/niobium-haze`). It wires the
