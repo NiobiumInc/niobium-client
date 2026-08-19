@@ -401,6 +401,7 @@ sudo apt install -y build-essential cmake libssl-dev python3 git
 ```bash
 make sync         # fetch submodules: niobium-fhetch + nested OpenFHE + json + niobium-haze
 make release      # build OpenFHE + libnbfhetch + transport client + examples (Release)
+make install-release  # install the client SDK to vendor/lib/niobium-client
 make install-cli  # install fog + nbcc_fhetch_replay to ~/.local/bin
 make sync-skill   # install the FHE design skill into .claude + .agents
 ```
@@ -423,16 +424,22 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && exec $SHELL
 fog --help
 ```
 
-### 4. Log in and submit a sample job
+### 4. Log in
 
 ```bash
 fog init                                    # optional: write ~/.fog/config with defaults
-fog login -u you@example.com                # prompts for password; mints + stores an API key
+fog login -u you@example.com                # console email; prompts for password; mints + stores an API key
+fog list                                    # confirms auth (an empty list is fine)
+```
+
+### 5. Submit a sample job
+
+```bash
 cd build/examples
-./mult_client mult_keys 7 13 65536          # will create the mult_keys directory, generate keys, and encrypt(ring dimension of 2^16)
+./mult_client mult_keys 7 13 65536          # creates mult_keys/, generates keys, encrypts (ring dimension 2^16)
 fog submit ./mult_server mult_keys --target=FOG
 fog list                                    # watch your jobs
-./mult_decrypt mult_keys                    #decrypt the results
+./mult_decrypt mult_keys                    # decrypt the results
 ```
 
 `fog submit ./app --target=FOG …` provisions a Fog job, blocks until a worker is
@@ -446,6 +453,98 @@ worker, and decrypt reveals the product. `mult_client`'s last argument is the ri
 dimension (`65536` = 2^16); the two integers before it are the operands. 
 `fog submit` wraps `mult_server` so its `replay()` dispatches to the assigned worker 
 instead of the local simulator.
+
+### 6. Use the Niobium skill to design and create your own FHE application
+
+The [FHE application design skill](https://github.com/NiobiumInc/niobium-skills)
+walks a coding agent through eleven stages: privacy model, feasibility, scheme
+and parameter selection, a plaintext twin validated against your own reference
+computation, then the encrypted program and its Fog deployment. A first design
+takes 30 to 60 minutes.
+
+**a. Make a folder for the application beside this repository.** Your
+application is its own repository; this one is a build dependency beside it:
+
+```bash
+mkdir -p ../my-fhe-app && cd ../my-fhe-app
+```
+
+**b. Install the skill into that folder.** The installer asks about your agent and
+writes the skill where that agent reads it:
+
+```bash
+npx skills add NiobiumInc/niobium-skills --skill fhe-application-design
+```
+
+Alternatively, install via GitHub:
+
+```bash
+git clone --depth 1 https://github.com/NiobiumInc/niobium-skills /tmp/niobium-skills
+
+# Claude Code, Claude Desktop
+mkdir -p .claude/skills && cp -r /tmp/niobium-skills/skills/fhe-application-design .claude/skills/
+
+# Codex, Cursor, Copilot, Gemini, Windsurf, Cline
+mkdir -p .agents/skills && cp -r /tmp/niobium-skills/skills/fhe-application-design .agents/skills/
+```
+
+**c. Start your coding agent in that folder and ask it to build what you
+want.** Need an idea?
+
+- Score a patient's 30-day readmission risk on a cloud the hospital does not
+  trust with the record.
+- Tell a utility which households can shed load during a peak event, from
+  meter readings each household keeps encrypted.
+- Grade a part from line-sensor readings without the vendor's cloud learning
+  the production volume.
+
+> **Note:** the skill wakes on the vocabulary of the problem: FHE, homomorphic
+> encryption, encrypted computation, computing on encrypted data, OpenFHE,
+> CKKS, the Niobium Fog. Naming it directly (`use the fhe-application-design
+> skill`) works too, as does describing a computation the computing party must
+> not be able to read.
+
+The skill asks about your FHE expertise as well as additional pertinent questions, including which niobium-client install (or container) you would like to use, how you would like to source any required data, and whether you would like your app written using OpenFHE or the Niobium FHE domain-specific language (DSL).
+
+**d. Validate it on your own machine.** The skill generates a full FHE application with each of the major components properly segmented. That means that it generates the following separate programs:
+
+- keygen
+- encrypt
+- server
+- decrypt
+
+The skill also generates scaffolding to simplify running and documenting the application, including:
+
+- a `README`
+- a `Makefile`
+- a `run.sh` environment wrapper that points at your chosen `niobium-client` installation, and
+- a `run_test.sh` harness that runs the full program end-to-end
+
+Your agent runs these as it iterates. The methodology enables you to test your program locally via CPU and a functional simulator before a Fog run to ensure program and mathematical correctness.
+
+```bash
+./run.sh "./run_test.sh --cpu"   # plain OpenFHE on your CPU, compared against the twin
+./run.sh "./run_test.sh --sim"   # the local simulator over the generated trace
+```
+
+### 7. Run your application on the Fog
+
+A bare `run_test.sh` targets the Fog. Your API key from step 4 is already in
+`~/.fog`:
+
+```bash
+cd ../my-fhe-app
+./run.sh "./run_test.sh"
+```
+
+The server step runs under `fog submit --target=FOG`, which provisions a job,
+streams your keys, ciphertext, and the generated trace to the assigned worker,
+computes there, and returns the encrypted result for the client side to
+decrypt and check. The key material moves before any compute starts, as in
+step 5.
+
+The Fog runs using ciphertexts with ring dimension 2^16; the generated harness keeps that
+check on for every submission.
 
 ### `fog` command reference
 
