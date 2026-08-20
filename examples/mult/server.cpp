@@ -65,15 +65,6 @@ int main(int argc, char* argv[]) {
             std::cout << "Loaded eval mult key" << std::endl;
         }
     }
-    {
-        std::ifstream rkStream(keyDir + "/rk.bin", std::ios::in | std::ios::binary);
-        if (rkStream.is_open()) {
-            if (!cc->DeserializeEvalAutomorphismKey(rkStream, SerType::BINARY))
-                throw std::runtime_error("Failed to load eval automorphism key");
-            std::cout << "Loaded eval automorphism key" << std::endl;
-        }
-    }
-
     // ---- Capture crypto context and tag polys for simulator ----
     // Address allocation is lazy (matches compiler's compact_address):
     // poly IDs exist from deserialization but only get FHETCH addresses
@@ -89,15 +80,23 @@ int main(int argc, char* argv[]) {
 
     if (!niobium::compiler().is_cache_valid()) {
         // ---- RECORDING PHASE ----
-        std::cout << "\n--- Recording EvalMult ---" << std::endl;
+        const bool hollow = niobium::compiler().is_hollow_mode();  // set by --hollow
+        std::cout << "\n--- Recording EvalMult ("
+                  << (hollow ? "hollow" : "real") << " mode) ---" << std::endl;
+        niobium::compiler().enable_hollow_mode(hollow);
         niobium::compiler().start();
 
-        auto ct_result = cc->EvalMult(ct_a, ct_b);
+        // Compress to one tower: decrypt needs only the last tower, and the
+        // compressed ciphertext is what travels back from a remote worker.
+        auto ct_result = cc->Compress(cc->EvalMult(ct_a, ct_b), 1);
 
         niobium::compiler().probe("result", ct_result);
         niobium::compiler().stop();
+        niobium::compiler().enable_hollow_mode(false);  // replay does real math
 
-        ct_openfhe = ct_result;  // stash for diff after replay
+        // A hollow record holds placeholder values, so there is no reference to diff.
+        if (!hollow)
+            ct_openfhe = ct_result;  // stash for diff after replay
     }
 
     // ---- REPLAY: execute trace through the FHETCH simulator ----

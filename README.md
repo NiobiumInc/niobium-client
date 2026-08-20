@@ -437,7 +437,7 @@ fog list                                    # confirms auth (an empty list is fi
 ```bash
 cd build/examples
 ./mult_client mult_keys 7 13 65536          # creates mult_keys/, generates keys, encrypts (ring dimension 2^16)
-fog submit ./mult_server mult_keys --target=FOG
+fog submit ./mult_server mult_keys --hollow --target=FOG
 fog list                                    # watch your jobs
 ./mult_decrypt mult_keys                    # decrypt the results
 ```
@@ -452,7 +452,8 @@ generates keys and encrypts two integers, the server multiplies them on a Fog
 worker, and decrypt reveals the product. `mult_client`'s last argument is the ring 
 dimension (`65536` = 2^16); the two integers before it are the operands. 
 `fog submit` wraps `mult_server` so its `replay()` dispatches to the assigned worker 
-instead of the local simulator.
+instead of the local simulator. `--hollow` records the instruction trace without 
+computing the result on your machine; the Fog does the real math.
 
 ### 6. Use the Niobium skill to design and create your own FHE application
 

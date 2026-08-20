@@ -61,33 +61,43 @@ int main(int argc, char* argv[]) {
     if (!Serial::DeserializeFromFile(keyDir + "/ct_b.bin", ct_b, SerType::BINARY))
         throw std::runtime_error("Failed to load ciphertext b");
 
+    // Load only the keys this operation uses — tag_keys() ships whatever the
+    // context holds, so loading nothing extra uploads nothing extra.
+    const bool needs_mult_key = operation == "MUL" || operation == "MUL_ADD" ||
+                                operation == "ADD_MUL" || operation == "MUL_MUL";
+    const bool needs_rotation_key = operation == "MORPH";
     bool has_mult_key = false;
-    {
+    if (needs_mult_key) {
         std::ifstream mkStream(keyDir + "/mk.bin", std::ios::binary);
         if (mkStream.is_open()) {
             if (cc->DeserializeEvalMultKey(mkStream, SerType::BINARY))
                 has_mult_key = true;
         }
     }
-    {
+    bool has_rotation_key = false;
+    if (needs_rotation_key) {
         std::ifstream rkStream(keyDir + "/rk.bin", std::ios::binary);
-        if (rkStream.is_open())
-            cc->DeserializeEvalAutomorphismKey(rkStream, SerType::BINARY);
+        if (rkStream.is_open() &&
+            cc->DeserializeEvalAutomorphismKey(rkStream, SerType::BINARY))
+            has_rotation_key = true;
     }
 
     // ---- Capture crypto context and tag polys ----
     niobium::compiler().capture_crypto_context(cc);
     niobium::compiler().tag_input("ct_a", ct_a);
     niobium::compiler().tag_input("ct_b", ct_b);
-    if (has_mult_key)
+    if (has_mult_key || has_rotation_key)
         niobium::compiler().tag_keys(cc);
 
     // Saved copy of OpenFHE's own computed result — diffed against the
     // simulator's output after replay.
     Ciphertext<DCRTPoly> ct_openfhe;
 
+    const bool hollow = niobium::compiler().is_hollow_mode();  // set by --hollow
     if (!niobium::compiler().is_cache_valid()) {
-        std::cout << "\n--- Recording " << operation << " ---" << std::endl;
+        std::cout << "\n--- Recording " << operation << " ("
+                  << (hollow ? "hollow" : "real") << " mode) ---" << std::endl;
+        niobium::compiler().enable_hollow_mode(hollow);
         niobium::compiler().start();
 
         Ciphertext<DCRTPoly> result;
@@ -141,9 +151,16 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
+        // Compress to one tower: decrypt needs only the last tower, and the
+        // compressed ciphertext is what travels back from a remote worker.
+        result = cc->Compress(result, 1);
+
         niobium::compiler().probe("result", result);
         niobium::compiler().stop();
-        ct_openfhe = result;
+        niobium::compiler().enable_hollow_mode(false);  // replay does real math
+        // A hollow record holds placeholder values, so there is no reference to diff.
+        if (!hollow)
+            ct_openfhe = result;
     }
 
     // ---- Replay ----
