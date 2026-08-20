@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <cstddef>
+
 namespace niobium::fhetch_transport {
 
 // ---- HTTP endpoint -----------------------------------------------------
@@ -21,6 +23,27 @@ constexpr const char* kReplayPath = "/replay";
 
 // Content type the body-archive uses (request + response).
 constexpr const char* kArchiveContentType = "application/x-niobium-archive";
+
+// ---- Customer log ------------------------------------------------------
+// The compiler cannot answer the user directly: it runs behind this daemon,
+// and the daemon does not forward its stdout/stderr, which carry internal
+// logging and can name server-side paths (see --return-logs, off by default).
+// So a compile that fails for a reason the *user* must act on -- "your client
+// is too old for this compiler" -- would otherwise surface as a bare 500.
+//
+// The compiler keeps a separate, curated log of messages written for the user.
+// It is generated under rules that keep it free of internal identifiers and
+// paths, which is exactly why it can be returned when the internal log cannot.
+// The compiler writes it into the project directory under this name.
+//
+// One NDJSON record per line: {ts, v, level, phase, msg}. Relaying it needs no
+// JSON parser -- the daemon returns the bytes and the client prints the `msg`
+// of each line, falling back to the whole line if it cannot find one.
+constexpr const char* kCustomerLogFile = "niobium_customer.ndjson";
+
+// Cap on how much of that log is returned. A failing run can produce many
+// records; the tail is the part that explains the failure.
+constexpr std::size_t kCustomerLogMaxBytes = 64 * 1024;
 
 // ---- Headers -----------------------------------------------------------
 // Target device id (FUNC_SIM, fpga5.2, …). Required on the request.
