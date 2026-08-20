@@ -85,6 +85,33 @@ set(OPENFHE_LIBRARY_PATH "${OPENFHE_INSTALL_DIR}/lib")
 set(NIOBIUM_CLIENT_FHETCH_DIR "" CACHE PATH
     "External niobium-fhetch source tree to use instead of vendor/niobium-fhetch (empty = use vendored submodule)")
 
+# Identify this client in every bundle it produces, so the compiler consuming
+# the bundle can tell whether it still accepts it. See COMPATIBILITY.md.
+#
+# VERSION is the contract-relevant part and the only thing compared. The
+# `git describe` suffix identifies the exact build, which matters because
+# customers build from source at arbitrary commits -- an untagged build reports
+# e.g. "0.1.0+g1d7db00" and is checked on the 0.1.0.
+#
+# Set before the add_subdirectory() calls below: this is what supplies
+# NIOBIUM_CLIENT_VERSION to niobium-fhetch, which writes the stamp. Directory
+# compile definitions only reach subdirectories added after they are set.
+set(NIOBIUM_CLIENT_BUILD_ID "${NIOBIUM_CLIENT_VERSION}")
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} describe --always --dirty
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE _nbc_describe
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+    if(_nbc_describe)
+        set(NIOBIUM_CLIENT_BUILD_ID "${NIOBIUM_CLIENT_VERSION}+${_nbc_describe}")
+    endif()
+endif()
+add_compile_definitions(NIOBIUM_CLIENT_VERSION="${NIOBIUM_CLIENT_BUILD_ID}")
+message(STATUS "niobium-client build id: ${NIOBIUM_CLIENT_BUILD_ID}")
+
 if(NIOBIUM_RUNTIME_PREFIX)
     # Runtime mode: consume the prebuilt core. Build only the fhetch bindings against it
     # (bindings/python sees NIOBIUM_RUNTIME_PREFIX -> runtime mode); OpenFHE, libnbfhetch,
