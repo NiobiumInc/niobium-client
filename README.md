@@ -438,9 +438,10 @@ docker run --rm -it -v "$HOME/.fog":/root/.fog ghcr.io/niobiuminc/fhe-dev:latest
 ```
 
 All of the examples come prebuilt inside the image. The second command opens
-a shell in the image's client tree with your Fog credentials mounted, so
-steps 4 and 5 run inside it unchanged. Keys and traces created in the shell
-last only for that session.
+a shell in the image's client tree with `~/.fog` mounted, so steps 4 and 5
+run inside it unchanged and the API key that `fog login` writes persists on
+your machine. Everything else a run creates (crypto keys, ciphertexts,
+traces) lives in the container, which `--rm` discards when the shell exits.
 
 ### 4. Log in
 
