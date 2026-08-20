@@ -55,14 +55,19 @@ int main(int argc, char* argv[]) {
     cc->EvalRotateKeyGen(keyPair.secretKey, {1, -1});
 
     // Serialize
-    Serial::SerializeToFile(outputDir + "/cc.bin", cc, SerType::BINARY);
-    Serial::SerializeToFile(outputDir + "/pk.bin", keyPair.publicKey, SerType::BINARY);
-    Serial::SerializeToFile(outputDir + "/sk.bin", keyPair.secretKey, SerType::BINARY);
+    if (!Serial::SerializeToFile(outputDir + "/cc.bin", cc, SerType::BINARY))
+        throw std::runtime_error("Failed to serialize crypto context");
+    if (!Serial::SerializeToFile(outputDir + "/pk.bin", keyPair.publicKey, SerType::BINARY))
+        throw std::runtime_error("Failed to serialize public key");
+    if (!Serial::SerializeToFile(outputDir + "/sk.bin", keyPair.secretKey, SerType::BINARY))
+        throw std::runtime_error("Failed to serialize secret key");
     std::ofstream mkStream(outputDir + "/mk.bin", std::ios::binary);
-    cc->SerializeEvalMultKey(mkStream, SerType::BINARY);
+    if (!mkStream.is_open() || !cc->SerializeEvalMultKey(mkStream, SerType::BINARY))
+        throw std::runtime_error("Failed to serialize eval mult key");
     mkStream.close();
     std::ofstream rkStream(outputDir + "/rk.bin", std::ios::binary);
-    cc->SerializeEvalAutomorphismKey(rkStream, SerType::BINARY);
+    if (!rkStream.is_open() || !cc->SerializeEvalAutomorphismKey(rkStream, SerType::BINARY))
+        throw std::runtime_error("Failed to serialize eval automorphism key");
     rkStream.close();
 
     // Pack two slots in ct_a so rotations produce a non-trivial result:
@@ -72,8 +77,10 @@ int main(int argc, char* argv[]) {
     auto ct_a = cc->Encrypt(keyPair.publicKey, cc->MakeCKKSPackedPlaintext(va));
     auto ct_b = cc->Encrypt(keyPair.publicKey, cc->MakeCKKSPackedPlaintext(vb));
 
-    Serial::SerializeToFile(outputDir + "/ct_a.bin", ct_a, SerType::BINARY);
-    Serial::SerializeToFile(outputDir + "/ct_b.bin", ct_b, SerType::BINARY);
+    if (!Serial::SerializeToFile(outputDir + "/ct_a.bin", ct_a, SerType::BINARY))
+        throw std::runtime_error("Failed to serialize ciphertext a");
+    if (!Serial::SerializeToFile(outputDir + "/ct_b.bin", ct_b, SerType::BINARY))
+        throw std::runtime_error("Failed to serialize ciphertext b");
 
     std::ofstream valStream(outputDir + "/values.txt");
     valStream << a << " " << b << std::endl;

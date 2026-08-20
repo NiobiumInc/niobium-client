@@ -63,6 +63,8 @@ int main(int argc, char* argv[]) {
 
     // Load only the keys this operation uses — tag_keys() ships whatever the
     // context holds, so loading nothing extra uploads nothing extra.
+    // Only ct*ct multiplies need the relinearization key; scalar EvalMult
+    // (MULI, ALL_NO_MUL) does not.
     const bool needs_mult_key = operation == "MUL" || operation == "MUL_ADD" ||
                                 operation == "ADD_MUL" || operation == "MUL_MUL";
     const bool needs_rotation_key = operation == "MORPH";
@@ -86,6 +88,7 @@ int main(int argc, char* argv[]) {
     niobium::compiler().capture_crypto_context(cc);
     niobium::compiler().tag_input("ct_a", ct_a);
     niobium::compiler().tag_input("ct_b", ct_b);
+    // A session with no eval keys is valid (plaintext_add never tags any).
     if (has_mult_key || has_rotation_key)
         niobium::compiler().tag_keys(cc);
 
@@ -174,6 +177,7 @@ int main(int argc, char* argv[]) {
     Ciphertext<DCRTPoly> ct_result;
     if (niobium::compiler().result(cc, "result", ct_result)) {
         if (ct_openfhe) {
+            // Both sides are the Compress()ed single-tower result.
             std::cout << "\n--- Differential: simulator vs OpenFHE ---" << std::endl;
             const auto& oe = ct_openfhe->GetElements();
             const auto& sm = ct_result->GetElements();

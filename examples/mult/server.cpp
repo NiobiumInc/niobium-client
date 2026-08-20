@@ -110,6 +110,7 @@ int main(int argc, char* argv[]) {
     Ciphertext<DCRTPoly> ct_result;
     if (niobium::compiler().result(cc, "result", ct_result)) {
         // ---- Differential: compare simulator output vs OpenFHE's own EvalMult result ----
+        // Both sides are the Compress()ed single-tower result.
         auto compare_func = [](Ciphertext<DCRTPoly>& ct_openfhe_, Ciphertext<DCRTPoly>& ct_result_){
         
             std::cout << "\n--- Differential: simulator vs OpenFHE ---" << std::endl;
