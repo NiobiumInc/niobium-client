@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
     const auto size = static_cast<InstanceSize>(std::stoi(argv[1]));
     InstanceParams prms(size);
 
-    int multiplicative_depth = 3;
+    int multiplicative_depth = 2;  // chained ct*ct multiplies supported; MUL_MUL uses two
     if (argc > 2 && std::isdigit(argv[2][0]))
         multiplicative_depth = std::stoi(argv[2]);
 

@@ -36,14 +36,14 @@ int main(int argc, char* argv[]) {
 
     std::filesystem::create_directories(outputDir);
 
-    // ---- CKKS parameters (matching compiler's TOY defaults) ----
+    // ---- CKKS parameters ----
     CCParams<CryptoContextCKKSRNS> parameters;
-    parameters.SetSecurityLevel(HEStd_NotSet);
-    parameters.SetRingDim(ring_dim);
-    parameters.SetMultiplicativeDepth(3);
-    parameters.SetScalingModSize(42);
-    parameters.SetFirstModSize(57);
-    parameters.SetScalingTechnique(FLEXIBLEAUTO);
+    parameters.SetSecurityLevel(HEStd_NotSet);     // no HE-standard security check (demo parameters)
+    parameters.SetRingDim(ring_dim);               // polynomial ring size; the Fog runs 2^16
+    parameters.SetMultiplicativeDepth(1);          // chained ct*ct multiplies supported; this circuit uses one
+    parameters.SetScalingModSize(42);              // bits of scale consumed by each multiply
+    parameters.SetFirstModSize(57);                // bits of the last modulus standing at decrypt
+    parameters.SetScalingTechnique(FLEXIBLEAUTO);  // rescale automatically after each multiply
 
     CryptoContext<DCRTPoly> cc = GenCryptoContext(parameters);
     cc->Enable(PKE);
@@ -56,10 +56,6 @@ int main(int argc, char* argv[]) {
     // ---- Key generation ----
     auto keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
-    // Generate a minimal rotation key set so the server can exercise the
-    // evalautomorphism-key loading path (matches the compiler reference,
-    // which always ships with rotation keys regardless of operation).
-    cc->EvalRotateKeyGen(keyPair.secretKey, {1, -1});
 
     // ---- Serialize crypto context + keys ----
     if (!Serial::SerializeToFile(outputDir + "/cc.bin", cc, SerType::BINARY))
@@ -73,11 +69,6 @@ int main(int argc, char* argv[]) {
     if (!mkStream.is_open() || !cc->SerializeEvalMultKey(mkStream, SerType::BINARY))
         throw std::runtime_error("Failed to serialize eval mult key");
     mkStream.close();
-
-    std::ofstream rkStream(outputDir + "/rk.bin", std::ios::out | std::ios::binary);
-    if (!rkStream.is_open() || !cc->SerializeEvalAutomorphismKey(rkStream, SerType::BINARY))
-        throw std::runtime_error("Failed to serialize eval automorphism key");
-    rkStream.close();
 
     // ---- Encrypt inputs ----
     std::vector<double> va = {a};
