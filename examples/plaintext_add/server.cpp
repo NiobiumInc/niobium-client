@@ -70,13 +70,19 @@ int main(int argc, char* argv[]) {
     niobium::compiler().tag_input("input_plaintext", pt);
 
     if (!niobium::compiler().is_cache_valid()) {
-        std::cout << "\n--- Recording plaintext-add ---" << std::endl;
+        const bool hollow = niobium::compiler().is_hollow_mode();  // set by --hollow
+        std::cout << "\n--- Recording plaintext-add ("
+                  << (hollow ? "hollow" : "real") << " mode) ---" << std::endl;
+        niobium::compiler().enable_hollow_mode(hollow);
         niobium::compiler().start();
 
-        auto ciphertextAfter = cc->EvalAdd(ciph, pt);
+        // Compress to one tower: decrypt needs only the last tower, and the
+        // compressed ciphertext is what travels back from a remote worker.
+        auto ciphertextAfter = cc->Compress(cc->EvalAdd(ciph, pt), 1);
 
         niobium::compiler().probe("output_cipher", ciphertextAfter);
         niobium::compiler().stop();
+        niobium::compiler().enable_hollow_mode(false);  // replay does real math
     }
 
     // ---- REPLAY: execute trace through the FHETCH simulator ----
