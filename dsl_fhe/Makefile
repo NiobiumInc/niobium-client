@@ -1,7 +1,8 @@
 XCOMP     := xcomp
 NBC       := python3 -m xcomp.nbc
 EXAMPLES  := examples
-NPROC     := $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+include ../make/platform.mk
+NPROC     := $(NB_NUM_CPUS)
 
 # Root of the niobium-client checkout (holds vendor/lib/openfhe and the built
 # libnbfhetch). dsl_fhe lives directly under it.
