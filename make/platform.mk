@@ -1,12 +1,8 @@
 # Host detection, shared by the root Makefile and dsl_fhe/Makefile so the two
 # cannot drift apart.
 #
-# nproc is coreutils and absent on macOS; sysctl lives in /usr/sbin, which is not
-# always on PATH, so it is also tried by absolute path. Falling back to a literal
-# matters: an empty value would turn `-j $(NB_NUM_CPUS)` into unbounded
-# parallelism rather than an error.
+# getconf is in /usr/bin on both Linux and macOS and needs no coreutils, unlike
+# nproc, and no /usr/sbin on PATH, unlike sysctl. The literal fallback matters:
+# an empty value would turn `-j $(NB_NUM_CPUS)` into unbounded parallelism.
 
-NB_NUM_CPUS := $(shell nproc 2>/dev/null \
-	|| sysctl -n hw.ncpu 2>/dev/null \
-	|| /usr/sbin/sysctl -n hw.ncpu 2>/dev/null \
-	|| echo 4)
+NB_NUM_CPUS := $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)
