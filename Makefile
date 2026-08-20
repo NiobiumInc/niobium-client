@@ -656,6 +656,7 @@ clean: ## Remove all build artifacts
 	-rm -rf $(OPENFHE_DIR)/build $(OPENFHE_DIR)/dbuild
 	-rm -rf bootstrap_keys mult_keys simple_ops_keys plaintext_add_keys
 	-rm -rf bootstrap_server_* mult_server_* simple_ops_server_* plaintext_add_server_*
+	-rm -rf nbcc_fhetch_replay_source_*
 
 clean-all: clean ## Deep clean including vendor installations
 	-rm -rf $(VENDOR_LIB_DIR)

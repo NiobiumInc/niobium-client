@@ -74,6 +74,7 @@ plaintext_add_keys/
 plaintext_add_server_workload_*/
 simple_ops_keys/
 simple_ops_server_workload_*/
+nbcc_fhetch_replay_source_*/
 
 # Reference material (scratch dirs at the repo root)
 /references/
