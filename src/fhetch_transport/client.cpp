@@ -97,6 +97,56 @@ std::pair<std::string, std::string> origin_of(const std::string& url) {
 
 }  // namespace
 
+
+// Render an error body from the server.
+//
+// When the compiler had something to say to the user, the body is its customer
+// log: one NDJSON record per line, of which only `msg` is worth showing. We
+// deliberately do not link a JSON parser for this -- the records are machine
+// generated to a fixed schema, so finding `msg` is a substring away, and any
+// line we cannot read is printed verbatim rather than dropped. Bodies that are
+// not customer records (a plain daemon error) fall through unchanged.
+std::string render_error_body(const std::string& body) {
+    const std::string key = "\"msg\":\"";
+    std::string out;
+    std::size_t pos = 0;
+
+    while (pos < body.size()) {
+        std::size_t eol = body.find('\n', pos);
+        if (eol == std::string::npos) eol = body.size();
+        const std::string line = body.substr(pos, eol - pos);
+        pos = eol + 1;
+        if (line.empty()) continue;
+
+        const std::size_t k = line.find(key);
+        if (k == std::string::npos) {          // not a record we understand
+            out += line;
+            out += '\n';
+            continue;
+        }
+
+        // Walk to the closing quote, honouring backslash escapes, and undo the
+        // handful of escapes a JSON string can carry.
+        std::string msg;
+        for (std::size_t i = k + key.size(); i < line.size(); ++i) {
+            const char c = line[i];
+            if (c == '"') break;
+            if (c != '\\') { msg += c; continue; }
+            if (++i >= line.size()) break;
+            switch (line[i]) {
+                case 'n':  msg += '\n'; break;
+                case 't':  msg += '\t'; break;
+                case 'r':  break;              // drop bare CR
+                case 'u':  msg += '?'; i += 4; break;  // non-ASCII: placeholder
+                default:   msg += line[i];     // \" \\ \/ and anything else
+            }
+        }
+        out += msg;
+        out += '\n';
+    }
+    return out.empty() ? body : out;
+}
+
 int main(int argc, char** argv) {
     namespace nft = niobium::fhetch_transport;
 
@@ -231,7 +281,7 @@ int main(int argc, char** argv) {
     }
     if (res->status != 200) {
         std::cerr << "[nbcc_fhetch_replay] server returned " << res->status
-                  << ": " << res->body << "\n";
+                  << ":\n" << render_error_body(res->body);
         return 4;
     }
 

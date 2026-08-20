@@ -29,6 +29,8 @@
 #include <filesystem>
 #include <iostream>
 #include <limits>
+#include <fstream>
+#include <iterator>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -178,6 +180,35 @@ std::string unique_tempdir(const std::string& prefix) {
     buf.push_back('\0');
     if (!::mkdtemp(buf.data())) throw std::runtime_error("could not create temp directory");
     return buf.data();
+}
+
+// Read the tail of the compiler's customer log, if it wrote one.
+//
+// Returned to the client even though --return-logs is off: unlike the captured
+// stdout/stderr, this log is curated for the user and carries no internal
+// identifiers or paths (see kCustomerLogFile). Empty string when there is
+// nothing to relay, leaving the caller's generic report in place.
+std::string read_customer_log(const std::string& tempdir) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const fs::path path = fs::path(tempdir) / nft::kCustomerLogFile;
+
+    const auto size = fs::file_size(path, ec);
+    if (ec) return {};                       // absent or unreadable
+
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return {};
+
+    // Take the tail, then drop the partial first line so every line returned
+    // is a whole record.
+    if (size > nft::kCustomerLogMaxBytes) {
+        in.seekg(static_cast<std::streamoff>(size - nft::kCustomerLogMaxBytes));
+        std::string discard;
+        std::getline(in, discard);
+    }
+    std::string out((std::istreambuf_iterator<char>(in)),
+                    std::istreambuf_iterator<char>());
+    return out;
 }
 
 // Sentinel: the child could not be started at all (bad path, no exec perm, out
@@ -464,11 +495,16 @@ struct Handler {
         }
 
         if (exit_code != 0) {
+            // Prefer what the compiler wrote for the user. Read before the
+            // tempdir goes away below.
+            const std::string customer = read_customer_log(tempdir);
             res.status = 500;
-            res.set_content(detail_for_client(
-                                "nbcc_fhetch_replay exited " +
-                                    std::to_string(exit_code),
-                                log),
+            res.set_content(!customer.empty()
+                                ? customer
+                                : detail_for_client(
+                                      "nbcc_fhetch_replay exited " +
+                                          std::to_string(exit_code),
+                                      log),
                             "text/plain");
             std::error_code ec; fs::remove_all(tempdir, ec);
             return;
