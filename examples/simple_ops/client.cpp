@@ -33,12 +33,12 @@ int main(int argc, char* argv[]) {
     std::filesystem::create_directories(outputDir);
 
     CCParams<CryptoContextCKKSRNS> parameters;
-    parameters.SetSecurityLevel(HEStd_NotSet);
-    parameters.SetRingDim(2048);
-    parameters.SetMultiplicativeDepth(3);
-    parameters.SetScalingModSize(42);
-    parameters.SetFirstModSize(57);
-    parameters.SetScalingTechnique(FLEXIBLEAUTO);
+    parameters.SetSecurityLevel(HEStd_NotSet);     // no HE-standard security check (demo parameters)
+    parameters.SetRingDim(2048);                   // polynomial ring size (toy; local sim only)
+    parameters.SetMultiplicativeDepth(2);          // chained ct*ct multiplies supported; MUL_MUL uses two
+    parameters.SetScalingModSize(42);              // bits of scale consumed by each multiply
+    parameters.SetFirstModSize(57);                // bits of the last modulus standing at decrypt
+    parameters.SetScalingTechnique(FLEXIBLEAUTO);  // rescale automatically after each multiply
 
     CryptoContext<DCRTPoly> cc = GenCryptoContext(parameters);
     cc->Enable(PKE);

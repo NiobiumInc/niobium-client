@@ -32,13 +32,13 @@ int main(int argc, char* argv[]) {
 
     // ---- CKKS parameters ----
     CCParams<CryptoContextCKKSRNS> parameters;
-    parameters.SetSecretKeyDist(UNIFORM_TERNARY);
-    parameters.SetSecurityLevel(HEStd_NotSet);
-    parameters.SetRingDim(2048);
-    parameters.SetScalingModSize(59);
-    parameters.SetScalingTechnique(FLEXIBLEAUTO);
-    parameters.SetFirstModSize(60);
-    parameters.SetMultiplicativeDepth(2);
+    parameters.SetSecretKeyDist(UNIFORM_TERNARY);  // secret-key coefficient distribution
+    parameters.SetSecurityLevel(HEStd_NotSet);     // no HE-standard security check (demo parameters)
+    parameters.SetRingDim(2048);                   // polynomial ring size (toy; local sim only)
+    parameters.SetScalingModSize(59);              // bits of scale consumed by each multiply
+    parameters.SetScalingTechnique(FLEXIBLEAUTO);  // rescale automatically after each multiply
+    parameters.SetFirstModSize(60);                // bits of the last modulus standing at decrypt
+    parameters.SetMultiplicativeDepth(1);          // chained ct*ct multiplies supported; this circuit uses none
 
     CryptoContext<DCRTPoly> cc = GenCryptoContext(parameters);
     cc->Enable(PKE);
