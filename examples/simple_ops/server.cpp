@@ -68,28 +68,24 @@ int main(int argc, char* argv[]) {
     const bool needs_mult_key = operation == "MUL" || operation == "MUL_ADD" ||
                                 operation == "ADD_MUL" || operation == "MUL_MUL";
     const bool needs_rotation_key = operation == "MORPH";
-    bool has_mult_key = false;
     if (needs_mult_key) {
         std::ifstream mkStream(keyDir + "/mk.bin", std::ios::binary);
-        if (mkStream.is_open()) {
-            if (cc->DeserializeEvalMultKey(mkStream, SerType::BINARY))
-                has_mult_key = true;
-        }
+        if (mkStream.is_open())
+            cc->DeserializeEvalMultKey(mkStream, SerType::BINARY);
     }
-    bool has_rotation_key = false;
     if (needs_rotation_key) {
         std::ifstream rkStream(keyDir + "/rk.bin", std::ios::binary);
-        if (rkStream.is_open() &&
-            cc->DeserializeEvalAutomorphismKey(rkStream, SerType::BINARY))
-            has_rotation_key = true;
+        if (rkStream.is_open())
+            cc->DeserializeEvalAutomorphismKey(rkStream, SerType::BINARY);
     }
 
     // ---- Capture crypto context and tag polys ----
     niobium::compiler().capture_crypto_context(cc);
     niobium::compiler().tag_input("ct_a", ct_a);
     niobium::compiler().tag_input("ct_b", ct_b);
-    // A session with no eval keys is valid (plaintext_add never tags any).
-    if (has_mult_key || has_rotation_key)
+    // Keyless sessions are valid: tag_keys only serializes eval keys; context
+    // metadata comes from capture_crypto_context.
+    if (needs_mult_key || needs_rotation_key)
         niobium::compiler().tag_keys(cc);
 
     // Saved copy of OpenFHE's own computed result — diffed against the
