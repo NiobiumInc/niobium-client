@@ -8,7 +8,8 @@
 //
 // This file is pure OpenFHE — no Niobium compiler dependency.
 //
-// Usage: ./plaintext_add_client [output_dir]
+// Usage: ./plaintext_add_client [output_dir [ring_dim]]
+//   Defaults: output_dir=plaintext_add_keys, ring_dim=2048
 
 #include "openfhe.h"
 
@@ -23,7 +24,9 @@ using namespace lbcrypto;
 
 int main(int argc, char* argv[]) {
     std::string outputDir = "plaintext_add_keys";
+    uint32_t ring_dim = 2048;
     if (argc > 1) outputDir = argv[1];
+    if (argc > 2) ring_dim = static_cast<uint32_t>(std::stoul(argv[2]));
 
     std::cout << "=== CKKS Plaintext-Add — Client (Key Generation) ===" << std::endl;
     std::cout << "Output directory: " << outputDir << std::endl;
@@ -34,7 +37,7 @@ int main(int argc, char* argv[]) {
     CCParams<CryptoContextCKKSRNS> parameters;
     parameters.SetSecretKeyDist(UNIFORM_TERNARY);  // secret-key coefficient distribution
     parameters.SetSecurityLevel(HEStd_NotSet);     // no HE-standard security check (demo parameters)
-    parameters.SetRingDim(2048);                   // polynomial ring size (toy; local sim only)
+    parameters.SetRingDim(ring_dim);               // polynomial ring size; the Fog runs 2^16
     parameters.SetScalingModSize(59);              // bits of scale consumed by each multiply
     parameters.SetScalingTechnique(FLEXIBLEAUTO);  // rescale automatically after each multiply
     parameters.SetFirstModSize(60);                // bits of the last modulus standing at decrypt
