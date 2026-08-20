@@ -424,6 +424,24 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && exec $SHELL
 fog --help
 ```
 
+### 3b. Or run the examples in the FHE-dev container
+
+The [FHE-dev image](https://github.com/NiobiumInc/niobium-skills) ships this
+client prebuilt: the examples, the `fog` CLI, and the design skill's
+build-and-run toolchain, from a snapshot of this repository's main branch
+taken when the image was published. Docker is the only local install. Build
+natively (step 3) when you will modify the client itself.
+
+```bash
+docker pull ghcr.io/niobiuminc/fhe-dev:latest
+docker run --rm -it -v "$HOME/.fog":/root/.fog ghcr.io/niobiuminc/fhe-dev:latest
+```
+
+All of the examples come prebuilt inside the image. The second command opens
+a shell in the image's client tree with your Fog credentials mounted, so
+steps 4 and 5 run inside it unchanged. Keys and traces created in the shell
+last only for that session.
+
 ### 4. Log in
 
 ```bash
@@ -504,7 +522,7 @@ want.** Need an idea?
 > skill`) works too, as does describing a computation the computing party must
 > not be able to read.
 
-The skill asks about your FHE expertise as well as additional pertinent questions, including which niobium-client install (or container) you would like to use, how you would like to source any required data, and whether you would like your app written using OpenFHE or the Niobium FHE domain-specific language (DSL).
+The skill asks about your FHE expertise as well as additional pertinent questions, including which niobium-client install (or container) you would like to use, how you would like to source any required data, and whether you would like your app written using OpenFHE or the Niobium FHE domain-specific language (DSL). If you choose the container as your build environment, the skill walks you through mounting your application folder into it.
 
 **d. Validate it on your own machine.** The skill generates a full FHE application with each of the major components properly segmented. That means that it generates the following separate programs (exact names depend on your stage declarations):
 
