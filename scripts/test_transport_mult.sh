@@ -138,23 +138,32 @@ fi
 echo
 echo "decrypt PASS — continuing to binary comparison"
 
+# sha256sum is GNU coreutils; macOS ships shasum instead.
+sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$@"
+  else
+    shasum -a 256 "$@"
+  fi
+}
+
 echo
 echo "=== [5/5] binary comparison ==="
 # Compute the hashes of the result openfhe computed, the result our pipeline writes to the final destination,
 # the ciphertext template the compiler uses, and the serialized probe of the compiler
-OPENFHE_RESULT_HASH=$(sha256sum mult_keys/ct_result_openfhe.bin | awk '{print $1}')
+OPENFHE_RESULT_HASH=$(sha256 mult_keys/ct_result_openfhe.bin | awk '{print $1}')
 echo "OpenFHE Gold Standard"
 echo $OPENFHE_RESULT_HASH
 
-FINAL_RESULT_HASH=$(sha256sum mult_keys/ct_result.bin | awk '{print $1}') 
+FINAL_RESULT_HASH=$(sha256 mult_keys/ct_result.bin | awk '{print $1}') 
 echo "Compiler Pipeline Result"
 echo $FINAL_RESULT_HASH
 
-CT_TEMPLATE_HASH=$(sha256sum mult_server_workload_ckks_mult/ciphertext_templates/result.template | awk '{print $1}')
+CT_TEMPLATE_HASH=$(sha256 mult_server_workload_ckks_mult/ciphertext_templates/result.template | awk '{print $1}')
 echo "Compiler Internal Ciphertext Template"
 echo $CT_TEMPLATE_HASH
 
-CT_PROBE_HASH=$(sha256sum mult_server_workload_ckks_mult/serialized_probes/result.ct | awk '{print $1}')
+CT_PROBE_HASH=$(sha256 mult_server_workload_ckks_mult/serialized_probes/result.ct | awk '{print $1}')
 echo "Compiler Internal Serialized Probe"
 echo $CT_PROBE_HASH
 

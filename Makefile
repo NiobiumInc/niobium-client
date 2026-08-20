@@ -32,10 +32,10 @@ UNAME_S := $(shell uname -s)
 
 ifndef NUM_CPUS
   ifeq ($(UNAME_S), Darwin)
-    NUM_CPUS := $(shell sysctl -n hw.ncpu)
+    NUM_CPUS := $(shell sysctl -n hw.ncpu 2>/dev/null || /usr/sbin/sysctl -n hw.ncpu 2>/dev/null || echo 4)
     export DYLD_LIBRARY_PATH := $(CURDIR)/vendor/lib/openfhe/lib:$(DYLD_LIBRARY_PATH)
   else
-    NUM_CPUS := $(shell nproc)
+    NUM_CPUS := $(shell nproc 2>/dev/null || echo 4)
     export LD_LIBRARY_PATH := $(CURDIR)/vendor/lib/openfhe/lib:$(LD_LIBRARY_PATH)
   endif
 endif
