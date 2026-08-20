@@ -8,7 +8,8 @@
 //
 // This file is pure OpenFHE — no Niobium compiler dependency.
 //
-// Usage: ./bootstrap_client [output_dir]
+// Usage: ./bootstrap_client [output_dir [ring_dim]]
+//   Defaults: output_dir=bootstrap_keys, ring_dim=2048
 
 #include "openfhe.h"
 
@@ -23,7 +24,9 @@ using namespace lbcrypto;
 
 int main(int argc, char* argv[]) {
     std::string outputDir = "bootstrap_keys";
+    uint32_t ring_dim = 2048;
     if (argc > 1) outputDir = argv[1];
+    if (argc > 2) ring_dim = static_cast<uint32_t>(std::stoul(argv[2]));
 
     std::cout << "=== CKKS Bootstrap — Client (Key Generation) ===" << std::endl;
     std::cout << "Output directory: " << outputDir << std::endl;
@@ -35,7 +38,10 @@ int main(int argc, char* argv[]) {
     CCParams<CryptoContextCKKSRNS> parameters;
     parameters.SetSecretKeyDist(UNIFORM_TERNARY);
     parameters.SetSecurityLevel(HEStd_NotSet);
-    parameters.SetRingDim(2048);
+    // Polynomial ring size. Bootstrap keygen scales steeply with it: rotation
+    // keys for N/2 slots across the full ~24-level chain reach multiple GB and
+    // minutes of keygen at 2^16.
+    parameters.SetRingDim(ring_dim);
     parameters.SetScalingModSize(59);
     parameters.SetScalingTechnique(FLEXIBLEAUTO);
     parameters.SetFirstModSize(60);
