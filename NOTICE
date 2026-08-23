@@ -2,7 +2,7 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-08-20
+Generated: 2026-08-23
 Tool: SCANOSS (snippet detection with License dataset)
 Components: 77
 
@@ -762,6 +762,7 @@ COMPONENT ATTRIBUTIONS
     Copyright 1995 97 Mark Olesen  lt;olesen@me.QueensU.CA gt
     Copyright 1995-1998 Eric Young  eay@cryptsoft.com)
     Copyright 1995-2022 Jean-loup Gailly and Mark Adler
+    Copyright 1995-2026 Jean-loup Gailly and Mark Adler
     Copyright 1996-2010 the NASM Authors - All rights reserved
     Copyright 1998 Todd C. Miller  lt;Todd.Miller@courtesan.com gt;
     Copyright 1998-2011 The OpenSSL Project.  All rights reserved.
@@ -770,7 +771,7 @@ COMPONENT ATTRIBUTIONS
     Copyright 2000-2007 Niels Provos  lt;provos@citi.umich.edu gt;
     Copyright 2001 Steve Underwood
     Copyright 2001-2011 Xiph.Org; Skype Limited; Octasic;
-    Copyright 2001-2017 Cisco Systems; Inc.
+    Copyright 2001-2017 Cisco Systems Inc
     Copyright 2001-2023 Xiph.Org; Skype Limited; Octasic;
     Copyright 2002 Niels Provos  lt;provos@citi.umich.edu gt
     Copyright 2003 Michael A. Davis  lt;mike@datanerds.net gt;
@@ -779,13 +780,13 @@ COMPONENT ATTRIBUTIONS
     Copyright 2005 Steve Underwood
     Copyright 2005-2008 ; The Android Open Source Project
     Copyright 2005-2017 ; Xiph.Org Foundation
-    Copyright 2006 Maxim Yegorushkin  lt;maxim.yegorushkin@gmail.com gt;
+    Copyright 2006 Maxim Yegorushkin  lt;maxim.yegorushkin@gmail.com gt
     Copyright 2007 Sun Microsystems
     Copyright 2007-2010 Niels Provos and Nick Mathewson
     Copyright 2007-2017 ; Jean-Marc Valin
-    Copyright 2007-2019 University of Illinois at Urbana-Champaign.
+    Copyright 2007-2019 University of Illinois at Urbana-Champaign
     Copyright 2008 Google Inc.  All rights reserved.
-    Copyright 2009 The Go Authors. All rights reserved.
+    Copyright 2009 The Go Authors. All rights reserved
     Copyright 2009-2014 by the contributors listed in CREDITS.TXT
     Copyright 2009-2015 by the contributors listed in CREDITS.TXT
     Copyright 2009-2019 by the contributors listed in CREDITS.TXT
@@ -795,7 +796,7 @@ COMPONENT ATTRIBUTIONS
     Copyright 2010 The Android Open Source Project
     Copyright 2011 ; The WebRTC project authors. All rights reserved.
     Copyright 2011 Google Inc. All Rights Reserved.
-    Copyright 2011 The LibYuv Project Authors. All rights reserved.
+    Copyright 2011 The LibYuv Project Authors. All rights reserved
     Copyright 2013 Julien Pommier ( pommier@modartt.com )
     Copyright 2015 The Chromium Authors
     Copyright 2015 The Chromium Authors. All rights reserved
