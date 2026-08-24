@@ -106,6 +106,7 @@ keys:
 # All fields are optional; omitted fields use init() defaults.
 compiler:
   target:       FUNC_SIM       # FUNC_SIM | FHE_SIM | QEMU_SIM | FPGA1 | FPGA2
+  trace_format: binary         # --trace-format (text | binary | both)
   optimization: "3"            # -O level
   registers:    "32"           # --registers
   memory:       "16"           # --memory (GB)
