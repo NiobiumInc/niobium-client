@@ -383,6 +383,48 @@ AUTO_B         ?= 3
 AUTO_IMM       ?= 0
 AUTO_EXPECTED  ?= 10
 
+test-auto-trace-format-release: build-release ## Auto-facade: --trace-format reaches the compiler through nbcc.py + YAML
+	$(call set-build-config,Release,build)
+	@rm -rf ciphers_auto_fmt
+	@mkdir -p ciphers_auto_fmt
+	@echo "=== keygen ==="
+	@cd ciphers_auto_fmt && LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib \
+		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_cache_keys 0
+	@echo "=== encrypt ==="
+	@cd ciphers_auto_fmt && LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib \
+		$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_client 0 $(AUTO_A) $(AUTO_B) output_a.bin output_b.bin
+	@for fmt in text binary both; do \
+		echo ""; \
+		echo "=== record with --trace-format=$$fmt ==="; \
+		rm -rf ciphers_auto_fmt/auto_fmt_*; \
+		( cd ciphers_auto_fmt && LD_LIBRARY_PATH=$(OPENFHE_INSTALL_DIR)/lib \
+			python3 $(CURDIR)/tools/nbcc.py \
+			--name auto_fmt --cache wl=TOY --cache op=$(AUTO_OP) \
+			--keys-mult io/toy/keys/mk.bin --keys-auto io/toy/keys/rk.bin \
+			--no-ring-dim-check --trace-format=$$fmt \
+			-- \
+			$(CURDIR)/$(BUILD_DIR)/examples/ciphers_ops_server_auto 0 \
+			output_a.bin output_b.bin $(AUTO_EXPECTED) $(AUTO_OP) $(AUTO_IMM) ) \
+			> ciphers_auto_fmt/run_$$fmt.log 2>&1 \
+			|| { echo "  FAIL: record failed"; tail -20 ciphers_auto_fmt/run_$$fmt.log; exit 1; }; \
+		text_n=$$(find ciphers_auto_fmt -name '*.fhetch' | wc -l | tr -d ' '); \
+		bin_n=$$(find ciphers_auto_fmt -name '*.fhex' | wc -l | tr -d ' '); \
+		case "$$fmt" in \
+			text)   want_t=1; want_b=0 ;; \
+			binary) want_t=0; want_b=1 ;; \
+			both)   want_t=1; want_b=1 ;; \
+		esac; \
+		if [ "$$text_n" != "$$want_t" ] || [ "$$bin_n" != "$$want_b" ]; then \
+			echo "  FAIL: --trace-format=$$fmt produced .fhetch=$$text_n .fhex=$$bin_n," \
+			     "expected .fhetch=$$want_t .fhex=$$want_b"; \
+			exit 1; \
+		fi; \
+		grep -q "PASS\|MATCH\|correct" ciphers_auto_fmt/run_$$fmt.log \
+			|| { echo "  WARN: no success marker in run log"; }; \
+		echo "  OK: .fhetch=$$text_n .fhex=$$bin_n"; \
+	done
+	@echo "auto-facade trace-format: all three formats OK"
+
 test-auto-ciphers-release: build-release ## Auto-facade ciphers_ops: keygen → record → replay (no niobium:: in user code). Op/values overridable: AUTO_OP=... AUTO_A=... AUTO_B=... AUTO_IMM=... AUTO_EXPECTED=...
 	$(call set-build-config,Release,build)
 	@rm -rf ciphers_auto
@@ -644,7 +686,7 @@ test-transport-hardening-release: build-release ## Security regressions for the 
 	    $(if $(PROJECT),--project $(PROJECT),)
 
 ## Run all client-level Release tests (CI target — no fhetch submodule)
-test-client-release: test-simple-ops-release test-mult-release test-auto-ciphers-release test-bootstrap-release test-plaintext-add-release test-ring-dim-check-release test-transport-hardening-release
+test-client-release: test-simple-ops-release test-mult-release test-auto-ciphers-release test-auto-trace-format-release test-bootstrap-release test-plaintext-add-release test-ring-dim-check-release test-transport-hardening-release
 
 ## Run all currently-passing Release tests (client + fhetch submodule) — internal server only, do not run in CI
 test-release: test-client-release test-fhetch-release
