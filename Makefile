@@ -503,7 +503,7 @@ test-mult-release: build-release ## Run the multiply example: client → server 
 NIOBIUM_COMPILER_ROOT ?= $(realpath $(CURDIR)/../..)
 TARGET ?= FUNC_SIM
 
-test-mult-target-release: build-release ## Run mult with --target=$(TARGET). Overrides: TARGET=FUNC_SIM|fpga5.2|…  NIOBIUM_COMPILER_ROOT=/path
+test-mult-target-release: build-release ## Run mult with --target=$(TARGET). Overrides: TARGET=FUNC_SIM|fpga5.2|…  NIOBIUM_COMPILER_ROOT=/path  TRACE_FORMAT=text|binary|both
 	$(call set-build-config,Release,build)
 	@if [ ! -x "$(NIOBIUM_COMPILER_ROOT)/build/nbcc_fhetch_replay" ]; then \
 		echo "ERROR: nbcc_fhetch_replay not found at $(NIOBIUM_COMPILER_ROOT)/build/nbcc_fhetch_replay"; \
@@ -517,7 +517,23 @@ test-mult-target-release: build-release ## Run mult with --target=$(TARGET). Ove
 	@echo "=== [2/3] mult_server --target=$(TARGET) (hollow record → dispatch to compiler) ==="
 	NBCC_FHETCH_REPLAY=$(NIOBIUM_COMPILER_ROOT)/build/nbcc_fhetch_replay \
 	$(RUN_WITHOUT_LIBRARY_PATH) \
-		$(BUILD_DIR)/examples/mult_server mult_keys --target=$(TARGET) --no-ring-dim-check
+		$(BUILD_DIR)/examples/mult_server mult_keys --target=$(TARGET) --no-ring-dim-check \
+		$(if $(TRACE_FORMAT),--trace-format=$(TRACE_FORMAT))
+	@if [ -n "$(TRACE_FORMAT)" ]; then \
+		t=$$(find mult_server_workload_* -name '*.fhetch' 2>/dev/null | wc -l | tr -d ' '); \
+		b=$$(find mult_server_workload_* -name '*.fhex' 2>/dev/null | wc -l | tr -d ' '); \
+		case "$(TRACE_FORMAT)" in \
+			text)   wt=1; wb=0 ;; \
+			binary) wt=0; wb=1 ;; \
+			both)   wt=1; wb=1 ;; \
+		esac; \
+		if [ "$$t" != "$$wt" ] || [ "$$b" != "$$wb" ]; then \
+			echo "  FAIL: --trace-format=$(TRACE_FORMAT) produced .fhetch=$$t .fhex=$$b," \
+			     "expected .fhetch=$$wt .fhex=$$wb"; \
+			exit 1; \
+		fi; \
+		echo "  trace artifacts OK (.fhetch=$$t .fhex=$$b)"; \
+	fi
 	@echo ""
 	@echo "=== [3/3] mult_decrypt ==="
 	$(BUILD_DIR)/examples/mult_decrypt mult_keys
