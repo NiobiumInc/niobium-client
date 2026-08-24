@@ -258,6 +258,7 @@ static std::vector<std::string> build_init_argv(const YAML::Node &node) {
   };
 
   add_value_flag("target", "--target");
+  add_value_flag("trace_format", "--trace-format");
   if (node["optimization"])
     args.push_back("-O" + node["optimization"].as<std::string>());
   add_value_flag("registers", "--registers");
