@@ -156,7 +156,10 @@ directly.
 
 3. **Capture** — On `compiler().stop()`, the trace is finalized as a `.fhetch`
    text file plus a `fhetch_replay.json` manifest (crypto context, modulus
-   chain, key ID ranges, input/output layout).
+   chain, key ID ranges, input/output layout). Pass
+   `--trace-format=binary` to write a `.fhex` instead — the same program in a
+   binary form roughly 4x smaller and faster to read — or
+   `--trace-format=both` for both. The default is text.
 
 4. **Replay (local)** — `compiler().replay()` executes the recorded trace
    through the bundled FHETCH simulator; `compiler().result(cc, name, ct)`
