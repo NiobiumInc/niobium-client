@@ -57,6 +57,7 @@ def build_yaml(args):
             compiler_lines.append(f"  {key}: {'true' if value else 'false'}")
 
     add_value("target", args.target)
+    add_value("trace_format", args.trace_format)
     add_value("optimization", args.optimization)
     add_value("registers", args.registers)
     add_value("memory", args.memory)
@@ -128,6 +129,11 @@ def parse_args():
     parser.add_argument("--target", default="local",
                         help="Target (default: local — in-process FHETCH sim; "
                              "non-local values dispatch to nbcc_fhetch_replay)")
+    parser.add_argument("--trace-format", default=None,
+                        choices=["text", "binary", "both"],
+                        help="Trace serialization: text (.fhetch, default), "
+                             "binary (.fhex, ~4x smaller and faster to read), "
+                             "or both")
     parser.add_argument("-O", "--optimization", default=None,
                         help="Optimization level")
     parser.add_argument("--registers", default=None, help="Number of registers")
