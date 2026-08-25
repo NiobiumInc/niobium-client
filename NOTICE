@@ -2,9 +2,9 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-08-23
+Generated: 2026-08-25
 Tool: SCANOSS (snippet detection with License dataset)
-Components: 77
+Components: 76
 
 This file lists all third-party software components detected
 in this repository, along with their licenses and copyright
@@ -138,7 +138,7 @@ LICENSE SUMMARY
   LPPL-1.3c: 1 component(s)
   Libpng: 1 component(s)
   Linux-syscall-note: 1 component(s)
-  MIT: 22 component(s)
+  MIT: 21 component(s)
   MIT AND Apache-2.0: 1 component(s)
   MIT AND GPL-2.0-only AND GPL-1.0-or-later AND MIT AND GPL-1.0-or-later AND MIT AND Boehm-GC AND GPL-1.0-or-later: 1 component(s)
   MIT AND GPL-3.0-only: 1 component(s)
@@ -560,14 +560,6 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2014; Randolph Voorhies; Shane Grant
   License: BSD-3-Clause, BSL-1.0, MIT
 
-  github.com/yhirose/cpp-httplib
-  Version: v0.43.1
-  Source: https://proxy.golang.org/github.com/yhirose/cpp-httplib/@v/v0.43.1.zip
-  PURL: pkg:golang/github.com/yhirose/cpp-httplib
-  Copyright:
-    Copyright 2026 Yuji Hirose. All rights reserved
-  License: MIT
-
   google-testmock
   Version: 1.14.0
   Source: https://www.nuget.org/packages/google-testmock
@@ -603,17 +595,16 @@ COMPONENT ATTRIBUTIONS
     Copyright 2005 ; Google Inc.
     Copyright 2008 ; Google Inc.
     Copyright 2014 gperftools Contributors
-    Copyright 2023 gperftools Contributors
     Copyright (c) 2003; Google Inc.
     Copyright (c) 2004; Google Inc.
     Copyright (c) 2006; Google Inc.
     Copyright (c) 2007; Google Inc.
-    Copyright (c) 2008-2009; Google Inc.
     Copyright (c) 2009; Google Inc.
     Copyright (c) 2011; Google Inc.
     Copyright (c) 2013; Google Inc.
     Copyright (c) 2021; IBM Ltd.
     Copyright (c) 2021; gperftools Contributors
+    Copyright (c) 2023; gperftools Contributors
     Copyright (c) 2024; gperftools Contributors
   License: BSD-3-Clause
 
@@ -1036,15 +1027,13 @@ COMPONENT ATTRIBUTIONS
   License: Apache-2.0
 
   platform/external/googletest
-  Version: studio-2024.3.1
-  Source: https://android.googlesource.com/platform/external/googletest/+archive/studio-2024.3.1.tar.gz
+  Version: aml_ads_351017080
+  Source: https://android.googlesource.com/platform/external/googletest/+archive/aml_ads_351017080.tar.gz
   PURL: pkg:googlesource/android/platform/external/googletest
   Copyright:
     Copyright 2024 Google Inc
-    Copyright 2005; Google Inc.
     Copyright 2006; Google Inc.
     Copyright 2007; Google Inc.
-    Copyright 2018; Google Inc.
   License: BSD-3-Clause
 
   rayx
