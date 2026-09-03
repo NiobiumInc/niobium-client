@@ -39,7 +39,8 @@
 # Config (INI, all optional; precedence: env var > config file > built-in):
 #   ~/.fog/config       [fog] api_url, mode, wait, maxwait   (hand-edited)
 #   ~/.fog/credentials  [fog] api_token                      (written by `login`, 0600)
-#   Override the dir with $FOG_HOME.
+#   Override the dir with --config-dir <dir> (any position) or $FOG_HOME;
+#   the flag wins, and is exported as $FOG_HOME so children agree.
 #
 # Env (each overrides the config file):
 #   FOG_API_URL      base URL of fog-api                    [default https://api.niobium.co]
@@ -88,7 +89,13 @@ def die(msg):
 
 
 # ---- config / credentials (INI) ---------------------------------------------
+# Set from a global --config-dir (see _extract_config_dir); beats $FOG_HOME.
+_CONFIG_DIR = None
+
+
 def _home():
+    if _CONFIG_DIR:
+        return Path(_CONFIG_DIR).expanduser()
     return Path(os.environ.get("FOG_HOME") or (Path.home() / ".fog"))
 
 
@@ -403,6 +410,29 @@ def cmd_init(rest):
 
 
 # ---- dispatch ---------------------------------------------------------------
+def _extract_config_dir(argv):
+    """Pull a global `--config-dir <dir>` / `--config-dir=<dir>` out of argv.
+
+    Accepted in any position so it works before or after the subcommand, and in
+    driver mode (`fog --config-dir=d --project=… --target=…`), where the rest of
+    argv is passed through to the transport client. Returns (dir|None, rest)."""
+    rest, val, i = [], None, 0
+    while i < len(argv):
+        a = argv[i]
+        if a.startswith("--config-dir="):
+            val = a.split("=", 1)[1]
+        elif a == "--config-dir":
+            if i + 1 >= len(argv):
+                die("--config-dir needs a directory")
+            val, i = argv[i + 1], i + 1
+        else:
+            rest.append(a)
+        i += 1
+    if val == "":
+        die("--config-dir needs a directory")
+    return val, rest
+
+
 COMMANDS = {
     "init": cmd_init,
     "login": cmd_login,
@@ -422,6 +452,9 @@ USAGE = """usage: fog <command> [args]
   get ID [ID…]            full JSON for specific job(s)
   cancel ID [ID…]         cancel/release specific job(s)
   cancel --pending        cancel every in-flight job
+
+Global options:
+  --config-dir DIR        config/credentials directory [default $FOG_HOME or ~/.fog]
 
 Config: ~/.fog/config + ~/.fog/credentials (INI).
 """
@@ -469,12 +502,35 @@ def selftest():
         assert load_token() == "env-tok"
         os.environ["FOG_API_URL"] = "https://x"        # env beats default
         assert _api() == "https://x"
+    # --config-dir: stripped from any position, flag beats $FOG_HOME
+    assert _extract_config_dir(["submit", "--config-dir", "/d", "--target=T"]) \
+        == ("/d", ["submit", "--target=T"])
+    assert _extract_config_dir(["--config-dir=/d", "--project=p"]) == ("/d", ["--project=p"])
+    assert _extract_config_dir(["list"]) == (None, ["list"])
+    global _CONFIG_DIR
+    with tempfile.TemporaryDirectory() as d:
+        os.environ["FOG_HOME"] = "/nonexistent-fog-home"
+        _CONFIG_DIR = d
+        try:
+            assert _home() == Path(d)
+            os.environ.pop("FOG_API_TOKEN", None)
+            save_token("cfgdir-tok")
+            assert load_token() == "cfgdir-tok"
+            assert (Path(d) / "credentials").exists()
+        finally:
+            _CONFIG_DIR = None
     print("[fog] selftest OK")
 
 
 def main(argv):
     if argv[:1] == ["--selftest"]:
         return selftest()
+    global _CONFIG_DIR
+    config_dir, argv = _extract_config_dir(argv)
+    if config_dir:
+        _CONFIG_DIR = config_dir
+        # Export so any child (and a re-exec through this tool) resolves the same dir.
+        os.environ["FOG_HOME"] = str(Path(config_dir).expanduser())
     if not argv or argv[0] in ("-h", "--help"):
         print(USAGE, file=sys.stderr)
         return
