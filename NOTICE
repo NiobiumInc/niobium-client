@@ -2,9 +2,9 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-08-25
+Generated: 2026-09-05
 Tool: SCANOSS (snippet detection with License dataset)
-Components: 76
+Components: 78
 
 This file lists all third-party software components detected
 in this repository, along with their licenses and copyright
@@ -26,7 +26,7 @@ LICENSE SUMMARY
   AFL-2.1: 1 component(s)
   AFL-3.0 AND GPL-2.0-only AND AFL-2.1 AND GPL-2.0-or-later AND MIT AND GPL-1.0-or-later: 1 component(s)
   AGPL-3.0-only [COPYLEFT]: 1 component(s)
-  Apache-2.0: 16 component(s)
+  Apache-2.0: 17 component(s)
   Apache-2.0 AND Apache-2.0 AND OpenSSL: 1 component(s)
   Apache-2.0 WITH LLVM-exception: 3 component(s)
   Apache-2.0 WITH LLVM-exception AND NCSA: 2 component(s)
@@ -34,12 +34,12 @@ LICENSE SUMMARY
   Artistic-1.0-Perl: 1 component(s)
   Artistic-1.0-Perl OR GPL-1.0-or-later: 1 component(s)
   Artistic-2.0: 1 component(s)
-  BSD-2-Clause: 7 component(s)
+  BSD-2-Clause: 8 component(s)
   BSD-2-Clause AND BSD-3-Clause: 1 component(s)
   BSD-2-Clause AND LGPL-2.1-only: 1 component(s)
   BSD-2-Clause-Darwin: 1 component(s)
   BSD-2-Clause-Patent: 1 component(s)
-  BSD-3-Clause: 32 component(s)
+  BSD-3-Clause: 33 component(s)
   BSD-3-Clause AND GPL-2.0-only AND BSD-3-Clause OR GPL-2.0-or-later AND GPL-1.0-or-later: 1 component(s)
   BSD-3-Clause AND ISC AND ISC AND MIT AND MIT: 1 component(s)
   BSD-3-Clause-LBNL: 1 component(s)
@@ -138,7 +138,7 @@ LICENSE SUMMARY
   LPPL-1.3c: 1 component(s)
   Libpng: 1 component(s)
   Linux-syscall-note: 1 component(s)
-  MIT: 21 component(s)
+  MIT: 22 component(s)
   MIT AND Apache-2.0: 1 component(s)
   MIT AND GPL-2.0-only AND GPL-1.0-or-later AND MIT AND GPL-1.0-or-later AND MIT AND Boehm-GC AND GPL-1.0-or-later: 1 component(s)
   MIT AND GPL-3.0-only: 1 component(s)
@@ -434,7 +434,7 @@ COMPONENT ATTRIBUTIONS
 
   Fall_Semester_programing
   Version: 32-Linux
-  Source: https://github.com/Kirya23/Fall_Semester_programing
+  Source: https://github.com/kirya23/fall_semester_programing
   PURL: pkg:github/kirya23/fall_semester_programing
   Copyright:
     Copyright 2000-2001 ; University of Notre Dame.
@@ -459,7 +459,7 @@ COMPONENT ATTRIBUTIONS
   License: LGPL-2.1-only
 
   gcc
-  Version: basepoints
+  Version: basepoints/gcc-10
   Source: https://github.com/gcc-mirror/gcc
   PURL: pkg:github/gcc-mirror/gcc
   Copyright:
@@ -595,6 +595,7 @@ COMPONENT ATTRIBUTIONS
     Copyright 2005 ; Google Inc.
     Copyright 2008 ; Google Inc.
     Copyright 2014 gperftools Contributors
+    Copyright (c) 2000; Google Inc.
     Copyright (c) 2003; Google Inc.
     Copyright (c) 2004; Google Inc.
     Copyright (c) 2006; Google Inc.
@@ -622,6 +623,7 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2008-2009; Google Inc.
     Copyright (c) 2008; Google Inc.
     Copyright (c) 2011; Google Inc.
+    Copyright (c) 2013; Google Inc.
     Copyright (c) 2014; 2024; gperftools Contributors
     Copyright (c) 2014; gperftools Contributors
     Copyright (c) 2024; gperftools Contributors
@@ -642,6 +644,17 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2010; Google Inc.
     Copyright (c) 2024; gperftools Contributors
   License: BSD-3-Clause
+
+  GridGenerator
+  Version: V0.0.2
+  Source: https://github.com/sfcmm/gridgenerator
+  PURL: pkg:github/sfcmm/gridgenerator
+  Copyright:
+    Copyright (c) 2014 Jarryd Beck
+    Copyright (c) 2021; Institute of Surface Science @ Hereon
+    Copyright 2008; Google Inc.
+    Copyright copyright owner or entity authorized by
+  License: Apache-2.0, BSD-2-Clause, BSD-3-Clause, MIT
 
   gym-app
   Version: v1.0.0
@@ -701,6 +714,7 @@ COMPONENT ATTRIBUTIONS
   Copyright:
     Copyright 2007 Free Software Foundation Inc.  http:  fsf.org
     Copyright 2013-2019 Niels Lohmann  http:  nlohmann.me
+    Copyright 2013-2022 Niels Lohmann
     Copyright 2013-2022 Niels Lohmann  http:  nlohmann.me
     Copyright 2013-2023 Niels Lohmann
     Copyright 2013-2025 Niels Lohmann
@@ -1015,7 +1029,18 @@ COMPONENT ATTRIBUTIONS
     Copyright 2012-2016 Free Software Foundation Inc
     Copyright 2016 Google Inc. All Rights Reserved
     Copyright 2023 Daisuke Aritomo
-  License: BSD-3-Clause, MIT
+  License: MIT
+
+  platform.external.googletest
+  Version: android-14.0.0_r32
+  Source: https://github.com/msft-mirror-aosp/platform.external.googletest
+  PURL: pkg:github/msft-mirror-aosp/platform.external.googletest
+  Copyright:
+    Copyright 2005; Google Inc.
+    Copyright 2006; Google Inc.
+    Copyright 2007; Google Inc.
+    Copyright 2008; Google Inc.
+  License: BSD-3-Clause
 
   platform/external/google-benchmark
   Version: platform-tools-30.0.1
