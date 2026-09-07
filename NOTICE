@@ -2,7 +2,7 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-09-05
+Generated: 2026-09-07
 Tool: SCANOSS (snippet detection with License dataset)
 Components: 78
 
@@ -330,7 +330,7 @@ COMPONENT ATTRIBUTIONS
 
   codspeed-cpp
   Version: v1.0.0
-  Source: https://github.com/CodSpeedHQ/codspeed-cpp
+  Source: https://github.com/codspeedhq/codspeed-cpp
   PURL: pkg:github/codspeedhq/codspeed-cpp
   Copyright:
     Copyright 2025 CodSpeed Technology SAS and contributors
@@ -1006,7 +1006,7 @@ COMPONENT ATTRIBUTIONS
 
   Otus_IP_filter
   Version: 3
-  Source: https://github.com/Daniil199820/Otus_IP_filter
+  Source: https://github.com/daniil199820/otus_ip_filter
   PURL: pkg:github/daniil199820/otus_ip_filter
   Copyright:
     Copyright 2009 Google Inc. All rights reserved
