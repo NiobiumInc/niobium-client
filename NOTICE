@@ -2,9 +2,9 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-09-07
+Generated: 2026-09-10
 Tool: SCANOSS (snippet detection with License dataset)
-Components: 78
+Components: 73
 
 This file lists all third-party software components detected
 in this repository, along with their licenses and copyright
@@ -34,12 +34,12 @@ LICENSE SUMMARY
   Artistic-1.0-Perl: 1 component(s)
   Artistic-1.0-Perl OR GPL-1.0-or-later: 1 component(s)
   Artistic-2.0: 1 component(s)
-  BSD-2-Clause: 8 component(s)
+  BSD-2-Clause: 7 component(s)
   BSD-2-Clause AND BSD-3-Clause: 1 component(s)
   BSD-2-Clause AND LGPL-2.1-only: 1 component(s)
   BSD-2-Clause-Darwin: 1 component(s)
   BSD-2-Clause-Patent: 1 component(s)
-  BSD-3-Clause: 33 component(s)
+  BSD-3-Clause: 30 component(s)
   BSD-3-Clause AND GPL-2.0-only AND BSD-3-Clause OR GPL-2.0-or-later AND GPL-1.0-or-later: 1 component(s)
   BSD-3-Clause AND ISC AND ISC AND MIT AND MIT: 1 component(s)
   BSD-3-Clause-LBNL: 1 component(s)
@@ -138,7 +138,7 @@ LICENSE SUMMARY
   LPPL-1.3c: 1 component(s)
   Libpng: 1 component(s)
   Linux-syscall-note: 1 component(s)
-  MIT: 22 component(s)
+  MIT: 21 component(s)
   MIT AND Apache-2.0: 1 component(s)
   MIT AND GPL-2.0-only AND GPL-1.0-or-later AND MIT AND GPL-1.0-or-later AND MIT AND Boehm-GC AND GPL-1.0-or-later: 1 component(s)
   MIT AND GPL-3.0-only: 1 component(s)
@@ -195,14 +195,6 @@ COMPONENT ATTRIBUTIONS
     Copyright 1994; 1995; 1996; 1999; 2000; 2001; 2002 Free Software
     Copyright 1994; 1995; 1996; 1999; 2000; 2001; 2002 Free Software Foundation; Inc.
   License: 0BSD, 0BSD AND GPL-2.0-only AND GPL-3.0-only AND LGPL-2.1-only, AFL-2.1, AFL-3.0 AND GPL-2.0-only AND AFL-2.1 AND GPL-2.0-or-later AND MIT AND GPL-1.0-or-later, AGPL-3.0-only, Apache-2.0, Apache-2.0 AND Apache-2.0 AND OpenSSL, Apache-2.0 WITH LLVM-exception, Apache-2.0 WITH LLVM-exception AND NCSA, Artistic-1.0-Perl, Artistic-1.0-Perl OR GPL-1.0-or-later, Artistic-2.0, BSD-2-Clause, BSD-2-Clause AND BSD-3-Clause, BSD-2-Clause AND LGPL-2.1-only, BSD-2-Clause-Darwin, BSD-2-Clause-Patent, BSD-3-Clause, BSD-3-Clause AND GPL-2.0-only AND BSD-3-Clause OR GPL-2.0-or-later AND GPL-1.0-or-later, BSD-3-Clause AND ISC AND ISC AND MIT AND MIT, BSD-4-Clause-UC, BSD-Attribution-HPND-disclaimer, BSL-1.0, CC-BY-1.0, CC-BY-2.0, CC-BY-2.5, CC-BY-3.0, CC-BY-3.0-AT, CC-BY-3.0-US, CC-BY-4.0, CC-BY-NC-1.0, CC-BY-NC-2.0, CC-BY-NC-2.5, CC-BY-NC-3.0, CC-BY-NC-ND-1.0, CC-BY-NC-ND-2.5, CC-BY-NC-ND-3.0, CC-BY-NC-ND-3.0-IGO, CC-BY-NC-SA-1.0, CC-BY-NC-SA-2.0, CC-BY-NC-SA-2.5, CC-BY-NC-SA-3.0, CC-BY-ND-1.0, CC-BY-ND-2.5, CC-BY-ND-3.0, CC-BY-ND-4.0, CC-BY-SA-1.0, CC-BY-SA-2.0, CC-BY-SA-2.0-UK, CC-BY-SA-2.1-JP, CC-BY-SA-2.5, CC-BY-SA-3.0, CC-BY-SA-3.0 AND GPL-2.0-or-later AND CC-BY-4.0 AND GPL-2.0-only, CC-BY-SA-3.0-AT, CC-BY-SA-4.0, CC-PDDC, CC0-1.0, CC0-1.0 OR Apache-2.0 AND CC0-1.0 AND Apache-2.0 AND CC0-1.0 AND Apache-2.0, CDDL-1.0, CDDL-1.1, CPL-1.0, EPL-1.0, EPL-2.0, FSFAP, GCC-exception-3.1, GFDL-1.1-only, GFDL-1.2-only, GFDL-1.3-only, GPL-1.0-only, GPL-1.0-or-later, GPL-1.0-or-later AND BSD-3-Clause, GPL-1.0-or-later AND CC-BY-4.0, GPL-1.0-or-later AND GPL-2.0-or-later AND GPL-2.0-only, GPL-1.0-or-later AND GPL-3.0-only AND MIT, GPL-2.0-only, GPL-2.0-only AND GPL-3.0-only AND GPL-1.0-or-later AND GPL-1.0-or-later AND GPL-2.0-only, GPL-3.0-linking-exception, GPL-3.0-linking-source-exception, GPL-3.0-only, GPL-3.0-only AND BSD-3-Clause AND GPL-1.0-or-later AND GPL-2.0-only, GPL-3.0-only AND GPL-1.0-or-later AND BSD-3-Clause, GPL-3.0-or-later AND FSFAP, GPL-CC-1.0, HPND, HPND AND MIT-open-group, HPND AND MIT-open-group AND HPND-DEC, HPND-DEC AND MIT-open-group, HPND-sell-variant, HPND-sell-variant AND MIT, ICU, ISC, ISC AND BSD-Source-Code AND BSD-3-Clause AND BSD-2-Clause AND Zlib, LGPL-2.0-only, LGPL-2.0-or-later AND LGPL-2.1-or-later, LGPL-2.1-only, LGPL-2.1-only AND GPL-1.0-or-later AND LGPL-2.1-or-later, LGPL-2.1-only AND GPL-2.0-only AND GPL-2.0-only, LGPL-2.1-only AND GPL-2.0-only AND LGPL-2.1-only, LGPL-2.1-or-later, LGPL-2.1-or-later AND GPL-3.0-or-later, LGPL-2.1-or-later AND LGPL-2.0-or-later, LGPL-2.1-or-later AND LLGPL, LGPL-2.1-or-later AND MPL-1.0 AND GPL-1.0-or-later, LGPL-3.0-linking-exception, LGPL-3.0-only, LGPL-3.0-only AND CC-BY-SA-3.0, LGPLLR, LPPL-1.0, LPPL-1.1, LPPL-1.2, LPPL-1.3a, LPPL-1.3c, Libpng, Linux-syscall-note, MIT, MIT AND Apache-2.0, MIT AND GPL-2.0-only AND GPL-1.0-or-later AND MIT AND GPL-1.0-or-later AND MIT AND Boehm-GC AND GPL-1.0-or-later, MIT AND GPL-3.0-only, MIT AND HPND-sell-variant, MIT AND HPND-sell-variant AND MIT AND HPND AND MIT-open-group AND X11, MIT AND MIT-open-group, MIT AND X11-distribute-modifications-variant, MIT OR PSF-2.0, MIT-0, MIT-open-group, MIT-open-group AND HPND-sell-variant, MIT-open-group AND X11, MPL-1.0, MPL-1.1, MPL-2.0, MPL-2.0 AND Apache-2.0, OFL-1.1, OFL-1.1 AND Apache-2.0, OLDAP-2.8, PHP-3.0, PHP-3.01, Ruby, SGI-B-2.0, Sleepycat AND BSD-3-Clause, Spencer-86, Swift-exception AND u-boot-exception-2.0 AND WxWindows-exception-3.1, TU-Berlin-2.0, Unlicense, W3C, WTFPL, X11, X11 AND MIT, X11-distribute-modifications-variant, ZPL-1.1, ZPL-2.0, ZPL-2.1, Zlib, bzip2-1.0.6, curl, libtiff, snprintf
-
-  AStarSearch
-  Version: 1.0
-  Source: https://github.com/eliainnocenti/AStarSearch
-  PURL: pkg:github/eliainnocenti/astarsearch
-  Copyright:
-    Copyright 2007; Google Inc.
-  License: BSD-3-Clause
 
   aview
   Version: 1.3.0rc1-6
@@ -336,17 +328,6 @@ COMPONENT ATTRIBUTIONS
     Copyright 2025 CodSpeed Technology SAS and contributors
   License: MIT
 
-  Common
-  Version: v1
-  Source: https://github.com/SFCMM/Common
-  PURL: pkg:github/sfcmm/common
-  Copyright:
-    Copyright (c) 2014 Jarryd Beck
-    Copyright (c) 2021; SFCMM
-    Copyright 2008; Google Inc.
-    Copyright copyright owner or entity authorized by
-  License: BSD-2-Clause
-
   controlr
   Version: 1.9.0
   Source: https://www.npmjs.com/package/controlr
@@ -407,14 +388,6 @@ COMPONENT ATTRIBUTIONS
   Copyright:
     Copyright 2005; Google Inc.
   License: Apache-2.0, BSD-3-Clause, MIT
-
-  DM-Project
-  Version: First-One
-  Source: https://github.com/Nekson228/DM-Project
-  PURL: pkg:github/nekson228/dm-project
-  Copyright:
-    Copyright 2008; Google Inc.
-  License: BSD-3-Clause
 
   doctest
   Version: 2.4.7
@@ -610,13 +583,12 @@ COMPONENT ATTRIBUTIONS
   License: BSD-3-Clause
 
   gperftools
-  Version: a81b2eb
+  Version: gperftools-2.8.1
   Source: https://github.com/alk/gperftools
   PURL: pkg:github/alk/gperftools
   Copyright:
     Copyright 2005 Google Inc
     Copyright 2023 gperftools Contributors
-    Copyright (c) 2000; Google Inc.
     Copyright (c) 2003; Google Inc.
     Copyright (c) 2004; Google Inc.
     Copyright (c) 2007; Google Inc.
@@ -666,7 +638,7 @@ COMPONENT ATTRIBUTIONS
   License: MIT
 
   HELICS
-  Version: 1.0.0-beta.2
+  Version: v1.0.0-beta.2
   Source: https://github.com/GMLC-TDC/HELICS
   PURL: pkg:github/gmlc-tdc/helics
   Copyright:
@@ -694,7 +666,7 @@ COMPONENT ATTRIBUTIONS
 
   imodel-native
   Version: v4.0.6
-  Source: https://github.com/iTwin/imodel-native
+  Source: https://github.com/itwin/imodel-native
   PURL: pkg:github/itwin/imodel-native
   Copyright:
     Copyright 2008 Google Inc
@@ -948,14 +920,6 @@ COMPONENT ATTRIBUTIONS
     Copyright 2006; Google Inc.
   License: BSD-3-Clause
 
-  nlohmann
-  Version: v3.10.5
-  Source: https://bitbucket.org/smi_multivet/nlohmann/get/v3.10.5.zip
-  PURL: pkg:bitbucket/smi_multivet/nlohmann
-  Copyright:
-    Copyright 2013-2022 Niels Lohmann
-  License: MIT
-
   nurikit
   Version: 0.1.0a14.post0
   Source: https://pypi.org/project/nurikit
@@ -1057,7 +1021,6 @@ COMPONENT ATTRIBUTIONS
   PURL: pkg:googlesource/android/platform/external/googletest
   Copyright:
     Copyright 2024 Google Inc
-    Copyright 2006; Google Inc.
     Copyright 2007; Google Inc.
   License: BSD-3-Clause
 
@@ -1066,7 +1029,6 @@ COMPONENT ATTRIBUTIONS
   Source: https://github.com/hz-b/rayx
   PURL: pkg:github/hz-b/rayx
   Copyright:
-    Copyright 2005; Google Inc.
     Copyright 2007; Google Inc.
   License: MIT
 
@@ -1101,15 +1063,6 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2018 Pranav Srinivas Kumar <pranav.srinivas.kumar@gmail.com>
     Copyright 2008; Google Inc.
   License: UNKNOWN — requires manual review
-
-  tcmalloc
-  Version: gperftools-2.1.90
-  Source: https://github.com/yangzhengxing/tcmalloc
-  PURL: pkg:github/yangzhengxing/tcmalloc
-  Copyright:
-    Copyright (c) 2005; Google Inc.
-    Copyright (c) 2013; Google Inc.
-  License: BSD-3-Clause
 
   Torque2D
   Version: v4.0-ea3
