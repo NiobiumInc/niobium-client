@@ -2,7 +2,7 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-09-10
+Generated: 2026-09-11
 Tool: SCANOSS (snippet detection with License dataset)
 Components: 73
 
@@ -215,9 +215,9 @@ COMPONENT ATTRIBUTIONS
   Source: https://github.com/google/benchmark
   PURL: pkg:github/google/benchmark
   Copyright:
+    Copyright 2015 Google Inc. All rights reserved
     Copyright 2021 Google Inc. All rights reserved
     Copyright 2015 Google Inc.
-    Copyright 2015 Google Inc. All rights reserved.
     Copyright 2016 Ismael Jimenez Martinez
     Copyright 2016 Ismael Jimenez Martinez. All rights reserved.
     Copyright 2017 Roman Lebedev. All rights reserved.
