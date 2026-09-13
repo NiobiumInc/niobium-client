@@ -56,7 +56,7 @@ jobs:
     # Downsized from n2-highmem-48 (384GB, sized for fhetch_driver's local
     # replay, now removed) to n2-highmem-16 (128GB) — measured peak with
     # FHE_SIM is ~57-59GB, so this keeps ~2x headroom.
-    runs-on: [self-hosted, gcp-ephemeral, n2-highmem-16]
+    runs-on: [self-hosted, gcp-ephemeral, n2-highmem-16, "run-${{ github.run_id }}"]
     timeout-minutes: 60
     env:
       SDK: /mnt/niobium-sdk/sdk
