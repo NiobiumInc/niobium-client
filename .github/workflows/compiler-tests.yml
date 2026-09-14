@@ -57,6 +57,31 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Pin branch SDK (lockstep changes only — .sdk-pin)
+        # No-op without a .sdk-pin file at the repo root. With one, the named
+        # sdk-branch-* tarball is fetched from the GCS mirror and BIND-MOUNTED
+        # over the nightly SDK, so every later step -- including anything that
+        # hardcodes the mount path -- sees the pin. A GITHUB_ENV write would
+        # not do that: this job defines SDK as job-level env, and job-level
+        # env is not reliably overridden by GITHUB_ENV. The VERSION check
+        # proves the pin took. Hard-fails on main so a pin cannot be merged.
+        run: |
+          set -e
+          [ -f .sdk-pin ] || { echo "no .sdk-pin — nightly SDK"; exit 0; }
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            echo "::error::.sdk-pin must not exist on main — remove it in the merge"; exit 1
+          fi
+          TAG="$(tr -d ' \n' < .sdk-pin)"
+          case "$TAG" in sdk-branch-*) ;; *) echo "::error::.sdk-pin must name an sdk-branch-* tag"; exit 1;; esac
+          DEST="$RUNNER_TEMP/branch-sdk"; mkdir -p "$DEST"
+          gcloud storage cp "gs://github-runner-499901-sdk-branches/$TAG/*.tar.*" "$DEST/" --quiet \
+            || { echo "::error::$TAG not in the mirror (built + ~20 min for the mirror cron?)"; exit 1; }
+          tar -xf "$DEST"/*.tar.* -C "$DEST"
+          SDKDIR="$(dirname "$(find "$DEST" -maxdepth 3 -name bin -type d | head -1)")"
+          sudo mount --bind "$SDKDIR" "$SDK"
+          grep -qx "$TAG" "$SDK/VERSION" \
+            || { echo "::error::pin did not take: $SDK/VERSION is '$(cat "$SDK/VERSION" 2>/dev/null)'"; exit 1; }
+          echo "pinned branch SDK: $TAG over $SDK"
       - name: Verify SDK is mounted (no version printed)
         run: |
           test -x "$SDK/bin/nbcc_fhetch_replay" || { echo "::error::SDK not mounted"; exit 1; }
