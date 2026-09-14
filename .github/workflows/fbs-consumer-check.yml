@@ -130,39 +130,51 @@ jobs:
 
       - name: Pin branch SDK (lockstep changes only — .sdk-pin)
         # No-op without a .sdk-pin file at the repo root. With one, the named
-        # sdk-branch-* tarball is fetched from the GCS mirror and BIND-MOUNTED
-        # over the nightly SDK, so every later step -- including anything that
+        # sdk-branch-* release's tarball is fetched from the GCS mirror,
+        # checksum-verified against its .sha256 sidecar, and BIND-MOUNTED over
+        # the nightly SDK, so every later step -- including anything that
         # hardcodes the mount path -- sees the pin. A GITHUB_ENV write would
-        # not do that: this job defines SDK as job-level env, and job-level
-        # env is not reliably overridden by GITHUB_ENV. The VERSION check
-        # proves the pin took. Hard-fails on main so a pin cannot be merged.
+        # not do that: this job defines SDK as job-level env, which GITHUB_ENV
+        # does not reliably override. The pin proves itself by mount identity
+        # (the SDK path now IS the extracted tree) plus the SDK contract file;
+        # the bundle's own VERSION is logged, not asserted -- the compiler
+        # writes the version string there, not the tag. Hard-fails on main so
+        # a pin cannot be merged.
         run: |
           set -e
           [ -f .sdk-pin ] || { echo "no .sdk-pin — nightly SDK"; exit 0; }
           if [ "$GITHUB_REF_NAME" = "main" ]; then
             echo "::error::.sdk-pin must not exist on main — remove it in the merge"; exit 1
           fi
-          TAG="$(tr -d ' \n' < .sdk-pin)"
+          TAG="$(tr -d ' \r\n' < .sdk-pin)"
           case "$TAG" in sdk-branch-*) ;; *) echo "::error::.sdk-pin must name an sdk-branch-* tag"; exit 1;; esac
           DEST="$RUNNER_TEMP/branch-sdk"; mkdir -p "$DEST"
-          # The compiler build takes ~15-25 min and the mirror cron copies the
-          # tarball a few minutes after it publishes, so a PR opened right after
-          # the dispatch would arrive first. Wait for it (bounded) instead of
-          # failing and asking someone to rerun.
           SRC="gs://github-runner-499901-sdk-branches/$TAG"
+          # The compiler build takes 15-25 min on the happy path (up to 3 h if
+          # it queues behind a running nightly) and its tarball lands in the
+          # bucket as it finishes; a PR opened right after the dispatch waits
+          # here instead of failing and asking for a rerun.
           for i in $(seq 1 60); do
             gcloud storage ls "$SRC/*.tar.*" >/dev/null 2>&1 && break
-            [ "$i" -eq 1 ] && echo "$TAG not in the mirror yet -- waiting up to 30 min for the build + mirror"
+            [ "$i" -eq 1 ] && echo "$TAG not in the mirror yet -- waiting up to 30 min for the compiler build"
             sleep 30
           done
           gcloud storage cp "$SRC/*.tar.*" "$DEST/" --quiet \
-            || { echo "::error::$TAG still not in the mirror after 30 min (did the build fail? is the tag exactly right?)"; exit 1; }
-          tar -xf "$DEST"/*.tar.* -C "$DEST"
-          SDKDIR="$(dirname "$(find "$DEST" -maxdepth 3 -name bin -type d | head -1)")"
+            || { echo "::error::$TAG still not in the mirror after 30 min -- check the release-binary-sdk run on the compiler branch, and that the tag is exactly right"; exit 1; }
+          # Two objects arrive: the tarball and its .sha256 sidecar. Name the
+          # tarball explicitly (a bare *.tar.* glob would hand tar the sidecar
+          # as a member to extract) and verify against the sidecar while it is here.
+          TARBALL="$(find "$DEST" -maxdepth 1 -name '*.tar.*' ! -name '*.sha256' | head -1)"
+          [ -n "$TARBALL" ] || { echo "::error::no tarball in $DEST"; exit 1; }
+          ( cd "$DEST" && sha256sum -c ./*.sha256 ) || { echo "::error::checksum mismatch for $TAG"; exit 1; }
+          tar -xf "$TARBALL" -C "$DEST"
+          SDKDIR="$(dirname "$(find "$DEST" -maxdepth 2 -name bin -type d | head -1)")"
+          [ -x "$SDKDIR/bin/nbcc_fhetch_replay" ] \
+            || { echo "::error::$TAG has no bin/nbcc_fhetch_replay -- not an SDK bundle this job can use"; exit 1; }
           sudo mount --bind "$SDKDIR" "$SDK"
-          grep -qx "$TAG" "$SDK/VERSION" \
-            || { echo "::error::pin did not take: $SDK/VERSION is '$(cat "$SDK/VERSION" 2>/dev/null)'"; exit 1; }
-          echo "pinned branch SDK: $TAG over $SDK"
+          [ "$(stat -c %d:%i "$SDK")" = "$(stat -c %d:%i "$SDKDIR")" ] \
+            || { echo "::error::pin did not take: $SDK is not $SDKDIR after the bind mount"; exit 1; }
+          echo "pinned branch SDK: $TAG over $SDK (bundle VERSION: $(cat "$SDK/VERSION" 2>/dev/null || echo n/a))"
       - name: Verify SDK is mounted (no version printed)
         run: |
           test -x "$SDK/bin/nbcc_fhetch_replay" || { echo "::error::SDK not mounted"; exit 1; }
