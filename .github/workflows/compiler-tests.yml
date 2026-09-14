@@ -74,8 +74,18 @@ jobs:
           TAG="$(tr -d ' \n' < .sdk-pin)"
           case "$TAG" in sdk-branch-*) ;; *) echo "::error::.sdk-pin must name an sdk-branch-* tag"; exit 1;; esac
           DEST="$RUNNER_TEMP/branch-sdk"; mkdir -p "$DEST"
-          gcloud storage cp "gs://github-runner-499901-sdk-branches/$TAG/*.tar.*" "$DEST/" --quiet \
-            || { echo "::error::$TAG not in the mirror (built + ~20 min for the mirror cron?)"; exit 1; }
+          # The compiler build takes ~15-25 min and the mirror cron copies the
+          # tarball a few minutes after it publishes, so a PR opened right after
+          # the dispatch would arrive first. Wait for it (bounded) instead of
+          # failing and asking someone to rerun.
+          SRC="gs://github-runner-499901-sdk-branches/$TAG"
+          for i in $(seq 1 60); do
+            gcloud storage ls "$SRC/*.tar.*" >/dev/null 2>&1 && break
+            [ "$i" -eq 1 ] && echo "$TAG not in the mirror yet -- waiting up to 30 min for the build + mirror"
+            sleep 30
+          done
+          gcloud storage cp "$SRC/*.tar.*" "$DEST/" --quiet \
+            || { echo "::error::$TAG still not in the mirror after 30 min (did the build fail? is the tag exactly right?)"; exit 1; }
           tar -xf "$DEST"/*.tar.* -C "$DEST"
           SDKDIR="$(dirname "$(find "$DEST" -maxdepth 3 -name bin -type d | head -1)")"
           sudo mount --bind "$SDKDIR" "$SDK"
