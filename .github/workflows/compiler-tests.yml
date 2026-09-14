@@ -105,7 +105,8 @@ jobs:
             || { echo "::error::pin did not take: $SDK is not $SDKDIR after the bind mount"; exit 1; }
           # Bundle-to-tag binding, warning-level: the producers enforce it, but a
           # bundle whose VERSION does not even mention the tag's sha7 is worth a
-          # word in the log (the selftest fixture is exactly that, on purpose).
+          # word in the log. The selftest fixture carries the real sha7, so it does
+          # not warn; only a bundle mirrored under an unrelated tag would.
           BUNDLE_VERSION="$(cat "$SDK/VERSION" 2>/dev/null || echo n/a)"
           grep -q "${TAG##*-}" <<< "$BUNDLE_VERSION" \
             || echo "::warning::bundle VERSION '$BUNDLE_VERSION' does not mention the tag's sha7 (${TAG##*-})"
