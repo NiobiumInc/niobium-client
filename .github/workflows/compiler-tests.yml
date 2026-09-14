@@ -58,7 +58,8 @@ jobs:
           submodules: recursive
 
       - name: Pin branch SDK (lockstep changes only — .sdk-pin)
-        # No-op without a .sdk-pin file at the repo root. With one, the named
+        # No-op without a .sdk-pin file at the consumer repo's root (path via
+        # SDK_PIN_FILE when the workflow nests that checkout). With one, the named
         # sdk-branch-* release's tarball is fetched from the GCS mirror,
         # checksum-verified against its .sha256 sidecar, and BIND-MOUNTED over
         # the nightly SDK, so every later step -- including anything that
@@ -71,11 +72,15 @@ jobs:
         # a pin cannot be merged.
         run: |
           set -e
-          [ -f .sdk-pin ] || { echo "no .sdk-pin — nightly SDK"; exit 0; }
+          # SDK_PIN_FILE: where THIS workflow checked the consumer repo out. Default is
+          # the workspace root; a workflow that nests the repo (fbs-consumer-check puts
+          # niobium-client at fbs/submission/niobium-client) sets it in job env.
+          PIN="${SDK_PIN_FILE:-.sdk-pin}"
+          [ -f "$PIN" ] || { echo "no $PIN — nightly SDK"; exit 0; }
           if [ "$GITHUB_REF_NAME" = "main" ]; then
             echo "::error::.sdk-pin must not exist on main — remove it in the merge"; exit 1
           fi
-          TAG="$(tr -d ' \r\n' < .sdk-pin)"
+          TAG="$(tr -d ' \r\n' < "$PIN")"
           case "$TAG" in sdk-branch-*) ;; *) echo "::error::.sdk-pin must name an sdk-branch-* tag"; exit 1;; esac
           DEST="$RUNNER_TEMP/branch-sdk"; mkdir -p "$DEST"
           SRC="gs://github-runner-499901-sdk-branches/$TAG"
