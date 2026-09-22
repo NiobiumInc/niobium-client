@@ -29,6 +29,10 @@ jobs:
       OPENFHE_ROOT: ${{ github.workspace }}/vendor/lib/openfhe
 
     steps:
+      # Resolved once for the whole job; every -j below reads $JOBS.
+      - name: Detect CPU count
+        run: echo "JOBS=$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)" >> "$GITHUB_ENV"
+
       # ------------------------------------------------------------
       # Checkout — niobium-fhetch is a submodule, and OpenFHE lives one
       # level deeper as a nested submodule. --recursive pulls both.
@@ -159,7 +163,7 @@ jobs:
           export CXX="ccache g++"
           make -C vendor/niobium-fhetch config-fhetch-release \
             OPENFHE_INSTALL_DIR="$OPENFHE_ROOT"
-          cmake --build vendor/niobium-fhetch/build -j"$(nproc)" --target fhetch_driver
+          cmake --build vendor/niobium-fhetch/build -j "$JOBS" --target fhetch_driver
 
       # Compiler unit tests (lexer / parser / semantic / codegen), build every
       # example (DSL -> C++ -> binaries), and run the end-to-end tests that
