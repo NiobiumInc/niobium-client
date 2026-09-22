@@ -65,6 +65,10 @@ jobs:
       SDK_PIN_FILE: fbs/submission/niobium-client/.sdk-pin
       PORT: "9443"
     steps:
+      # Resolved once for the whole job; every -j below reads $JOBS.
+      - name: Detect CPU count
+        run: echo "JOBS=$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)" >> "$GITHUB_ENV"
+
       - name: Checkout fbs-submission (main)
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -216,7 +220,7 @@ jobs:
           make -C submission/niobium-client/vendor/niobium-fhetch config-fhetch-release \
             OPENFHE_INSTALL_DIR="$OPENFHE_PREFIX" EXTERNAL_OPENFHE=1
           cmake --build submission/niobium-client/vendor/niobium-fhetch/build \
-            -j"$(nproc)" --target fhetch_driver
+            -j "$JOBS" --target fhetch_driver
           scripts/build_task.sh ./submission "$OPENFHE_PREFIX"
 
       - name: Disk usage — after build
