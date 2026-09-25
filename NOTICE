@@ -2,9 +2,9 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-09-24
+Generated: 2026-09-25
 Tool: SCANOSS (snippet detection with License dataset)
-Components: 139
+Components: 144
 
 This file lists all third-party software components detected
 in this repository, along with their licenses and copyright
@@ -26,11 +26,12 @@ LICENSE SUMMARY
   AFL-2.1: 1 component(s)
   AFL-3.0 AND GPL-2.0-only AND AFL-2.1 AND GPL-2.0-or-later AND MIT AND GPL-1.0-or-later: 1 component(s)
   AGPL-3.0-only [COPYLEFT]: 1 component(s)
-  Apache-2.0: 29 component(s)
+  Apache-2.0: 31 component(s)
   Apache-2.0 AND Apache-2.0 AND OpenSSL: 1 component(s)
   Apache-2.0 WITH LLVM-exception: 4 component(s)
   Apache-2.0 WITH LLVM-exception AND NCSA: 2 component(s)
   Apache-2.0 WITH LLVM-exception AND NCSA AND NCSA OR MIT AND NCSA AND MIT: 1 component(s)
+  Apache-with-LLVM-Exception: 1 component(s)
   Artistic-1.0-Perl: 2 component(s)
   Artistic-1.0-Perl OR GPL-1.0-or-later: 1 component(s)
   Artistic-2.0: 1 component(s)
@@ -40,7 +41,7 @@ LICENSE SUMMARY
   BSD-2-Clause-Darwin: 1 component(s)
   BSD-2-Clause-Patent: 1 component(s)
   BSD-2-Clause-Views: 1 component(s)
-  BSD-3-Clause: 46 component(s)
+  BSD-3-Clause: 47 component(s)
   BSD-3-Clause AND GPL-2.0-only AND BSD-3-Clause OR GPL-2.0-or-later AND GPL-1.0-or-later: 1 component(s)
   BSD-3-Clause AND ISC AND ISC AND MIT AND MIT: 1 component(s)
   BSD-3-Clause-LBNL: 1 component(s)
@@ -75,7 +76,7 @@ LICENSE SUMMARY
   CC-BY-SA-2.0-UK: 1 component(s)
   CC-BY-SA-2.1-JP: 1 component(s)
   CC-BY-SA-2.5: 1 component(s)
-  CC-BY-SA-3.0: 1 component(s)
+  CC-BY-SA-3.0: 2 component(s)
   CC-BY-SA-3.0 AND GPL-2.0-or-later AND CC-BY-4.0 AND GPL-2.0-only: 1 component(s)
   CC-BY-SA-3.0-AT: 1 component(s)
   CC-BY-SA-4.0: 1 component(s)
@@ -98,7 +99,7 @@ LICENSE SUMMARY
   GPL-1.0-or-later AND CC-BY-4.0: 1 component(s)
   GPL-1.0-or-later AND GPL-2.0-or-later AND GPL-2.0-only: 1 component(s)
   GPL-1.0-or-later AND GPL-3.0-only AND MIT: 1 component(s)
-  GPL-2.0-only [COPYLEFT]: 9 component(s)
+  GPL-2.0-only [COPYLEFT]: 10 component(s)
   GPL-2.0-only AND GPL-3.0-only AND GPL-1.0-or-later AND GPL-1.0-or-later AND GPL-2.0-only: 1 component(s)
   GPL-2.0-or-later [COPYLEFT]: 3 component(s)
   GPL-3.0-linking-exception: 1 component(s)
@@ -142,7 +143,7 @@ LICENSE SUMMARY
   LPPL-1.3c: 1 component(s)
   Libpng: 1 component(s)
   Linux-syscall-note: 1 component(s)
-  MIT: 56 component(s)
+  MIT: 57 component(s)
   MIT AND Apache-2.0: 1 component(s)
   MIT AND GPL-2.0-only AND GPL-1.0-or-later AND MIT AND GPL-1.0-or-later AND MIT AND Boehm-GC AND GPL-1.0-or-later: 1 component(s)
   MIT AND GPL-3.0-only: 1 component(s)
@@ -191,6 +192,14 @@ LICENSE SUMMARY
 
 COMPONENT ATTRIBUTIONS
 
+  android_external_google-benchmark
+  Version: Edge_Pie_V191205
+  Source: https://github.com/khadas/android_external_google-benchmark
+  PURL: pkg:github/khadas/android_external_google-benchmark
+  Copyright:
+    Copyright copyright owner or entity authorized by
+  License: Apache-2.0
+
   AsersX-for-Termux
   Version: v1.0.0
   Source: https://github.com/TermuxnTR/AsersX-for-Termux
@@ -214,6 +223,12 @@ COMPONENT ATTRIBUTIONS
     Copyright copyright used for BSD software; slightly modified
   License: GPL-2.0-or-later
 
+  bazel-central-registry
+  Version: fee413b
+  Source: https://github.com/bazelbuild/bazel-central-registry
+  PURL: pkg:github/bazelbuild/bazel-central-registry
+  License: Apache-2.0
+
   benchmark
   Version: 571c235
   Source: https://github.com/google/benchmark
@@ -234,22 +249,22 @@ COMPONENT ATTRIBUTIONS
   License: Apache-2.0
 
   benchmark
-  Version: v1.8.4-gbenchmark
-  Source: https://github.com/stolyarchuk/benchmark
-  PURL: pkg:github/stolyarchuk/benchmark
-  License: Apache-2.0
-
-  benchmark
   Version: v1.9.5
   Source: https://github.com/ac-frg/benchmark
   PURL: pkg:github/ac-frg/benchmark
   Copyright:
+    Copyright 2015 Google Inc. All rights reserved
     Copyright 2015 Google Inc.
-    Copyright 2015 Google Inc. All rights reserved.
     Copyright 2016 Ismael Jimenez Martinez
     Copyright 2016 Ismael Jimenez Martinez. All rights reserved.
     Copyright 2017 Roman Lebedev. All rights reserved.
     Copyright copyright owner or entity authorized by
+  License: Apache-2.0
+
+  benchmark
+  Version: v1.8.4-gbenchmark
+  Source: https://github.com/stolyarchuk/benchmark
+  PURL: pkg:github/stolyarchuk/benchmark
   License: Apache-2.0
 
   bombic
@@ -362,12 +377,18 @@ COMPONENT ATTRIBUTIONS
   License: Apache-2.0
 
   codspeed-cpp
-  Version: v1.0.0
+  Version: 76985b6
   Source: https://github.com/codspeedhq/codspeed-cpp
   PURL: pkg:github/codspeedhq/codspeed-cpp
   Copyright:
     Copyright 2021 Google Inc. All rights reserved
     Copyright 2025 CodSpeed Technology SAS and contributors
+    Copyright 2015 Google Inc.
+    Copyright 2015 Google Inc. All rights reserved.
+    Copyright 2016 Ismael Jimenez Martinez
+    Copyright 2016 Ismael Jimenez Martinez. All rights reserved.
+    Copyright 2020 Google Inc.
+    Copyright 2020 Google Inc. All rights reserved.
     Copyright 2021 Google Inc.
   License: MIT
 
@@ -501,6 +522,7 @@ COMPONENT ATTRIBUTIONS
   PURL: pkg:github/z0brk/easy-arch-wsl
   Copyright:
     Copyright (c) 2005; Google Inc.
+    Copyright (c) 2008; Google Inc.
     Copyright (c) 2024; gperftools Contributors
   License: BSD-2-Clause, BSD-3-Clause, GPL-2.0-only, MIT
 
@@ -510,6 +532,9 @@ COMPONENT ATTRIBUTIONS
   PURL: pkg:github/numpad/ecs-sandbox
   Copyright:
     Copyright (c) 2014; Randolph Voorhies; Shane Grant
+    Copyright (c) 2015; Kyle Fleming
+    Copyright (c) 2015; Kyle Fleming; Juan Pedro Bolivar Puente
+    Copyright (c) 2017; Juan Pedro Bolivar Puente
     Copyright (c) 2017; Randolph Voorhies; Shane Grant
   License: BSD-3-Clause, MIT, Unlicense, Zlib
 
@@ -632,6 +657,16 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 1996; 1997; 1998; 1999; 2000; 2001; 2003; 2004; 2005; 2006; 2007; 2008; 2009 Free Software Foundation; Inc.
   License: GPL-2.0-only
 
+  gcc
+  Version: gcc-RFI-v22.3.0
+  Source: https://github.com/ashlingmicrosystems/gcc
+  PURL: pkg:github/ashlingmicrosystems/gcc
+  Copyright:
+    (C) 1996; 1997; 1998; 1999; 2000; 2001; 2003; 2004; 2005; 2006;
+    Copyright 1996 Gordon Matzigkeit  gord@gnu.ai.mit.edu
+    Copyright (c) 1996; 1997; 1998; 1999; 2000; 2001; 2003; 2004; 2005; 2006; 2007; 2008; 2009 Free Software Foundation; Inc.
+  License: GPL-2.0-only
+
   geometrize2gd
   Version: v1.2.0
   Source: https://github.com/sh1ne-dev/geometrize2gd
@@ -640,6 +675,7 @@ COMPONENT ATTRIBUTIONS
     Copyright 2008-2009 Bjorn Hoehrmann <bjoern@hoehrmann.de>
     Copyright 2013-2023 Niels Lohmann <https:  nlohmann.me>
     Copyright 2016-2021 Evan Nemerson <evan@nemerson.com>
+    Copyright 2018 The Abseil Authors
     CopyrightText: 2008-2009 Bj  rn Hoehrmann <bjoern@hoehrmann.de>
     CopyrightText: 2013-2023 Niels Lohmann <https:  nlohmann.me>
   License: MIT
@@ -727,6 +763,7 @@ COMPONENT ATTRIBUTIONS
   Copyright:
     Copyright 2005 Google Inc
     Copyright 2014 gperftools Contributors
+    Copyright 2023 gperftools Contributors
     Copyright (c) 2000; Google Inc.
     Copyright (c) 2003; Google Inc.
     Copyright (c) 2004; Google Inc.
@@ -744,7 +781,6 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2016; gperftools Contributors
     Copyright (c) 2021; IBM Ltd.
     Copyright (c) 2021; gperftools Contributors
-    Copyright (c) 2023; gperftools Contributors
     Copyright (c) 2024; gperftools Contributors
     Copyright 1994; 1995; 1996; 1999; 2000; 2001; 2002 Free Software
     Copyright 1994; 1995; 1996; 1999; 2000; 2001; 2002 Free Software Foundation; Inc.
@@ -772,6 +808,8 @@ COMPONENT ATTRIBUTIONS
     Copyright (C) 2017-2024 Free Software Foundation; Inc.
     Copyright (C) 2018-2024 Free Software Foundation; Inc.
     Copyright (C) 2020-2024 Free Software Foundation; Inc.
+    Copyright (C) 2022-2024 Free Software Foundation; Inc.
+    Copyright (c) 2012-2024 Free Software Foundation; Inc. Adapted
     Copyright (c) 2015-2024 Free Software Foundation; Inc. Adapted
   License: BSD-3-Clause
 
@@ -794,6 +832,14 @@ COMPONENT ATTRIBUTIONS
     Copyright 2008; Google Inc.
   License: BSD-3-Clause, MIT
 
+  github.com/mgerhardy/vengi
+  Version: v0.0.37
+  Source: https://proxy.golang.org/github.com/mgerhardy/vengi/@v/v0.0.37.zip
+  PURL: pkg:golang/github.com/mgerhardy/vengi
+  Copyright:
+    Copyright 2023 Martin Gerhardy
+  License: BSD-3-Clause, CC-BY-SA-3.0, MIT
+
   github.com/milvus-io/cgosymbolizer
   Version: v0.0.0-20260807032543-e7a4f9c60056
   Source: https://proxy.golang.org/github.com/milvus-io/cgosymbolizer/@v/v0.0.0-20260807032543-e7a4f9c60056.zip
@@ -807,6 +853,7 @@ COMPONENT ATTRIBUTIONS
   Source: https://proxy.golang.org/github.com/openfheorg/openfhe-development/@v/v1.0.1.zip
   PURL: pkg:golang/github.com/openfheorg/openfhe-development
   Copyright:
+    Copyright 2022 OpenFHE
     Copyright (c) 2014-2022; NJIT; Duality Technologies Inc. and other contributors
     Copyright 2012; Samuel Neves <sneves@dei.uc.pt>
     Copyright 2012; Samuel Neves <sneves@dei.uc.pt>.  You may use this under the
@@ -1241,6 +1288,12 @@ COMPONENT ATTRIBUTIONS
     Copyright copyright patent holders of the
   License: Apache-2.0, Apache-2.0 WITH LLVM-exception, Apache-2.0 WITH LLVM-exception AND NCSA, Apache-2.0 WITH LLVM-exception AND NCSA AND NCSA OR MIT AND NCSA AND MIT, BSD-3-Clause, ISC, MIT, NCSA
 
+  llvm-project
+  Version: llvmorg-14.0.0-rc1
+  Source: https://codeberg.org/YoWASP/llvm-project/archive/llvmorg-14.0.0-rc1.zip
+  PURL: pkg:codeberg/yowasp/llvm-project
+  License: Apache-with-LLVM-Exception
+
   llvm-project-legacy-branches
   Version: google/stable/2016-11-22
   Source: https://github.com/llvm/llvm-project-legacy-branches
@@ -1337,6 +1390,8 @@ COMPONENT ATTRIBUTIONS
   Copyright:
     Copyright 2015 Google Inc.
     Copyright 2015 Google Inc. All rights reserved.
+    Copyright 2020 Google Inc.
+    Copyright 2020 Google Inc. All rights reserved.
   License: GPL-3.0-only
 
   Mypal
@@ -1514,8 +1569,8 @@ COMPONENT ATTRIBUTIONS
   License: BSD-3-Clause
 
   platform/external/google-benchmark
-  Version: platform-tools-30.0.1
-  Source: https://android.googlesource.com/platform/external/google-benchmark/+archive/platform-tools-30.0.1.tar.gz
+  Version: android-cts-15.0_r9
+  Source: https://android.googlesource.com/platform/external/google-benchmark/+archive/android-cts-15.0_r9.tar.gz
   PURL: pkg:googlesource/android/platform/external/google-benchmark
   Copyright:
     Copyright 2015 Google Inc. All rights reserved
@@ -1536,6 +1591,7 @@ COMPONENT ATTRIBUTIONS
     Copyright 2005 Google Inc. All Rights Reserved
     Copyright 2008 Google Inc
     Copyright 2009 Google Inc. All Rights Reserved
+    Copyright 2010 Google Inc. All Rights Reserved
     Copyright 2015 Google Inc. All rights reserved
     Copyright 2017 Google Inc
     Copyright 2018 Google LLC. All rights reserved
@@ -1547,6 +1603,7 @@ COMPONENT ATTRIBUTIONS
     Copyright 2006; Google Inc.
     Copyright 2007; Google Inc.
     Copyright 2009 Google Inc.
+    Copyright 2010 Google Inc.
     Copyright 2013; Google Inc.
     Copyright 2015 Google Inc.
     Copyright 2018 Google LLC.
@@ -1667,6 +1724,7 @@ COMPONENT ATTRIBUTIONS
     Copyright 2007; Google Inc.
     Copyright 2009; Google Inc.
     Copyright 2013; Google Inc.
+    Copyright 2018; Google Inc.
     Copyright 2018; Google LLC.
     Copyright 2019; Google LLC.
   License: MIT
@@ -1747,6 +1805,7 @@ COMPONENT ATTRIBUTIONS
   Copyright:
     Copyright 2005; Google Inc.
     Copyright 2008; Google Inc.
+    Copyright 2010; Google Inc.
     Copyright 2013; Google Inc.
     Copyright 2015; Google Inc.
   License: Apache-2.0, MIT
@@ -1777,12 +1836,28 @@ COMPONENT ATTRIBUTIONS
   Source: https://github.com/yugabyte/yugabyte-db-thirdparty
   PURL: pkg:github/yugabyte/yugabyte-db-thirdparty
   Copyright:
+    Copyright 2014 Kiyoshi Masui  kiyo@physics.ubc.ca)
     Copyright copyright text to reflect Google s relinquished ownership
   License: MIT
 
 ------------------------------------------------------------
 
 FULL LICENSE TEXTS
+
+--- Apache-2.0 ---
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
 
 --- 0BSD ---
 
@@ -5573,21 +5648,6 @@ General Provisions
 (14)  Disclaimer of Warranty:
 THE PACKAGE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES. THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT ARE DISCLAIMED TO THE EXTENT PERMITTED BY YOUR LOCAL LAW. UNLESS REQUIRED BY LAW, NO COPYRIGHT HOLDER OR CONTRIBUTOR WILL BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL DAMAGES ARISING IN ANY WAY OUT OF THE USE OF THE PACKAGE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
---- Apache-2.0 ---
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
 
 
 --- Apache-2.0 WITH LLVM-exception AND NCSA ---
@@ -11031,6 +11091,11 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+--- Apache-with-LLVM-Exception ---
+
+Full license text available at: https://spdx.org/licenses/Apache-with-LLVM-Exception.html
 
 
 --- Jam ---
