@@ -2,7 +2,7 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-09-26
+Generated: 2026-09-27
 Tool: SCANOSS (snippet detection with License dataset)
 Components: 145
 
@@ -493,7 +493,7 @@ COMPONENT ATTRIBUTIONS
   License: Apache-2.0, BSD-3-Clause, MIT
 
   doctest
-  Version: 2.4.7
+  Version: v2.4.11
   Source: https://github.com/doctest/doctest
   PURL: pkg:github/doctest/doctest
   Copyright:
