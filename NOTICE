@@ -2,7 +2,7 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-09-27
+Generated: 2026-09-28
 Tool: SCANOSS (snippet detection with License dataset)
 Components: 145
 
@@ -945,7 +945,7 @@ COMPONENT ATTRIBUTIONS
   License: BSD-3-Clause
 
   gperftools
-  Version: gperftools-2.8.1
+  Version: a81b2eb
   Source: https://github.com/alk/gperftools
   PURL: pkg:github/alk/gperftools
   Copyright:
