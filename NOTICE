@@ -2,9 +2,9 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-09-28
+Generated: 2026-09-29
 Tool: SCANOSS (snippet detection with License dataset)
-Components: 145
+Components: 204
 
 This file lists all third-party software components detected
 in this repository, along with their licenses and copyright
@@ -15,6 +15,8 @@ notices as required by those licenses.
 WARNING: The following component(s) have no license information.
 These require manual review to determine licensing terms.
 
+  - DigitalBits (https://github.com/xdbfoundation/DigitalBits)
+  - Frogman-Engine (https://github.com/Project-Frogman/Frogman-Engine)
   - startle (https://github.com/raphael-group/startle)
 
 ------------------------------------------------------------
@@ -26,28 +28,30 @@ LICENSE SUMMARY
   AFL-2.1: 1 component(s)
   AFL-3.0 AND GPL-2.0-only AND AFL-2.1 AND GPL-2.0-or-later AND MIT AND GPL-1.0-or-later: 1 component(s)
   AGPL-3.0-only [COPYLEFT]: 1 component(s)
-  Apache-2.0: 32 component(s)
+  Apache-2.0: 47 component(s)
   Apache-2.0 AND Apache-2.0 AND OpenSSL: 1 component(s)
-  Apache-2.0 WITH LLVM-exception: 4 component(s)
+  Apache-2.0 AND BSD-3-Clause: 1 component(s)
+  Apache-2.0 WITH LLVM-exception: 5 component(s)
   Apache-2.0 WITH LLVM-exception AND NCSA: 2 component(s)
   Apache-2.0 WITH LLVM-exception AND NCSA AND NCSA OR MIT AND NCSA AND MIT: 1 component(s)
   Apache-with-LLVM-Exception: 1 component(s)
   Artistic-1.0-Perl: 2 component(s)
   Artistic-1.0-Perl OR GPL-1.0-or-later: 1 component(s)
   Artistic-2.0: 1 component(s)
-  BSD-2-Clause: 13 component(s)
+  BSD-2-Clause: 16 component(s)
   BSD-2-Clause AND BSD-3-Clause: 1 component(s)
   BSD-2-Clause AND LGPL-2.1-only: 1 component(s)
   BSD-2-Clause-Darwin: 1 component(s)
   BSD-2-Clause-Patent: 1 component(s)
   BSD-2-Clause-Views: 1 component(s)
-  BSD-3-Clause: 47 component(s)
+  BSD-3-Clause: 68 component(s)
   BSD-3-Clause AND GPL-2.0-only AND BSD-3-Clause OR GPL-2.0-or-later AND GPL-1.0-or-later: 1 component(s)
   BSD-3-Clause AND ISC AND ISC AND MIT AND MIT: 1 component(s)
-  BSD-3-Clause-LBNL: 1 component(s)
+  BSD-3-Clause-LBNL: 2 component(s)
   BSD-4-Clause-UC: 1 component(s)
   BSD-Attribution-HPND-disclaimer: 1 component(s)
   BSL-1.0: 3 component(s)
+  BSL-1.0 AND BSL-1.0 AND MIT AND MIT: 1 component(s)
   CC-BY-1.0: 1 component(s)
   CC-BY-2.0: 1 component(s)
   CC-BY-2.5: 1 component(s)
@@ -85,6 +89,8 @@ LICENSE SUMMARY
   CC0-1.0 OR Apache-2.0 AND CC0-1.0 AND Apache-2.0 AND CC0-1.0 AND Apache-2.0: 1 component(s)
   CDDL-1.0 [COPYLEFT]: 1 component(s)
   CDDL-1.1 [COPYLEFT]: 1 component(s)
+  CMU-Mach: 1 component(s)
+  CMU-Mach-nodoc: 1 component(s)
   CPL-1.0 [COPYLEFT]: 1 component(s)
   EPL-1.0 [COPYLEFT]: 1 component(s)
   EPL-2.0 [COPYLEFT]: 2 component(s)
@@ -93,21 +99,23 @@ LICENSE SUMMARY
   GFDL-1.1-only: 1 component(s)
   GFDL-1.2-only: 1 component(s)
   GFDL-1.3-only: 1 component(s)
+  GNU-All-permissive-Copying-License: 1 component(s)
   GPL-1.0-only [COPYLEFT]: 1 component(s)
   GPL-1.0-or-later [COPYLEFT]: 1 component(s)
   GPL-1.0-or-later AND BSD-3-Clause: 1 component(s)
   GPL-1.0-or-later AND CC-BY-4.0: 1 component(s)
   GPL-1.0-or-later AND GPL-2.0-or-later AND GPL-2.0-only: 1 component(s)
   GPL-1.0-or-later AND GPL-3.0-only AND MIT: 1 component(s)
-  GPL-2.0-only [COPYLEFT]: 10 component(s)
+  GPL-2.0 WITH Linux-syscall-note: 1 component(s)
+  GPL-2.0-only [COPYLEFT]: 12 component(s)
   GPL-2.0-only AND GPL-3.0-only AND GPL-1.0-or-later AND GPL-1.0-or-later AND GPL-2.0-only: 1 component(s)
-  GPL-2.0-or-later [COPYLEFT]: 3 component(s)
+  GPL-2.0-or-later [COPYLEFT]: 5 component(s)
   GPL-3.0-linking-exception: 1 component(s)
   GPL-3.0-linking-source-exception: 1 component(s)
-  GPL-3.0-only [COPYLEFT]: 10 component(s)
+  GPL-3.0-only [COPYLEFT]: 13 component(s)
   GPL-3.0-only AND BSD-3-Clause AND GPL-1.0-or-later AND GPL-2.0-only: 1 component(s)
   GPL-3.0-only AND GPL-1.0-or-later AND BSD-3-Clause: 1 component(s)
-  GPL-3.0-or-later [COPYLEFT]: 1 component(s)
+  GPL-3.0-or-later [COPYLEFT]: 2 component(s)
   GPL-3.0-or-later AND FSFAP: 1 component(s)
   GPL-CC-1.0: 1 component(s)
   HPND: 1 component(s)
@@ -117,13 +125,13 @@ LICENSE SUMMARY
   HPND-sell-variant: 1 component(s)
   HPND-sell-variant AND MIT: 1 component(s)
   ICU: 1 component(s)
-  ISC: 3 component(s)
+  ISC: 4 component(s)
   ISC AND BSD-Source-Code AND BSD-3-Clause AND BSD-2-Clause AND Zlib: 1 component(s)
   JSON: 1 component(s)
   Jam: 1 component(s)
   LGPL-2.0-only [COPYLEFT]: 1 component(s)
   LGPL-2.0-or-later AND LGPL-2.1-or-later: 1 component(s)
-  LGPL-2.1-only [COPYLEFT]: 4 component(s)
+  LGPL-2.1-only [COPYLEFT]: 6 component(s)
   LGPL-2.1-only AND GPL-1.0-or-later AND LGPL-2.1-or-later: 1 component(s)
   LGPL-2.1-only AND GPL-2.0-only AND GPL-2.0-only: 1 component(s)
   LGPL-2.1-only AND GPL-2.0-only AND LGPL-2.1-only: 1 component(s)
@@ -133,8 +141,9 @@ LICENSE SUMMARY
   LGPL-2.1-or-later AND LLGPL: 1 component(s)
   LGPL-2.1-or-later AND MPL-1.0 AND GPL-1.0-or-later: 1 component(s)
   LGPL-3.0-linking-exception: 1 component(s)
-  LGPL-3.0-only [COPYLEFT]: 3 component(s)
+  LGPL-3.0-only [COPYLEFT]: 4 component(s)
   LGPL-3.0-only AND CC-BY-SA-3.0: 1 component(s)
+  LGPL-3.0-or-later [COPYLEFT]: 1 component(s)
   LGPLLR: 1 component(s)
   LPPL-1.0: 1 component(s)
   LPPL-1.1: 1 component(s)
@@ -142,8 +151,9 @@ LICENSE SUMMARY
   LPPL-1.3a: 1 component(s)
   LPPL-1.3c: 1 component(s)
   Libpng: 1 component(s)
+  LicenseRef-scanoss-expat-601: 1 component(s)
   Linux-syscall-note: 1 component(s)
-  MIT: 57 component(s)
+  MIT: 71 component(s)
   MIT AND Apache-2.0: 1 component(s)
   MIT AND GPL-2.0-only AND GPL-1.0-or-later AND MIT AND GPL-1.0-or-later AND MIT AND Boehm-GC AND GPL-1.0-or-later: 1 component(s)
   MIT AND GPL-3.0-only: 1 component(s)
@@ -153,22 +163,24 @@ LICENSE SUMMARY
   MIT AND X11-distribute-modifications-variant: 1 component(s)
   MIT OR PSF-2.0: 1 component(s)
   MIT-0: 1 component(s)
+  MIT-CMU: 1 component(s)
   MIT-open-group: 1 component(s)
   MIT-open-group AND HPND-sell-variant: 1 component(s)
   MIT-open-group AND X11: 1 component(s)
   MPL-1.0: 1 component(s)
   MPL-1.1 [COPYLEFT]: 1 component(s)
-  MPL-2.0 [COPYLEFT]: 6 component(s)
+  MPL-2.0 [COPYLEFT]: 7 component(s)
   MPL-2.0 AND Apache-2.0: 1 component(s)
-  NCSA: 7 component(s)
+  NCSA: 9 component(s)
   OFL-1.1 [COPYLEFT]: 1 component(s)
   OFL-1.1 AND Apache-2.0: 1 component(s)
   OLDAP-2.8: 1 component(s)
-  OpenSSL: 1 component(s)
+  OpenSSL: 2 component(s)
   PHP-3.0: 1 component(s)
   PHP-3.01: 1 component(s)
   Ruby: 1 component(s)
   SGI-B-2.0: 1 component(s)
+  SPDX-License WITH Linux-syscall-note: 2 component(s)
   Sleepycat AND BSD-3-Clause: 1 component(s)
   Spencer-86: 1 component(s)
   Swift-exception AND u-boot-exception-2.0 AND WxWindows-exception-3.1: 1 component(s)
@@ -182,9 +194,9 @@ LICENSE SUMMARY
   ZPL-1.1: 1 component(s)
   ZPL-2.0: 1 component(s)
   ZPL-2.1: 1 component(s)
-  Zlib: 4 component(s)
+  Zlib: 6 component(s)
   bzip2-1.0.6: 1 component(s)
-  curl: 2 component(s)
+  curl: 3 component(s)
   libtiff: 1 component(s)
   snprintf: 1 component(s)
 
@@ -200,6 +212,14 @@ COMPONENT ATTRIBUTIONS
     Copyright copyright owner or entity authorized by
   License: Apache-2.0
 
+  Archive
+  Version: 202408062027
+  Source: https://github.com/bolucat/archive
+  PURL: pkg:github/bolucat/archive
+  Copyright:
+    Copyright (c) 2023; gperftools Contributors
+  License: Apache-2.0, Apache-2.0 WITH LLVM-exception, BSD-2-Clause, BSD-3-Clause, GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-or-later, ISC, MIT, SPDX-License WITH Linux-syscall-note
+
   AsersX-for-Termux
   Version: v1.0.0
   Source: https://github.com/TermuxnTR/AsersX-for-Termux
@@ -208,6 +228,14 @@ COMPONENT ATTRIBUTIONS
     Copyright 1994; 1995; 1996; 1999; 2000; 2001; 2002 Free Software
     Copyright 1994; 1995; 1996; 1999; 2000; 2001; 2002 Free Software Foundation; Inc.
   License: 0BSD, 0BSD AND GPL-2.0-only AND GPL-3.0-only AND LGPL-2.1-only, AFL-2.1, AFL-3.0 AND GPL-2.0-only AND AFL-2.1 AND GPL-2.0-or-later AND MIT AND GPL-1.0-or-later, AGPL-3.0-only, Apache-2.0, Apache-2.0 AND Apache-2.0 AND OpenSSL, Apache-2.0 WITH LLVM-exception, Apache-2.0 WITH LLVM-exception AND NCSA, Artistic-1.0-Perl, Artistic-1.0-Perl OR GPL-1.0-or-later, Artistic-2.0, BSD-2-Clause, BSD-2-Clause AND BSD-3-Clause, BSD-2-Clause AND LGPL-2.1-only, BSD-2-Clause-Darwin, BSD-2-Clause-Patent, BSD-3-Clause, BSD-3-Clause AND GPL-2.0-only AND BSD-3-Clause OR GPL-2.0-or-later AND GPL-1.0-or-later, BSD-3-Clause AND ISC AND ISC AND MIT AND MIT, BSD-4-Clause-UC, BSD-Attribution-HPND-disclaimer, BSL-1.0, CC-BY-1.0, CC-BY-2.0, CC-BY-2.5, CC-BY-3.0, CC-BY-3.0-AT, CC-BY-3.0-US, CC-BY-4.0, CC-BY-NC-1.0, CC-BY-NC-2.0, CC-BY-NC-2.5, CC-BY-NC-3.0, CC-BY-NC-ND-1.0, CC-BY-NC-ND-2.5, CC-BY-NC-ND-3.0, CC-BY-NC-ND-3.0-IGO, CC-BY-NC-SA-1.0, CC-BY-NC-SA-2.0, CC-BY-NC-SA-2.5, CC-BY-NC-SA-3.0, CC-BY-ND-1.0, CC-BY-ND-2.5, CC-BY-ND-3.0, CC-BY-ND-4.0, CC-BY-SA-1.0, CC-BY-SA-2.0, CC-BY-SA-2.0-UK, CC-BY-SA-2.1-JP, CC-BY-SA-2.5, CC-BY-SA-3.0, CC-BY-SA-3.0 AND GPL-2.0-or-later AND CC-BY-4.0 AND GPL-2.0-only, CC-BY-SA-3.0-AT, CC-BY-SA-4.0, CC-PDDC, CC0-1.0, CC0-1.0 OR Apache-2.0 AND CC0-1.0 AND Apache-2.0 AND CC0-1.0 AND Apache-2.0, CDDL-1.0, CDDL-1.1, CPL-1.0, EPL-1.0, EPL-2.0, FSFAP, GCC-exception-3.1, GFDL-1.1-only, GFDL-1.2-only, GFDL-1.3-only, GPL-1.0-only, GPL-1.0-or-later, GPL-1.0-or-later AND BSD-3-Clause, GPL-1.0-or-later AND CC-BY-4.0, GPL-1.0-or-later AND GPL-2.0-or-later AND GPL-2.0-only, GPL-1.0-or-later AND GPL-3.0-only AND MIT, GPL-2.0-only, GPL-2.0-only AND GPL-3.0-only AND GPL-1.0-or-later AND GPL-1.0-or-later AND GPL-2.0-only, GPL-3.0-linking-exception, GPL-3.0-linking-source-exception, GPL-3.0-only, GPL-3.0-only AND BSD-3-Clause AND GPL-1.0-or-later AND GPL-2.0-only, GPL-3.0-only AND GPL-1.0-or-later AND BSD-3-Clause, GPL-3.0-or-later AND FSFAP, GPL-CC-1.0, HPND, HPND AND MIT-open-group, HPND AND MIT-open-group AND HPND-DEC, HPND-DEC AND MIT-open-group, HPND-sell-variant, HPND-sell-variant AND MIT, ICU, ISC, ISC AND BSD-Source-Code AND BSD-3-Clause AND BSD-2-Clause AND Zlib, LGPL-2.0-only, LGPL-2.0-or-later AND LGPL-2.1-or-later, LGPL-2.1-only, LGPL-2.1-only AND GPL-1.0-or-later AND LGPL-2.1-or-later, LGPL-2.1-only AND GPL-2.0-only AND GPL-2.0-only, LGPL-2.1-only AND GPL-2.0-only AND LGPL-2.1-only, LGPL-2.1-or-later, LGPL-2.1-or-later AND GPL-3.0-or-later, LGPL-2.1-or-later AND LGPL-2.0-or-later, LGPL-2.1-or-later AND LLGPL, LGPL-2.1-or-later AND MPL-1.0 AND GPL-1.0-or-later, LGPL-3.0-linking-exception, LGPL-3.0-only, LGPL-3.0-only AND CC-BY-SA-3.0, LGPLLR, LPPL-1.0, LPPL-1.1, LPPL-1.2, LPPL-1.3a, LPPL-1.3c, Libpng, Linux-syscall-note, MIT, MIT AND Apache-2.0, MIT AND GPL-2.0-only AND GPL-1.0-or-later AND MIT AND GPL-1.0-or-later AND MIT AND Boehm-GC AND GPL-1.0-or-later, MIT AND GPL-3.0-only, MIT AND HPND-sell-variant, MIT AND HPND-sell-variant AND MIT AND HPND AND MIT-open-group AND X11, MIT AND MIT-open-group, MIT AND X11-distribute-modifications-variant, MIT OR PSF-2.0, MIT-0, MIT-open-group, MIT-open-group AND HPND-sell-variant, MIT-open-group AND X11, MPL-1.0, MPL-1.1, MPL-2.0, MPL-2.0 AND Apache-2.0, OFL-1.1, OFL-1.1 AND Apache-2.0, OLDAP-2.8, PHP-3.0, PHP-3.01, Ruby, SGI-B-2.0, Sleepycat AND BSD-3-Clause, Spencer-86, Swift-exception AND u-boot-exception-2.0 AND WxWindows-exception-3.1, TU-Berlin-2.0, Unlicense, W3C, WTFPL, X11, X11 AND MIT, X11-distribute-modifications-variant, ZPL-1.1, ZPL-2.0, ZPL-2.1, Zlib, bzip2-1.0.6, curl, libtiff, snprintf
+
+  AStarSearch
+  Version: 1.0
+  Source: https://github.com/eliainnocenti/AStarSearch
+  PURL: pkg:github/eliainnocenti/astarsearch
+  Copyright:
+    Copyright 2008; Google Inc.
+  License: BSD-3-Clause
 
   aview
   Version: 1.3.0rc1-6
@@ -222,6 +250,26 @@ COMPONENT ATTRIBUTIONS
     Copyright copyright text to reflect Google s relinquished ownership
     Copyright copyright used for BSD software; slightly modified
   License: GPL-2.0-or-later
+
+  axom
+  Version: v0.4.0
+  Source: https://github.com/llnl/axom
+  PURL: pkg:github/llnl/axom
+  Copyright:
+    Copyright 2012 - present ; Victor Zverovich
+    Copyright 2017-2024 Lawrence Livermore National Security LLC
+    Copyright 2017-2025 ; Lawrence Livermore National Security; LLC.
+    Copyright 2017-2026 Lawrence Livermore National Security LLC
+    Copyright (c) 2005-2010; 2012-2013; Andrew Hang Chen and contributors;
+    Copyright (c) 2014-2021; Lawrence Livermore National Security; LLC.
+    Copyright (c) 2014-2023; Lawrence Livermore National Security; LLC.
+    Copyright (c) 2017-2021; Lawrence Livermore National Security; LLC.
+    Copyright (c) 2017-2022; Lawrence Livermore National Security; LLC.
+    Copyright (c) 2017-2023; Lawrence Livermore National Security; LLC.
+    Copyright (c) 2018-2022; Lawrence Livermore National Security; LLC
+    Copyright 2008; Google Inc.
+    Copyright copyright owner or entity authorized by
+  License: BSD-3-Clause
 
   bazel-central-registry
   Version: fee413b
@@ -262,9 +310,34 @@ COMPONENT ATTRIBUTIONS
   License: Apache-2.0
 
   benchmark
+  Version: v1.1.0
+  Source: https://bitbucket.org/athlete-drones/benchmark/get/v1.1.0.zip
+  PURL: pkg:bitbucket/athlete-drones/benchmark
+  Copyright:
+    Copyright copyright owner or entity authorized by
+  License: Apache-2.0, Apache-2.0 AND BSD-3-Clause
+
+  benchmark
+  Version: v1.7.0
+  Source: https://bitbucket.org/wangxinyu123456/benchmark/get/v1.7.0.zip
+  PURL: pkg:bitbucket/wangxinyu123456/benchmark
+  Copyright:
+    Copyright copyright owner or entity authorized by
+  License: Apache-2.0
+
+  benchmark
   Version: v1.8.4-gbenchmark
   Source: https://github.com/stolyarchuk/benchmark
   PURL: pkg:github/stolyarchuk/benchmark
+  License: Apache-2.0
+
+  benchmark-dev
+  Version: 1.9.4-r0
+  Source: https://dl-cdn.alpinelinux.org/v3.23/community/x86_64/benchmark-dev-1.9.4-r0.apk
+  PURL: pkg:apk/benchmark-dev
+  Copyright:
+    Copyright 2015 Google Inc.
+    Copyright 2015 Google Inc. All rights reserved.
   License: Apache-2.0
 
   bombic
@@ -288,6 +361,16 @@ COMPONENT ATTRIBUTIONS
     Copyright 2016-2021 Evan Nemerson <evan@nemerson.com>
     CopyrightText: 2013-2023 Niels Lohmann <https:  nlohmann.me>
   License: BSD-2-Clause, MIT
+
+  c-shell-implementation
+  Version: d448951
+  Source: https://github.com/hoangsonww/c-shell-implementation
+  PURL: pkg:github/hoangsonww/c-shell-implementation
+  Copyright:
+    Copyright 2024 Google Inc
+    Copyright 2024 Son Nguyen
+    Copyright 2007; Google Inc.
+  License: MIT
 
   c_ookieclicker
   Version: 4346e3d
@@ -319,6 +402,17 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2018; Shane Grant
   License: BSD-3-Clause
 
+  cereal
+  Version: v0.9.0
+  Source: https://bitbucket.org/martincech/cereal/get/v0.9.0.zip
+  PURL: pkg:bitbucket/martincech/cereal
+  Copyright:
+    Copyright (C) 2011 Milo Yip.
+    Copyright (c) 2006; 2007 Marcin Kalicinski.
+    Copyright (c) 2013; Randolph Voorhies; Shane Grant
+    Copyright (c) 2014; Randolph Voorhies; Shane Grant
+  License: BSD-3-Clause
+
   checkedc-llvm-project
   Version: llvmorg-3.8.0-rc1
   Source: https://github.com/secure-sw-dev/checkedc-llvm-project
@@ -342,12 +436,27 @@ COMPONENT ATTRIBUTIONS
   License: LGPL-2.1-only
 
   cherrytree
-  Version: 1.0.1
+  Version: 0.99.56
   Source: https://github.com/giuspen/cherrytree
   PURL: pkg:github/giuspen/cherrytree
   Copyright:
-    Copyright 2009; Google Inc.
-  License: GPL-3.0-only
+    Copyright 2005 Google Inc. All Rights Reserved
+    Copyright 2008 Google Inc
+    Copyright 2009 Google Inc. All Rights Reserved
+    Copyright 2015 Google Inc. All rights reserved
+    Copyright 2020 Google Inc. All Rights Reserved
+    Copyright 2021 Google Inc. All Rights Reserved
+    Copyright 2005 Google Inc.
+    Copyright 2006; Google Inc.
+    Copyright 2007; Google Inc.
+    Copyright 2009 Google Inc.
+    Copyright 2010; Google Inc.
+    Copyright 2013; Google Inc.
+    Copyright 2015 Google Inc.
+    Copyright 2018; Google Inc.
+    Copyright 2020 Google Inc.
+    Copyright 2021 Google Inc.
+  License: GPL-2.0-only, GPL-3.0-only
 
   circt
   Version: firtool-1.68.0
@@ -387,6 +496,8 @@ COMPONENT ATTRIBUTIONS
     Copyright 2015 Google Inc. All rights reserved.
     Copyright 2016 Ismael Jimenez Martinez
     Copyright 2016 Ismael Jimenez Martinez. All rights reserved.
+    Copyright 2018 Google Inc.
+    Copyright 2018 Google Inc. All rights reserved.
     Copyright 2020 Google Inc.
     Copyright 2020 Google Inc. All rights reserved.
     Copyright 2021 Google Inc.
@@ -425,19 +536,21 @@ COMPONENT ATTRIBUTIONS
 
   cpp-httplib
   Version: v0.43.1
-  Source: https://gitee.com/yuanfeng1897/cpp-httplib
-  PURL: pkg:gitee/yuanfeng1897/cpp-httplib
-  Copyright:
-    Copyright 2026 Yuji Hirose. All rights reserved
-  License: MIT
-
-  cpp-httplib
-  Version: v0.43.1
   Source: https://github.com/yhirose/cpp-httplib
   PURL: pkg:github/yhirose/cpp-httplib
   Copyright:
     Copyright 2026 Yuji Hirose. All rights reserved
   License: MIT
+
+  cross-python
+  Version: 0.0.17
+  Source: https://github.com/tttapa/cross-python
+  PURL: pkg:github/tttapa/cross-python
+  Copyright:
+    Copyright 2005; Google Inc.
+    Copyright 2007; Google Inc.
+    Copyright 2008; Google Inc.
+  License: BSD-3-Clause
 
   crypting
   Version: v0.6
@@ -446,6 +559,15 @@ COMPONENT ATTRIBUTIONS
   Copyright:
     Copyright 1999-2017 Free Software Foundation Inc
   License: BSD-3-Clause
+
+  cxx-common
+  Version: v0.2.8
+  Source: https://github.com/lifting-bits/cxx-common
+  PURL: pkg:github/lifting-bits/cxx-common
+  Copyright:
+    Copyright 2007; Google Inc.
+    Copyright 2008; Google Inc.
+  License: Apache-2.0
 
   d2x-xl
   Version: 1.12.31.7
@@ -469,6 +591,14 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2012-2022 Sebastien Rombauts (sebastien.rombauts@gmail.com)
   License: GPL-2.0-only, MIT, OpenSSL, Zlib, curl
 
+  deepin-draw
+  Version: 5.8.0.73
+  Source: https://github.com/linuxdeepin/deepin-draw
+  PURL: pkg:github/linuxdeepin/deepin-draw
+  Copyright:
+    Copyright 2008; Google Inc.
+  License: GPL-3.0-only
+
   deepin-log-viewer
   Version: 5.8.0.28
   Source: https://github.com/linuxdeepin/deepin-log-viewer
@@ -483,6 +613,43 @@ COMPONENT ATTRIBUTIONS
     Copyright 2015; Google Inc.
     Copyright 2018; Google LLC.
   License: GPL-3.0-only
+
+  DeepSea-libs
+  Version: v16
+  Source: https://github.com/akb825/DeepSea-libs
+  PURL: pkg:github/akb825/deepsea-libs
+  Copyright:
+    Copyright 2007; Google Inc.
+  License: Apache-2.0
+
+  deeptensor
+  Version: 0.1.0
+  Source: https://pypi.org/project/deeptensor
+  PURL: pkg:pypi/deeptensor
+  Copyright:
+    Copyright 2007; Google Inc.
+  License: MIT
+
+  DigitalBits
+  Version: 1.0.58-beta.4
+  Source: https://github.com/xdbfoundation/DigitalBits
+  PURL: pkg:github/xdbfoundation/digitalbits
+  Copyright:
+    Copyright (C) 2012-2016 Free Software Foundation; Inc.
+    Copyright (C) 2014 David Mazieres.  All rights reserved.
+    Copyright (c) 2003-2020 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+    Copyright (c) 2006; 2007 Marcin Kalicinski
+    Copyright (c) 2013-2019
+    Copyright (c) 2014-2020 Omar Cornut
+    Copyright (c) 2014-2021 Omar Cornut
+    Copyright (c) 2014; Randolph Voorhies; Shane Grant
+    Copyright (c) 2016 Gabi Melman.
+    Copyright (c) 2017-2020; Bartosz Taudul <wolf.pld@gmail.com>
+    Copyright (c) 2017-2021; Bartosz Taudul <wolf@nereid.pl>
+    Copyright 2008; Google Inc.
+    Copyright copyright interest in the
+    Copyright copyright owner or entity authorized by
+  License: UNKNOWN — requires manual review
 
   discord-music-presence
   Version: v2.0.1
@@ -500,6 +667,22 @@ COMPONENT ATTRIBUTIONS
     Copyright 2016-2023 Viktor Kirilov
     Copyright (c) 2016-2021 Viktor Kirilov
   License: MIT
+
+  doctest
+  Version: v2.4.11
+  Source: https://github.com/onqtam/doctest
+  PURL: pkg:github/onqtam/doctest
+  Copyright:
+    Copyright 2016-2023 Viktor Kirilov
+  License: MIT
+
+  domoticz
+  Version: 4.10658
+  Source: https://github.com/domoticz/domoticz
+  PURL: pkg:github/domoticz/domoticz
+  Copyright:
+    Copyright (C) 2006; 2009 Marcin Kalicinski
+  License: GPL-3.0-only
 
   dxfeed-graal-cxx-api
   Version: v4.2.0
@@ -527,6 +710,23 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2024; gperftools Contributors
   License: BSD-2-Clause, BSD-3-Clause, GPL-2.0-only, MIT
 
+  ecflow
+  Version: 5.9.2
+  Source: https://github.com/ecmwf/ecflow
+  PURL: pkg:github/ecmwf/ecflow
+  Copyright:
+    Copyright 1996 - European Centre for Medium-Range Weather Forecasts  ECMWF
+    Copyright 2005 - European Centre for Medium-Range Weather Forecasts  ECMWF
+    Copyright 2012 EOS GmbH
+    Copyright (c) 2006; 2007 Marcin Kalicinski
+    Copyright (c) 2014; Randolph Voorhies; Shane Grant
+    Copyright (c) 2017 yhirose
+    Copyright [2009-2012] The Apache Software Foundation
+    Copyright [2009-2019] The Apache Software Foundation
+    Copyright [2009-2022] The Apache Software Foundation
+    Copyright copyright owner or entity authorized by
+  License: Apache-2.0
+
   ecs-sandbox
   Version: v0.1.10
   Source: https://github.com/numpad/ecs-sandbox
@@ -546,6 +746,14 @@ COMPONENT ATTRIBUTIONS
   Copyright:
     Copyright (C) 2002-2014 Free Software Foundation; Inc.
   License: GPL-3.0-only
+
+  EmmyLuaCodeStyle
+  Version: 1.1.6
+  Source: https://github.com/cppcxy/emmyluacodestyle
+  PURL: pkg:github/cppcxy/emmyluacodestyle
+  Copyright:
+    Copyright 2006; Google Inc.
+  License: MIT
 
   engine
   Version: v0.2.0-beta
@@ -617,6 +825,17 @@ COMPONENT ATTRIBUTIONS
     Copyright 2008; Google Inc.
   License: Apache-2.0, BSD-3-Clause, MIT
 
+  flast-gecko
+  Version: 2021-02-07-09-32
+  Source: https://github.com/fascodenet/flast-gecko
+  PURL: pkg:github/fascodenet/flast-gecko
+  Copyright:
+    Copyright 2005; Google Inc.
+    Copyright 2008; Google Inc.
+    Copyright 2010; Google Inc.
+    Copyright 2015; Google Inc.
+  License: BSD-3-Clause
+
   fluent-bit
   Version: v5.1.1
   Source: https://github.com/fluent/fluent-bit
@@ -634,6 +853,14 @@ COMPONENT ATTRIBUTIONS
     Copyright 2007; Google Inc.
     Copyright 2008 Google Inc.
   License: LGPL-2.1-only
+
+  Frogman-Engine
+  Version: v2025.02.24c
+  Source: https://github.com/Project-Frogman/Frogman-Engine
+  PURL: pkg:github/project-frogman/frogman-engine
+  Copyright:
+    Copyright 2018; Google Inc.
+  License: UNKNOWN — requires manual review
 
   gams-cpp
   Version: v1.2.3
@@ -667,6 +894,21 @@ COMPONENT ATTRIBUTIONS
     Copyright 1996 Gordon Matzigkeit  gord@gnu.ai.mit.edu
     Copyright (c) 1996; 1997; 1998; 1999; 2000; 2001; 2003; 2004; 2005; 2006; 2007; 2008; 2009 Free Software Foundation; Inc.
   License: GPL-2.0-only
+
+  genten
+  Version: 4c0068f6
+  Source: https://gitlab.com/tensors/genten
+  PURL: pkg:gitlab/tensors/genten
+  Copyright:
+    Copyright 2008 Google Inc
+    Copyright 2009 Google Inc. All rights reserved
+    Copyright 2017 Google Inc
+    Copyright 2005; Google Inc.
+    Copyright 2006; Google Inc.
+    Copyright 2007; Google Inc.
+    Copyright 2009 Google Inc.
+    Copyright 2018; Google Inc.
+  License: BSD-3-Clause
 
   geometrize2gd
   Version: v1.2.0
@@ -748,6 +990,14 @@ COMPONENT ATTRIBUTIONS
   Copyright:
     Copyright 2003-2017 University of Illinois at Urbana-Champaign
   License: BSD-3-Clause, MIT
+
+  github.com/google/benchmark
+  Version: v1.9.1
+  Source: https://proxy.golang.org/github.com/google/benchmark/@v/v1.9.1.zip
+  PURL: pkg:golang/github.com/google/benchmark
+  Copyright:
+    Copyright copyright owner or entity authorized by
+  License: Apache-2.0
 
   github.com/google/googletest
   Version: v1.14.1-0.20250210182227-4a00a24fff3c
@@ -872,6 +1122,15 @@ COMPONENT ATTRIBUTIONS
     Copyright 2009 Google Inc.
   License: BSD-3-Clause, GPL-2.0-only, MIT, MPL-2.0, Zlib
 
+  github.com/rnichollx/google-benchmark
+  Version: v0.0.0-20260723091812-b514eee1c23e
+  Source: https://proxy.golang.org/github.com/rnichollx/google-benchmark/@v/v0.0.0-20260723091812-b514eee1c23e.zip
+  PURL: pkg:golang/github.com/rnichollx/google-benchmark
+  Copyright:
+    Copyright 2015 Google Inc.
+    Copyright 2015 Google Inc. All rights reserved.
+  License: Apache-2.0
+
   github.com/servo/mozjs
   Version: v0.61.1
   Source: https://proxy.golang.org/github.com/servo/mozjs/@v/v0.61.1.zip
@@ -893,6 +1152,31 @@ COMPONENT ATTRIBUTIONS
   Copyright:
     Copyright (c) 2016-2021 Viktor Kirilov
   License: Apache-2.0, MIT
+
+  glibc
+  Version: glibc-2.20.90
+  Source: https://github.com/bminor/glibc
+  PURL: pkg:github/bminor/glibc
+  Copyright:
+    Copyright (C) 2002-2014 Free Software Foundation; Inc.
+  License: GPL-2.0 WITH Linux-syscall-note, LGPL-2.1-only, SPDX-License WITH Linux-syscall-note
+
+  google-benchmark
+  Version: 1.9.4
+  Source: https://pypi.org/project/google-benchmark
+  PURL: pkg:pypi/google-benchmark
+  Copyright:
+    Copyright 2020 Google Inc.
+    Copyright 2020 Google Inc. All rights reserved.
+  License: Apache-2.0
+
+  google-perftools
+  Version: 2.15-1
+  Source: https://snapshot.debian.org/archive/debian/20240107T145339Z/pool/main/g/google-perftools/libgoogle-perftools-dev_2.15-1_arm64.deb
+  PURL: pkg:deb/debian/google-perftools
+  Copyright:
+    Copyright (c) 2008; Google Inc.
+  License: BSD-3-Clause
 
   google-testmock
   Version: 1.14.0
@@ -921,6 +1205,29 @@ COMPONENT ATTRIBUTIONS
     Copyright copyright owner or entity authorized by
   License: BSD-3-Clause
 
+  googletest
+  Version: 1.15.2-1
+  Source: https://snapshot.debian.org/archive/debian/20240811T212128Z/pool/main/g/googletest/googletest_1.15.2.orig.tar.gz
+  PURL: pkg:deb/debian/googletest
+  Copyright:
+    Copyright 2008 Google Inc
+    Copyright copyright owner or entity authorized by
+  License: BSD-3-Clause
+
+  googletest.mirror/v1.14.0
+  Version: 1.14.0
+  Source: https://sourceforge.net/projects/googletest.mirror/v1.14.0
+  PURL: pkg:sourceforge/googletest.mirror/v1.14.0
+  Copyright:
+    Copyright 2010 Google Inc. All Rights Reserved
+    Copyright 2017 Google Inc
+    Copyright 2005; Google Inc.
+    Copyright 2006; Google Inc.
+    Copyright 2007; Google Inc.
+    Copyright 2008; Google Inc.
+    Copyright 2010 Google Inc.
+  License: BSD-3-Clause
+
   gperftools
   Version: gperftools-2.17.2
   Source: https://github.com/gperftools/gperftools
@@ -937,11 +1244,15 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2007; Google Inc.
     Copyright (c) 2008-2009; Google Inc.
     Copyright (c) 2009; Google Inc.
+    Copyright (c) 2010 The Chromium Authors
+    Copyright (c) 2010 The Chromium Authors. All rights reserved.
+    Copyright (c) 2010; Google Inc.
     Copyright (c) 2011; Google Inc.
     Copyright (c) 2013; Google Inc.
     Copyright (c) 2021; IBM Ltd.
     Copyright (c) 2021; gperftools Contributors
     Copyright (c) 2024; gperftools Contributors
+    Copyright 2009 Google Inc. All Rights Reserved.
   License: BSD-3-Clause
 
   gperftools
@@ -980,6 +1291,14 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2024; gperftools Contributors
   License: BSD-3-Clause
 
+  gperftools_jll.jl
+  Version: gperftools-v2.7.0+0
+  Source: https://github.com/JuliaBinaryWrappers/gperftools_jll.jl
+  PURL: pkg:github/juliabinarywrappers/gperftools_jll.jl
+  Copyright:
+    Copyright (c) 2008; Google Inc.
+  License: MIT
+
   GridGenerator
   Version: V0.0.2
   Source: https://github.com/sfcmm/gridgenerator
@@ -999,6 +1318,18 @@ COMPONENT ATTRIBUTIONS
     Copyright 2005; Google Inc.
     Copyright 2018; Google Inc.
   License: MIT
+
+  hcnet-core
+  Version: v19.10.0
+  Source: https://github.com/sanjayhashcash/hcnet-core
+  PURL: pkg:github/sanjayhashcash/hcnet-core
+  Copyright:
+    Copyright (c) 2014; Randolph Voorhies; Shane Grant
+    Copyright (c) 2015; Kyle Fleming
+    Copyright (c) 2015; Kyle Fleming; Juan Pedro Bolivar Puente
+    Copyright (c) 2017; Juan Pedro Bolivar Puente
+    Copyright (c) 2017; Randolph Voorhies; Shane Grant
+  License: Apache-2.0
 
   hcnet-core
   Version: v10.2.0
@@ -1030,8 +1361,17 @@ COMPONENT ATTRIBUTIONS
     CopyrightText: 2013-2023 Niels Lohmann <https:  nlohmann.me>
   License: BSD-3-Clause
 
+  heir
+  Version: v0.0.2
+  Source: https://github.com/google/heir
+  PURL: pkg:github/google/heir
+  Copyright:
+    Copyright (c) 2014-2022; NJIT; Duality Technologies Inc. and other contributors
+    Copyright (c) 2014-2023; NJIT; Duality Technologies Inc. and other contributors
+  License: Apache-2.0
+
   HELICS
-  Version: v1.0.0-beta.2
+  Version: v2.1.0
   Source: https://github.com/GMLC-TDC/HELICS
   PURL: pkg:github/gmlc-tdc/helics
   Copyright:
@@ -1083,6 +1423,23 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2004-2008 Rene Nyffenegger
   License: MPL-2.0
 
+  intel-llvm-mirror
+  Version: sycl-nightly/20211228
+  Source: https://github.com/codeplaysoftware/intel-llvm-mirror
+  PURL: pkg:github/codeplaysoftware/intel-llvm-mirror
+  Copyright:
+    Copyright COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM; DAMAGES OR OTHER
+    Copyright    2002-2009 Michael J. Fromberger
+    Copyright (C) 2004 eXtensible Systems; Inc.
+    Copyright (c) 2003-2014 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2006 Kirill Simonov
+    Copyright (c) 2010-2015 Benjamin Peterson
+    Copyright (c) 2013-2014; Pexpect development team
+    Copyright (c) 2019 Intel Corporation. All rights reserved.
+    Copyright 2008; Google Inc.
+    Copyright copyright owner or entity authorized by
+  License: Apache-2.0
+
   jason_note
   Version: 484bc97
   Source: https://github.com/shihyu/jason_note
@@ -1119,6 +1476,58 @@ COMPONENT ATTRIBUTIONS
     CopyrightText: 2009 Florian Loitsch <https:  florian.loitsch.com >
     CopyrightText: 2013-2023 Niels Lohmann <https:  nlohmann.me>
   License: MIT
+
+  jupedsim
+  Version: 0.13.0
+  Source: https://pypi.org/project/jupedsim
+  PURL: pkg:pypi/jupedsim
+  Copyright:
+    Copyright (c) 2009-2018; Poly2Tri Contributors
+    Copyright (c) 2016 Wenzel Jakob <wenzel.jakob@epfl.ch>; All rights reserved.
+    Copyright 2008; Google Inc.
+    Copyright copyright owner or entity authorized by
+  License: LGPL-3.0-or-later
+
+  jupedsim
+  Version: v1.0.1
+  Source: https://github.com/pedestriandynamics/jupedsim
+  PURL: pkg:github/pedestriandynamics/jupedsim
+  Copyright:
+    Copyright 2007 Free Software Foundation; Inc. <https:  www.fsf.org >
+    Copyright 2008 ; Google Inc.
+    Copyright 2012 - present ; Victor Zverovich and  fmt  contributors
+    Copyright 2014 Stefan Walk
+    Copyright 2016 Wenzel Jakob <wenzel.jakob@epfl.ch>; All rights reserved.
+    Copyright (c) 2009-2018; Poly2Tri Contributors
+    Copyright (c) 2016 Tom Johnson
+    Copyright copyright owner or entity authorized by
+  License: LGPL-2.1-only, LGPL-3.0-only
+
+  Kisak-Strike
+  Version: ddc0a5e
+  Source: https://github.com/SwagSoftware/Kisak-Strike
+  PURL: pkg:github/swagsoftware/kisak-strike
+  Copyright:
+    Copyright COPYRIGHT HOLDERS AND CONTRIBUTORS
+    Copyright (C) 1989; 1991 Free Software Foundation; Inc.
+    Copyright (C) 2012-2016 Free Software Foundation; Inc.
+    Copyright (c) 1994-2013 Xiph.Org Foundation and contributors
+    Copyright (c) 1995-2010 by Wei Dai.  All rights reserved.
+    Copyright (c) 1995-2013 by Michael Hipp and others;
+    Copyright (c) 1998-2008 Greg Roelofs.  All rights reserved.
+    Copyright (c) 2002-2015 Xiph.org Foundation
+    Copyright (c) 2002; Xiph.org Foundation
+    Copyright (c) 2004; 2006-2011 Glenn Randers-Pehrson; and are
+    Copyright (c) 2005; Google Inc.
+    Copyright (c) 2008-2014 CodePoint Ltd; Shift Technology Ltd; and contributors
+    Copyright (c) 2014-2021 Omar Cornut
+    Copyright (c) 2017-2021; Bartosz Taudul <wolf.pld@gmail.com>
+    Copyright (c) 2020 Do  a Can Yan  ko  lu
+    Copyright 2001-2011 Xiph.Org; Skype Limited; Octasic;
+    Copyright 2008; Google Inc.
+    Copyright Holder maintains some
+    Copyright copyright interest in the
+  License: GPL-3.0-only
 
   lab06
   Version: v1.0.0
@@ -1157,6 +1566,22 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2012-2024 Free Software Foundation; Inc. Adapted
     Copyright (c) 2015-2024 Free Software Foundation; Inc. Adapted
   License: BSD-2-Clause, BSD-3-Clause
+
+  libcereal
+  Version: 1.2.1-1
+  Source: https://snapshot.debian.org/archive/debian-ports/20160814T183340Z/pool-m68k/main/libc/libcereal/libcereal-dev_1.2.1-1_m68k.deb
+  PURL: pkg:deb/debian/libcereal
+  Copyright:
+    Copyright (C) 2006; 2009 Marcin Kalicinski
+  License: BSD-3-Clause
+
+  libraryfemtherm
+  Version: 0.23.0
+  Source: https://pypi.org/project/libraryfemtherm
+  PURL: pkg:pypi/libraryfemtherm
+  Copyright:
+    Copyright 2007; Google Inc.
+  License: BSD-3-Clause-LBNL
 
   librpa
   Version: v0.7.0
@@ -1201,6 +1626,7 @@ COMPONENT ATTRIBUTIONS
     Copyright 2007-2010 Niels Provos and Nick Mathewson
     Copyright 2007-2017 ; Jean-Marc Valin
     Copyright 2007-2019 University of Illinois at Urbana-Champaign
+    Copyright 2008 Google Inc
     Copyright 2008 Google Inc.  All rights reserved.
     Copyright 2009 The Go Authors. All rights reserved
     Copyright 2009-2014 by the contributors listed in CREDITS.TXT
@@ -1230,6 +1656,7 @@ COMPONENT ATTRIBUTIONS
     Copyright 2019 Zenichi Amano
     Copyright 2022 ; Google Inc.
     Copyright 2023 The Chromium Authors
+    Copyright 2005; Google Inc.
     Copyright 2016 Ismael Jimenez Martinez
     Copyright copyright owner or entity authorized by
   License: Apache-2.0
@@ -1261,6 +1688,89 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2010-2015 Benjamin Peterson
     Copyright copyright owner or entity authorized by
   License: Apache-2.0 WITH LLVM-exception
+
+  llvm-project
+  Version: llvmorg-4.0.0-rc1
+  Source: https://bitbucket.org/Prasada2711/llvm-project/get/llvmorg-4.0.0-rc1.zip
+  PURL: pkg:bitbucket/prasada2711/llvm-project
+  Copyright:
+    (c) 2003-2009 Jonathan  Wolf  Rentzsch: <http:  rentzsch.com>
+    Copyright COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM; DAMAGES OR OTHER
+    Copyright    2012 Peter Harris
+    Copyright (C) 1991; 1999 Free Software Foundation; Inc.
+    Copyright (C) 2004 Nate Begeman and Louis Gerbarg
+    Copyright (C) 2004 eXtensible Systems; Inc.
+    Copyright (c) 1996-2014  Anthony Green; Red Hat; Inc and others.
+    Copyright (c) 1998-2001 Greg Roelofs.  All rights reserved.
+    Copyright (c) 2000-2002 Glenn Randers-Pehrson
+    Copyright (c) 2003-2007 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2003-2008 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2003-2009 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2003-2010 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2003-2011 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2003-2012 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2003-2013 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2003-2014 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2003-2015 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2003-2016 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2003-2017 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2003-2018 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2003-2019 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2003; 2004 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2003; 2004; 2005 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2003; 2004; 2005; 2006 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2003; University of Illinois at Urbana-Champaign.  All rights
+    Copyright (c) 2006 Kirill Simonov
+    Copyright (c) 2007 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2007-2010 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2007-2011 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2007-2012 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2007-2013 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2007-2014 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2007-2015 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2007-2016 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2007-2017 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2007-2018 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2007-2019 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2008 Noah Spurrier
+    Copyright (c) 2009 The Go Authors. All rights reserved.
+    Copyright (c) 2009-2010 by the contributors listed in CREDITS.TXT
+    Copyright (c) 2009-2012 Polly Team
+    Copyright (c) 2009-2012 by the contributors listed in CREDITS.TXT
+    Copyright (c) 2009-2013 Polly Team
+    Copyright (c) 2009-2013 by the contributors listed in CREDITS.TXT
+    Copyright (c) 2009-2014 Polly Team
+    Copyright (c) 2009-2014 by the contributors listed in CREDITS.TXT
+    Copyright (c) 2009-2015 by the contributors listed in CREDITS.TXT
+    Copyright (c) 2009-2016 Polly Team
+    Copyright (c) 2009-2016 by the contributors listed in CREDITS.TXT
+    Copyright (c) 2009-2017 by the contributors listed in CREDITS.TXT
+    Copyright (c) 2009-2018 by the contributors listed in CREDITS.TXT
+    Copyright (c) 2009-2019 Polly Team
+    Copyright (c) 2009-2019 by the contributors listed in CREDITS.TXT
+    Copyright (c) 2010 Apple Inc.
+    Copyright (c) 2010-2015 Benjamin Peterson
+    Copyright (c) 2011-2013 by the contributors listed in CREDITS.TXT
+    Copyright (c) 2011-2014 by the contributors listed in CREDITS.TXT
+    Copyright (c) 2011-2015 by the contributors listed in CREDITS.TXT
+    Copyright (c) 2011-2016 by the contributors listed in CREDITS.TXT
+    Copyright (c) 2011-2018 by the contributors listed in CREDITS.TXT
+    Copyright (c) 2011-2019 by the contributors listed in CREDITS.TXT
+    Copyright (c) 2011; 2012
+    Copyright (c) 2013-2014; Pexpect development team
+    Copyright (c) 2017 The LLVM Developers
+    Copyright (c) 2017-2019 by the contributors listed in CREDITS.TXT.
+    Copyright (c) 2019 The LLVM Developers
+    Copyright 2008; Google Inc.
+    Copyright License. Subject to the terms and conditions of this
+    Copyright copyright (C) 1996-2002 Julian R Seward.  All rights reserved.
+    Copyright copyright information; is in COPYING.LIB.
+    Copyright copyright owner or entity authorized by
+    Copyright copyright owners other than the Free
+    Copyright copyright patent holders of the
+    Copyright copyrights and restrictions:
+    Copyright copyrights that can be found in each individual source file in
+  License: NCSA
 
   llvm-project
   Version: 36e2577
@@ -1301,8 +1811,23 @@ COMPONENT ATTRIBUTIONS
   PURL: pkg:codeberg/yowasp/llvm-project
   License: Apache-with-LLVM-Exception
 
+  llvm-project-cxxjit
+  Version: llvmorg-3.9.0-rc1
+  Source: https://github.com/hfinkel/llvm-project-cxxjit
+  PURL: pkg:github/hfinkel/llvm-project-cxxjit
+  Copyright:
+    (C); std::thread(C);
+    Copyright (C) 2004 eXtensible Systems; Inc.
+    Copyright (c) 2006 Kirill Simonov
+    Copyright (c) 2008 Noah Spurrier
+    Copyright (c) 2010-2015 Benjamin Peterson
+    Copyright (c) 2019 The LLVM Developers
+    Copyright 2008; Google Inc.
+    Copyright copyright owner or entity authorized by
+  License: NCSA
+
   llvm-project-legacy-branches
-  Version: google/stable/2016-11-22
+  Version: google/stable/2016-12-08
   Source: https://github.com/llvm/llvm-project-legacy-branches
   PURL: pkg:github/llvm/llvm-project-legacy-branches
   Copyright:
@@ -1363,7 +1888,7 @@ COMPONENT ATTRIBUTIONS
   Source: https://github.com/cdecpgl/minimal-serializer
   PURL: pkg:github/cdecpgl/minimal-serializer
   Copyright:
-    Copyright (C) 2015 THL A29 Limited; a Tencent company; and Milo Yip. All rights reserved.
+    Copyright (C) 2015 THL A29 Limited; a Tencent company; and Milo Yip-> All rights reserved->
   License: MIT
 
   mitata
@@ -1409,6 +1934,38 @@ COMPONENT ATTRIBUTIONS
     Copyright 2006; Google Inc.
   License: BSD-3-Clause
 
+  mysql-server
+  Version: mysql-9.1.2-preview
+  Source: https://github.com/mysql/mysql-server
+  PURL: pkg:github/mysql/mysql-server
+  Copyright:
+    Copyright 1997   Oracle and or its affiliates
+    Copyright 2014 gperftools Contributors
+    Copyright 2023 gperftools Contributors
+    Copyright (c) 2005; Google Inc.
+    Copyright (c) 2006; Google Inc.
+    Copyright (c) 2008-2009; Google Inc.
+    Copyright (c) 2008; Google Inc.
+    Copyright (c) 2011; Google Inc.
+  License: BSD-3-Clause, curl
+
+  natron
+  Version: 2.2.9
+  Source: https://sourceforge.net/projects/natron
+  PURL: pkg:sourceforge/natron
+  Copyright:
+    Copyright (C) 2011-2017 Free Software Foundation; Inc.
+  License: GPL-2.0-or-later
+
+  naujasoop
+  Version: v2.0-release
+  Source: https://github.com/andriusfitnese/naujasoop
+  PURL: pkg:github/andriusfitnese/naujasoop
+  Copyright:
+    Copyright 2008 Google Inc
+    Copyright 2005; Google Inc.
+  License: BSD-3-Clause
+
   network-manager
   Version: debian/1.10.2-1
   Source: https://git.launchpad.net/network-manager/tag/?h=debian/1.10.2-1
@@ -1417,6 +1974,48 @@ COMPONENT ATTRIBUTIONS
     Copyright (C) 2011-2017 Free Software Foundation; Inc.
   License: GPL-2.0-only
 
+  nlohmann-json
+  Version: 3.11.3-r0
+  Source: https://dl-cdn.alpinelinux.org/v3.20/community/aarch64/nlohmann-json-3.11.3-r0.apk
+  PURL: pkg:apk/nlohmann-json
+  Copyright:
+    Copyright (c) 2009 Florian Loitsch.
+    Copyright 2008-2009 Bjorn Hoehrmann <bjoern@hoehrmann.de>
+    Copyright 2009 Florian Loitsch <https:  florian.loitsch.com >
+    Copyright 2013-2023 Niels Lohmann <https:  nlohmann.me>
+    Copyright 2016-2021 Evan Nemerson <evan@nemerson.com>
+    Copyright 2018 The Abseil Authors
+    CopyrightText: 2008-2009 Bj  rn Hoehrmann <bjoern@hoehrmann.de>
+    CopyrightText: 2009 Florian Loitsch <https:  florian.loitsch.com >
+    CopyrightText: 2013-2023 Niels Lohmann <https:  nlohmann.me>
+  License: MIT
+
+  nlohmann-json3
+  Version: 3.11.3-1
+  Source: https://snapshot.debian.org/archive/debian/20231216T210748Z/pool/main/n/nlohmann-json3/nlohmann-json3_3.11.3.orig.tar.gz
+  PURL: pkg:deb/debian/nlohmann-json3
+  Copyright:
+    Copyright 2013-2019 Niels Lohmann  http:  nlohmann.me
+    Copyright 2013-2022 Niels Lohmann  http:  nlohmann.me
+    Copyright 2013-2023 Niels Lohmann
+    Copyright 2013-2023 Niels Lohmann <https:  nlohmann.me>
+    Copyright 2018 Vitaliy Manushkin <agri@akamo.info>
+    CopyrightText: 2013-2023 Niels Lohmann <https:  nlohmann.me>
+  License: LicenseRef-scanoss-expat-601
+
+  nlohmann_json
+  Version: v3.10.5
+  Source: https://github.com/striezel-stash/nlohmann_json
+  PURL: pkg:github/striezel-stash/nlohmann_json
+  Copyright:
+    Copyright 2013-2015 Niels Lohmann
+    Copyright 2013-2025 Niels Lohmann
+    Copyright COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM; DAMAGES OR OTHER LIABILITY; WHETHER IN AN ACTION OF CONTRACT; TORT OR OTHERWISE; ARI
+    Copyright (C) 2009 Google Inc.
+    Copyright (c) 2012; Erik Edlund <erik.edlund@32767.se>
+    Copyright (c) 2016-2021 Viktor Kirilov
+  License: MIT
+
   nlohmann_json
   Version: v2.0.10
   Source: https://gitee.com/minhanghuang/nlohmann_json
@@ -1424,6 +2023,14 @@ COMPONENT ATTRIBUTIONS
   Copyright:
     Copyright 2013-2017 Niels Lohmann
   License: MIT
+
+  nss
+  Version: NSS_3_41_BETA1
+  Source: https://github.com/nss-dev/nss
+  PURL: pkg:github/nss-dev/nss
+  Copyright:
+    Copyright 2006; Google Inc.
+  License: MPL-2.0
 
   ntgcalls
   Version: 1.2.1
@@ -1451,12 +2058,29 @@ COMPONENT ATTRIBUTIONS
     Copyright 2007; Google Inc.
   License: Apache-2.0
 
+  Obfuscation
+  Version: fabc9e9
+  Source: https://github.com/cyberpoint/obfuscation
+  PURL: pkg:github/cyberpoint/obfuscation
+  Copyright:
+    Copyright (c) 2005; Google Inc.
+    Copyright (c) 2013; Google Inc.
+  License: BSD-3-Clause
+
   objektinis-prog-class
   Version: ver2.0
   Source: https://github.com/mykolassl/objektinis-prog-class
   PURL: pkg:github/mykolassl/objektinis-prog-class
   Copyright:
     Copyright 2008; Google Inc.
+  License: BSD-3-Clause
+
+  ObjProg_Ver2
+  Version: isleidimas2.0
+  Source: https://github.com/Friebay/ObjProg_Ver2
+  PURL: pkg:github/friebay/objprog_ver2
+  Copyright:
+    Copyright 2007; Google Inc.
   License: BSD-3-Clause
 
   open3d
@@ -1501,6 +2125,25 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2014-2023; NJIT; Duality Technologies Inc. and other contributors
     Copyright (c) 2014-2024; NJIT; Duality Technologies Inc. and other contributors
   License: BSD-2-Clause
+
+  OpenFHE_int128_jll.jl
+  Version: OpenFHE_int128-v1.4.2+0
+  Source: https://github.com/JuliaBinaryWrappers/OpenFHE_int128_jll.jl
+  PURL: pkg:github/juliabinarywrappers/openfhe_int128_jll.jl
+  Copyright:
+    Copyright  c) 2014-2022  NJIT  Duality Technologies Inc. and other contributors
+    Copyright (c) 2014-2022; NJIT; Duality Technologies Inc. and other contributors
+  License: BSD-2-Clause, BSD-3-Clause, BSL-1.0 AND BSL-1.0 AND MIT AND MIT, MIT, Zlib
+
+  OpenFHE_jll.jl
+  Version: OpenFHE-v1.1.2+0
+  Source: https://github.com/JuliaBinaryWrappers/OpenFHE_jll.jl
+  PURL: pkg:github/juliabinarywrappers/openfhe_jll.jl
+  Copyright:
+    Copyright (c) 2014-2022; NJIT; Duality Technologies Inc. and other contributors
+    Copyright (c) 2014-2023; NJIT; Duality Technologies Inc. and other contributors
+    Copyright (c) 2014; Randolph Voorhies; Shane Grant
+  License: BSD-2-Clause, BSD-3-Clause, MIT, Zlib
 
   OpenXLSX
   Version: v0.3.2
@@ -1556,11 +2199,34 @@ COMPONENT ATTRIBUTIONS
   License: MIT
 
   p2pool
-  Version: v4.5
+  Version: v4.8
   Source: https://github.com/SChernykh/p2pool
   PURL: pkg:github/schernykh/p2pool
   Copyright:
+    (C) 2007 Free Software Foundation; Inc. <https:  fsf.org >
+    Copyright 2005 Google Inc. All Rights Reserved
+    Copyright 2014-2021 ; The Monero Project
+    Copyright 2017 Google Inc
     Copyright 2024 Google Inc
+    Copyright COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM; DAMAGES OR OTHER
+    Copyright (C) 1995; 1996; 1997; and 1998 WIDE Project.
+    Copyright (C) 2015 THL A29 Limited; a Tencent company; and Milo Yip.  All rights reserved.
+    Copyright (c) 1996 - 2023; Daniel Stenberg; <daniel@haxx.se>; and many
+    Copyright (c) 2005-2023; Thomas BERNARD
+    Copyright (c) 2012 Julian Berman
+    Copyright (c) 2014-2020; The Monero Project
+    Copyright (c) 2015-present libuv project contributors.
+    Copyright (c) 2016-2019 Viktor Kirilov
+    Copyright (c) 2017 Bart Muzzin
+    Copyright (c) 2018-2019; tevador <tevador@gmail.com>
+    Copyright (c) 2018-2021 Martin Ankerl
+    Copyright (c) <year> 2007-14 Mike Karlesky; Mark VanderVoord; Greg Williams
+    Copyright 2005 Google Inc.
+    Copyright 2007; Google Inc.
+    Copyright 2008; Google Inc.
+    Copyright 2012-2020; Bert Belder <bertbelder@gmail.com>
+    Copyright 2020; Google Inc.
+    Copyright 2025; Google Inc.
   License: GPL-3.0-only
 
   pf2
@@ -1582,6 +2248,7 @@ COMPONENT ATTRIBUTIONS
     Copyright 2006; Google Inc.
     Copyright 2007; Google Inc.
     Copyright 2008; Google Inc.
+    Copyright 2009; Google Inc.
   License: BSD-3-Clause
 
   platform/external/google-benchmark
@@ -1638,12 +2305,31 @@ COMPONENT ATTRIBUTIONS
     Copyright 2015; Google Inc.
   License: BSD-3-Clause
 
+  pyaccell
+  Version: 1.0.0
+  Source: https://pypi.org/project/pyaccell
+  PURL: pkg:pypi/pyaccell
+  Copyright:
+    Copyright 2007; Google Inc.
+    Copyright 2008; Google Inc.
+    Copyright 2013; Google Inc.
+    Copyright 2015; Google Inc.
+  License: MIT
+
   pytheiasfm
   Version: b736361
   Source: https://github.com/urbste/pytheiasfm
   PURL: pkg:github/urbste/pytheiasfm
   Copyright:
     Copyright (c) 2014; Randolph Voorhies; Shane Grant
+  License: BSD-3-Clause
+
+  qr
+  Version: v0.7.0
+  Source: https://github.com/lurkydismal/qr
+  PURL: pkg:github/lurkydismal/qr
+  Copyright:
+    Copyright 2006; Google Inc.
   License: BSD-3-Clause
 
   rapidjson
@@ -1663,10 +2349,26 @@ COMPONENT ATTRIBUTIONS
     Copyright 2007; Google Inc.
   License: MIT
 
+  remctl
+  Version: upstream/3.13
+  Source: https://github.com/rra/remctl
+  PURL: pkg:github/rra/remctl
+  Copyright:
+    Copyright 1996-2014 Free Software Foundation Inc
+  License: CMU-Mach, CMU-Mach-nodoc, GNU-All-permissive-Copying-License, MIT, MIT-CMU
+
   RK2
   Version: v1.0.0.0
   Source: https://github.com/amandreev17/RK2
   PURL: pkg:github/amandreev17/rk2
+  Copyright:
+    Copyright 2008 Google Inc
+    Copyright 2024 Google Inc
+    Copyright 2005; Google Inc.
+    Copyright 2007; Google Inc.
+    Copyright 2015; Google Inc.
+    Copyright 2018; Google Inc.
+    Copyright 2020; Google Inc.
   License: BSD-3-Clause
 
   rk2
@@ -1686,6 +2388,14 @@ COMPONENT ATTRIBUTIONS
     Copyright (C) 1994 X Consortium
   License: GPL-2.0-or-later, MIT
 
+  sentry-native
+  Version: 0.13.8
+  Source: https://github.com/getsentry/sentry-native
+  PURL: pkg:github/getsentry/sentry-native
+  Copyright:
+    Copyright 2019 Sentry  https:  sentry.io) and individual contributors
+  License: MIT
+
   slowfuzz
   Version: e124345
   Source: https://github.com/nettrino/slowfuzz
@@ -1699,6 +2409,14 @@ COMPONENT ATTRIBUTIONS
   Copyright:
     Copyright 2009-2013 Luke Maurits  luke@maurits.id.au
   License: MIT
+
+  so5extra
+  Version: v.1.4.2
+  Source: https://github.com/Stiffstream/so5extra
+  PURL: pkg:github/stiffstream/so5extra
+  Copyright:
+    Copyright (c) 2016-2021 Viktor Kirilov
+  License: BSD-3-Clause
 
   spirv-to-dxil-sys
   Version: 0.4.0
@@ -1720,13 +2438,66 @@ COMPONENT ATTRIBUTIONS
     Copyright 2008; Google Inc.
   License: UNKNOWN — requires manual review
 
+  static-lib-build
+  Version: pytorch/v2.9.1
+  Source: https://github.com/divvun/static-lib-build
+  PURL: pkg:github/divvun/static-lib-build
+  Copyright:
+    Copyright 2013   the respective contributors
+  License: Apache-2.0, BSD-3-Clause, MIT
+
+  stunnel-msspi
+  Version: stunnel-5.71-cpro-0.66
+  Source: https://github.com/CryptoPro/stunnel-msspi
+  PURL: pkg:github/cryptopro/stunnel-msspi
+  Copyright:
+    Copyright 2013-2023 Niels Lohmann <https:  nlohmann.me>
+    CopyrightText: 2013-2023 Niels Lohmann <https:  nlohmann.me>
+  License: OpenSSL
+
   swift-llvm
   Version: swift-3.1-DEVELOPMENT-SNAPSHOT-2017-02-17-a
   Source: https://github.com/apple/swift-llvm
   PURL: pkg:github/apple/swift-llvm
   Copyright:
     Copyright 2003-2016 University of Illinois at Urbana-Champaign
+    Copyright 2003-2017 University of Illinois at Urbana-Champaign
+    Copyright (C) 2004 eXtensible Systems; Inc.
+    Copyright (c) 2003-2018 University of Illinois at Urbana-Champaign.
+    Copyright (c) 2006 Kirill Simonov
+    Copyright (c) 2007-2018 University of Illinois at Urbana-Champaign.
+    Copyright 2008; Google Inc.
+    Copyright License. Subject to the terms and conditions of this
+    Copyright copyright owner or entity authorized by
   License: Apache-2.0
+
+  tcmalloc
+  Version: perftools-0.94.1
+  Source: https://github.com/yangzhengxing/tcmalloc
+  PURL: pkg:github/yangzhengxing/tcmalloc
+  License: BSD-3-Clause
+
+  TiMemory
+  Version: 1.3.0rc2
+  Source: https://pypi.org/project/TiMemory
+  PURL: pkg:pypi/timemory
+  Copyright:
+    Copyright (C) 1991; 1999 Free Software Foundation; Inc.
+    Copyright (C) 2015 THL A29 Limited; a Tencent company; and Milo Yip.  All rights reserved.
+    Copyright (c) 2006; 2007 Marcin Kalicinski.
+    Copyright (c) 2008; Enthought; Inc.
+    Copyright (c) 2015 Microsoft Corporation. All rights reserved.
+    Copyright (c) 2015-2020; Lawrence Livermore National Security; LLC.
+    Copyright (c) 2015-2021; Lawrence Livermore National Security; LLC.
+    Copyright (c) 2016 Wenzel Jakob <wenzel.jakob@epfl.ch>; All rights reserved.
+    Copyright (c) 2016-2017; NVIDIA CORPORATION.  All rights reserved.
+    Copyright (c) 2017-2021; Lawrence Livermore National Security; LLC.
+    Copyright (c) 2019; The Regents of the University of California;
+    Copyright (c) 2020 Jonathan R. Madsen
+    Copyright 2008; Google Inc.
+    Copyright copyright owner or entity authorized by
+    Copyright copyright patent holders of the
+  License: MIT
 
   timp_labs
   Version: v0.1.0.0
@@ -1847,6 +2618,15 @@ COMPONENT ATTRIBUTIONS
   PURL: pkg:github/fewnity/xenity-engine
   License: MIT
 
+  ytsaurus
+  Version: python-test/ytsaurus-client/0.13.29
+  Source: https://github.com/ytsaurus/ytsaurus
+  PURL: pkg:github/ytsaurus/ytsaurus
+  Copyright:
+    Copyright 2015 Google Inc.
+    Copyright 2015 Google Inc. All rights reserved.
+  License: Apache-2.0
+
   yugabyte-db-thirdparty
   Version: v20190714084201.6ac8cb9784
   Source: https://github.com/yugabyte/yugabyte-db-thirdparty
@@ -1873,6 +2653,167 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+
+--- Apache-2.0 WITH LLVM-exception ---
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+
+--- BSD-2-Clause ---
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+--- BSD-3-Clause ---
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+--- GPL-2.0-or-later ---
+
+This program is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the Free
+Software Foundation; either version 2 of the License, or (at your option)
+any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+Full license text: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+
+
+--- GPL-2.0-only ---
+
+This program is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the Free
+Software Foundation; version 2 of the License.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+Full license text: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+
+
+--- GPL-3.0-or-later ---
+
+This library is free software; you can redistribute it and/or modify it
+under the terms of the GNU Lesser General Public License as published by
+the Free Software Foundation; either version 3 of the License, or (at
+your option) any later version.
+
+This library is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more
+details.
+
+You should have received a copy of the GNU Lesser General Public License
+along with this library; if not, see <https://www.gnu.org/licenses/>.
+
+Full license text: https://www.gnu.org/licenses/lgpl-3.0.html
+
+
+--- ISC ---
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+
+
+--- MIT ---
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+--- SPDX-License WITH Linux-syscall-note ---
+
+Full license text available at: https://spdx.org/licenses/SPDX-License WITH Linux-syscall-note.html
 
 
 --- 0BSD ---
@@ -1992,27 +2933,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 Full license text: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
 
 
---- X11 ---
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-
 --- X11 AND MIT ---
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -2035,6 +2955,27 @@ SOFTWARE.
 
 
 --- X11-distribute-modifications-variant ---
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+--- X11 ---
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -2940,27 +3881,6 @@ SOFTWARE.
 
 
 --- MIT-open-group ---
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-
---- MIT ---
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -4251,21 +5171,6 @@ THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
 
 
 
---- ISC ---
-
-Permission to use, copy, modify, and/or distribute this software for any
-purpose with or without fee is hereby granted, provided that the above
-copyright notice and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
-LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
-OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-PERFORMANCE OF THIS SOFTWARE.
-
-
 --- ISC AND BSD-Source-Code AND BSD-3-Clause AND BSD-2-Clause AND Zlib ---
 
 Redistribution and use in source and binary forms, with or without
@@ -4307,39 +5212,6 @@ Except as contained in this notice, the name of a copyright holder shall not be 
 
 
 
---- HPND ---
-
-Historical Permission Notice and Disclaimer
-
-Copyright <year> <copyright holder>
-
-Permission to use, copy, modify, and distribute this software and its documentation for any purpose and without fee is hereby granted, provided that the above copyright notice appear in all copies, and that both that copyright notice and this permission notice appear in supporting documentation, and that the name of <copyright holder> or <related entities> not be used in advertising or publicity pertaining to distribution of the software without specific, written prior permission. <copyright holder> makes no representations about the suitability of this software for any purpose. It is provided "as is" without express or implied warranty.
-
-<copyright holder> DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS,. IN NO EVENT SHALL <copyright holder> BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-
-
-
---- HPND-sell-variant AND MIT ---
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-
 --- HPND-sell-variant ---
 
 Copyright 1993 by OpenVision Technologies, Inc.
@@ -4362,6 +5234,27 @@ USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
 OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 
+
+
+--- HPND-sell-variant AND MIT ---
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 
 --- HPND-DEC AND MIT-open-group ---
@@ -4425,6 +5318,18 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+--- HPND ---
+
+Historical Permission Notice and Disclaimer
+
+Copyright <year> <copyright holder>
+
+Permission to use, copy, modify, and distribute this software and its documentation for any purpose and without fee is hereby granted, provided that the above copyright notice appear in all copies, and that both that copyright notice and this permission notice appear in supporting documentation, and that the name of <copyright holder> or <related entities> not be used in advertising or publicity pertaining to distribution of the software without specific, written prior permission. <copyright holder> makes no representations about the suitability of this software for any purpose. It is provided "as is" without express or implied warranty.
+
+<copyright holder> DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS,. IN NO EVENT SHALL <copyright holder> BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
 
 
 --- EPL-1.0 ---
@@ -4988,23 +5893,6 @@ Additional permission under GNU GPL version 3 section 7
 
 If you modify this Program, or any covered work, by linking or combining it with [name of library] (or a modified version of that library), containing parts covered by the terms of [name of library's license], the licensors of this Program grant you additional permission to convey the resulting work. Corresponding Source for a non-source form of such a combination shall include the source code for the parts of [name of library] used as well as that of the covered work.
 
-
-
---- GPL-2.0-only ---
-
-This program is free software; you can redistribute it and/or modify it
-under the terms of the GNU General Public License as published by the Free
-Software Foundation; version 2 of the License.
-
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc.,
-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-
-Full license text: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
 
 
 --- GPL-CC-1.0 ---
@@ -5667,21 +6555,6 @@ THE PACKAGE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS" AND WIT
 
 
 --- Apache-2.0 WITH LLVM-exception AND NCSA ---
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-
---- Apache-2.0 WITH LLVM-exception ---
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7388,167 +8261,6 @@ Creative Commons may be contacted at http://creativecommons.org/.
 
 
 
---- CC-BY-SA-3.0 AND GPL-2.0-or-later AND CC-BY-4.0 AND GPL-2.0-only ---
-
-This program is free software; you can redistribute it and/or modify it
-under the terms of the GNU General Public License as published by the Free
-Software Foundation; version 2 of the License.
-
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc.,
-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-
-Full license text: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
-
-
---- CC-BY-SA-3.0-AT ---
-
-CREATIVE COMMONS IST KEINE RECHTSANWALTSKANZLEI UND LEISTET KEINE RECHTSBERATUNG. DIE BEREITSTELLUNG DIESER LIZENZ FÜHRT ZU KEINEM MANDATSVERHÄLTNIS. CREATIVE COMMONS STELLT DIESE INFORMATIONEN OHNE GEWÄHR ZUR VERFÜGUNG. CREATIVE COMMONS ÜBERNIMMT KEINE GEWÄHRLEISTUNG FÜR DIE GELIEFERTEN INFORMATIONEN UND SCHLIEßT DIE HAFTUNG FÜR SCHÄDEN AUS, DIE SICH AUS DEREN GEBRAUCH ERGEBEN.
-
-Lizenz
-
-DER GEGENSTAND DIESER LIZENZ (WIE UNTER „SCHUTZGEGENSTAND“ DEFINIERT) WIRD UNTER DEN BEDINGUNGEN DIESER CREATIVE COMMONS PUBLIC LICENSE ("CCPL", „LIZENZ“ ODER "LIZENZVERTRAG") ZUR VERFÜGUNG GESTELLT. DER SCHUTZGEGENSTAND IST DURCH DAS URHEBERRECHT UND/ODER ANDERE GESETZE GESCHÜTZT. JEDE FORM DER NUTZUNG DES SCHUTZGEGENSTANDES, DIE NICHT AUFGRUND DIESER LIZENZ ODER DURCH GESETZE GESTATTET IST, IST UNZULÄSSIG.
-
-DURCH DIE AUSÜBUNG EINES DURCH DIESE LIZENZ GEWÄHRTEN RECHTS AN DEM SCHUTZGEGENSTAND ERKLÄREN SIE SICH MIT DEN LIZENZBEDINGUNGEN RECHTSVERBINDLICH EINVERSTANDEN. SOWEIT DIESE LIZENZ ALS LIZENZVERTRAG ANZUSEHEN IST, GEWÄHRT IHNEN DER LIZENZGEBER DIE IN DER LIZENZ GENANNTEN RECHTE UNENTGELTLICH UND IM AUSTAUSCH DAFÜR, DASS SIE DAS GEBUNDENSEIN AN DIE LIZENZBEDINGUNGEN AKZEPTIEREN.
-
-1. Definitionen
-
-    a. Der Begriff "Bearbeitung" im Sinne dieser Lizenz bezeichnet das Ergebnis jeglicher Art von Veränderung des Schutzgegenstandes, solange dieses erkennbar vom Schutzgegenstand abgeleitet wurde. Dies kann insbesondere auch eine Umgestaltung, Änderung, Anpassung, Übersetzung oder Heranziehung des Schutzgegenstandes zur Vertonung von Laufbildern sein. Nicht als Bearbeitung des Schutzgegenstandes gelten seine Aufnahme in eine Sammlung oder ein Sammelwerk und die freie Nutzung des Schutzgegenstandes.
-
-    b. Der Begriff "Sammelwerk" im Sinne dieser Lizenz meint eine Zusammenstellung von literarischen, künstlerischen oder wissenschaftlichen Inhalten zu einem einheitlichen Ganzen, sofern diese Zusammenstellung aufgrund von Auswahl und Anordnung der darin enthaltenen selbständigen Elemente eine eigentümliche geistige Schöpfung darstellt, unabhängig davon, ob die Elemente systematisch oder methodisch angelegt und dadurch einzeln zugänglich sind oder nicht.
-
-    c. "Verbreiten" im Sinne dieser Lizenz bedeutet, den Schutzgegenstand oder Bearbeitungen im Original oder in Form von Vervielfältigungsstücken, mithin in körperlich fixierter Form der Öffentlichkeit zugänglich zu machen oder in Verkehr zu bringen.
-
-    d. Unter "Lizenzelementen" werden im Sinne dieser Lizenz die folgenden übergeordneten Lizenzcharakteristika verstanden, die vom Lizenzgeber ausgewählt wurden und in der Bezeichnung der Lizenz zum Ausdruck kommen: "Namensnennung", "Weitergabe unter gleichen Bedingungen".
-
-    e. Der "Lizenzgeber" im Sinne dieser Lizenz ist diejenige natürliche oder juristische Person oder Gruppe, die den Schutzgegenstand unter den Bedingungen dieser Lizenz anbietet und insoweit als Rechteinhaberin auftritt.
-
-    f. "Rechteinhaber" im Sinne dieser Lizenz ist der Urheber des Schutzgegenstandes oder jede andere natürliche oder juristische Person, die am Schutzgegenstand ein Immaterialgüterrecht erlangt hat, welches die in Abschnitt 3 genannten Handlungen erfasst und eine Erteilung, Übertragung oder Einräumung von Nutzungsbewilligungen bzw Nutzungsrechten an Dritte erlaubt.
-
-    g. Der Begriff "Schutzgegenstand" bezeichnet in dieser Lizenz den literarischen, künstlerischen oder wissenschaftlichen Inhalt, der unter den Bedingungen dieser Lizenz angeboten wird. Das kann insbesondere eine eigentümliche geistige Schöpfung jeglicher Art oder ein Werk der kleinen Münze, ein nachgelassenes Werk oder auch ein Lichtbild oder anderes Objekt eines verwandten Schutzrechts sein, unabhängig von der Art seiner Fixierung und unabhängig davon, auf welche Weise jeweils eine Wahrnehmung erfolgen kann, gleichviel ob in analoger oder digitaler Form. Soweit Datenbanken oder Zusammenstellungen von Daten einen immaterialgüterrechtlichen Schutz eigener Art genießen, unterfallen auch sie dem Begriff „Schutzgegenstand“ im Sinne dieser Lizenz.
-
-    h. Mit "Sie" bzw. "Ihnen" ist die natürliche oder juristische Person gemeint, die in dieser Lizenz im Abschnitt 3 genannte Nutzungen des Schutzgegenstandes vornimmt und zuvor in Hinblick auf den Schutzgegenstand nicht gegen Bedingungen dieser Lizenz verstoßen oder aber die ausdrückliche Erlaubnis des Lizenzgebers erhalten hat, die durch diese Lizenz gewährte Nutzungsbewilligung trotz eines vorherigen Verstoßes auszuüben.
-
-    i. Unter "Öffentlich Wiedergeben" im Sinne dieser Lizenz sind Wahrnehmbarmachungen des Schutzgegenstandes in unkörperlicher Form zu verstehen, die für eine Mehrzahl von Mitgliedern der Öffentlichkeit bestimmt sind und mittels öffentlicher Wiedergabe in Form von Vortrag, Aufführung, Vorführung, Darbietung, Sendung, Weitersendung oder zeit- und ortsunabhängiger Zurverfügungstellung erfolgen, unabhängig von den zum Einsatz kommenden Techniken und Verfahren, einschließlich drahtgebundener oder drahtloser Mittel und Einstellen in das Internet.
-
-    j. "Vervielfältigen" im Sinne dieser Lizenz bedeutet, gleichviel in welchem Verfahren, auf welchem Träger, in welcher Menge und ob vorübergehend oder dauerhaft, Vervielfältigungsstücke des Schutzgegenstandes herzustellen, insbesondere durch Ton- oder Bildaufzeichnungen, und umfasst auch das erstmalige Festhalten des Schutzgegenstandes oder dessen Wahrnehmbarmachung auf Mitteln der wiederholbaren Wiedergabe sowie das Herstellen von Vervielfältigungsstücken dieser Festhaltung, sowie die Speicherung einer geschützten Darbietung oder eines Bild- und/oder Schallträgers in digitaler Form oder auf einem anderen elektronischen Medium.
-
-    k. "Mit Creative Commons kompatible Lizenz" bezeichnet eine Lizenz, die unter https://creativecommons.org/compatiblelicenses aufgelistet ist und die durch Creative Commons als grundsätzlich zur vorliegenden Lizenz äquivalent akzeptiert wurde, da zumindest folgende Voraussetzungen erfüllt sind:
-
-    Diese mit Creative Commons kompatible Lizenz
-
-        i. enthält Bestimmungen, welche die gleichen Ziele verfolgen, die gleiche Bedeutung haben und die gleichen Wirkungen erzeugen wie die Lizenzelemente der vorliegenden Lizenz; und
-
-        ii. erlaubt ausdrücklich das Lizenzieren von ihr unterstellten Abwandlungen unter vorliegender Lizenz, unter einer anderen rechtsordnungsspezifisch angepassten Creative-Commons-Lizenz mit denselben Lizenzelementen wie vorliegende Lizenz aufweist oder unter der entsprechenden Creative-Commons-Unported-Lizenz.
-
-2. Beschränkungen der Verwertungsrechte
-
-Diese Lizenz ist in keiner Weise darauf gerichtet, Befugnisse zur Nutzung des Schutzgegenstandes zu vermindern, zu beschränken oder zu vereiteln, die sich aus den Beschränkungen der Verwertungsrechte, anderen Beschränkungen der Ausschließlichkeitsrechte des Rechtsinhabers oder anderen entsprechenden Rechtsnormen oder sich aus dem Fehlen eines immaterialgüterrechtlichen Schutzes ergeben.
-
-3. Lizenzierung
-
-Unter den Bedingungen dieser Lizenz erteilt Ihnen der Lizenzgeber - unbeschadet unverzichtbarer Rechte und vorbehaltlich des Abschnitts 3.e) - die vergütungsfreie, räumlich und zeitlich (für die Dauer des Urheberrechts oder verwandten Schutzrechts am Schutzgegenstand) unbeschränkte Nutzungsbewilligung, den Schutzgegenstand in der folgenden Art und Weise zu nutzen:
-
-    a. Den Schutzgegenstand in beliebiger Form und Menge zu vervielfältigen, ihn in Sammelwerke zu integrieren und ihn als Teil solcher Sammelwerke zu vervielfältigen;
-
-    b. Den Schutzgegenstand zu bearbeiten, einschließlich Übersetzungen unter Nutzung jedweder Medien anzufertigen, sofern deutlich erkennbar gemacht wird, dass es sich um eine Bearbeitung handelt;
-
-    c. Den Schutzgegenstand, allein oder in Sammelwerke aufgenommen, öffentlich wiederzugeben und zu verbreiten; und
-
-    d. Bearbeitungen des Schutzgegenstandes zu veröffentlichen, öffentlich wiederzugeben und zu verbreiten.
-
-    e. Bezüglich Vergütung für die Nutzung des Schutzgegenstandes gilt Folgendes:
-
-        i. Unverzichtbare gesetzliche Vergütungsansprüche: Soweit unverzichtbare Vergütungsansprüche im Gegenzug für gesetzliche Lizenzen vorgesehen oder Pauschalabgabensysteme (zum Beispiel für Leermedien) vorhanden sind, behält sich der Lizenzgeber das ausschließliche Recht vor, die entsprechenden Vergütungsansprüche für jede Ausübung eines Rechts aus dieser Lizenz durch Sie geltend zu machen.
-
-        ii. Vergütung bei Zwangslizenzen: Soweit Zwangslizenzen außerhalb dieser Lizenz vorgesehen sind und zustande kommen, verzichtet der Lizenzgeber für alle Fälle einer lizenzgerechten Nutzung des Schutzgegenstandes durch Sie auf jegliche Vergütung.
-
-        iii. Vergütung in sonstigen Fällen: Bezüglich lizenzgerechter Nutzung des Schutzgegenstandes durch Sie, die nicht unter die beiden vorherigen Abschnitte (i) und (ii) fällt, verzichtet der Lizenzgeber auf jegliche Vergütung, unabhängig davon, ob eine Geltendmachung der Vergütungsansprüche durch ihn selbst oder nur durch eine Verwertungsgesellschaft möglich wäre.
-
-Die vorgenannte Nutzungsbewilligung wird für alle bekannten sowie alle noch nicht bekannten Nutzungsarten eingeräumt. Sie beinhaltet auch das Recht, solche Änderungen am Schutzgegenstand vorzunehmen, die für bestimmte nach dieser Lizenz zulässige Nutzungen technisch erforderlich sind. Alle sonstigen Rechte, die über diesen Abschnitt hinaus nicht ausdrücklich vom Lizenzgeber eingeräumt werden, bleiben diesem allein vorbehalten. Soweit Datenbanken oder Zusammenstellungen von Daten Schutzgegenstand dieser Lizenz oder Teil dessen sind und einen immaterialgüterrechtlichen Schutz eigener Art genießen, verzichtet der Lizenzgeber auf die Geltendmachung sämtlicher daraus resultierender Rechte.
-
-4. Bedingungen
-
-Die Erteilung der Nutzungsbewilligung gemäß Abschnitt 3 dieser Lizenz erfolgt ausdrücklich nur unter den folgenden Bedingungen:
-
-    a. Sie dürfen den Schutzgegenstand ausschließlich unter den Bedingungen dieser Lizenz verbreiten oder öffentlich wiedergeben. Sie müssen dabei stets eine Kopie dieser Lizenz oder deren vollständige Internetadresse in Form des Uniform-Resource-Identifier (URI) beifügen. Sie dürfen keine Vertrags- oder Nutzungsbedingungen anbieten oder fordern, die die Bedingungen dieser Lizenz oder die durch diese Lizenz gewährten Rechte beschränken. Sie dürfen den Schutzgegenstand nicht unterlizenzieren. Bei jeder Kopie des Schutzgegenstandes, die Sie verbreiten oder öffentlich wiedergeben, müssen Sie alle Hinweise unverändert lassen, die auf diese Lizenz und den Haftungsausschluss hinweisen. Wenn Sie den Schutzgegenstand verbreiten oder öffentlich wiedergeben, dürfen Sie (in Bezug auf den Schutzgegenstand) keine technischen Maßnahmen ergreifen, die den Nutzer des Schutzgegenstandes in der Ausübung der ihm durch diese Lizenz gewährten Rechte behindern können. Dasselbe gilt auch für den Fall, dass der Schutzgegenstand einen Bestandteil eines Sammelwerkes bildet, was jedoch nicht bedeutet, dass das Sammelwerk insgesamt dieser Lizenz unterstellt werden muss. Sofern Sie ein Sammelwerk erstellen, müssen Sie - soweit dies praktikabel ist - auf die Mitteilung eines Lizenzgebers hin aus dem Sammelwerk die in Abschnitt 4.c) aufgezählten Hinweise entfernen. Wenn Sie eine Bearbeitung vornehmen, müssen Sie – soweit dies praktikabel ist – auf die Mitteilung eines Lizenzgebers hin von der Bearbeitung die in Abschnitt 4.c) aufgezählten Hinweise entfernen.
-
-    b. Sie dürfen eine Bearbeitung ausschließlich unter den Bedingungen
-
-        i. dieser Lizenz,
-
-        ii. einer späteren Version dieser Lizenz mit denselben Lizenzelementen,
-
-        iii. einer rechtsordnungsspezifischen Creative-Commons-Lizenz mit denselben Lizenzelementen ab Version 3.0 aufwärts (z.B. Namensnennung - Weitergabe unter gleichen Bedingungen 3.0 US),
-
-        iv. der Creative-Commons-Unported-Lizenz mit denselben Lizenzelementen ab Version 3.0 aufwärts, oder
-
-        v. einer mit Creative Commons kompatiblen Lizenz
-
-    verbreiten oder öffentlich wiedergeben.
-
-    Falls Sie die Bearbeitung gemäß Abschnitt b)(v) unter einer mit Creative Commons kompatiblen Lizenz lizenzieren, müssen Sie deren Lizenzbestimmungen Folge leisten.
-
-    Falls Sie die Bearbeitung unter einer der unter b)(i)-(iv) genannten Lizenzen ("Verwendbare Lizenzen") lizenzieren, müssen Sie deren Lizenzbestimmungen sowie folgenden Bestimmungen Folge leisten: Sie müssen stets eine Kopie der verwendbaren Lizenz oder deren vollständige Internetadresse in Form des Uniform-Resource-Identifier (URI) beifügen, wenn Sie die Bearbeitung verbreiten oder öffentlich wiedergeben. Sie dürfen keine Vertrags- oder Nutzungsbedingungen anbieten oder fordern, die die Bedingungen der verwendbaren Lizenz oder die durch sie gewährten Rechte beschränken. Bei jeder Bearbeitung, die Sie verbreiten oder öffentlich wiedergeben, müssen Sie alle Hinweise auf die verwendbare Lizenz und den Haftungsausschluss unverändert lassen. Wenn Sie die Bearbeitung verbreiten oder öffentlich wiedergeben, dürfen Sie (in Bezug auf die Bearbeitung) keine technischen Maßnahmen ergreifen, die den Nutzer der Bearbeitung in der Ausübung der ihm durch die verwendbare Lizenz gewährten Rechte behindern können. Dieser Abschnitt 4.b) gilt auch für den Fall, dass die Bearbeitung einen Bestandteil eines Sammelwerkes bildet; dies bedeutet jedoch nicht, dass das Sammelwerk insgesamt der verwendbaren Lizenz unterstellt werden muss.
-
-    c. Die Verbreitung und die öffentliche Wiedergabe des Schutzgegenstandes oder auf ihm aufbauender Inhalte oder ihn enthaltender Sammelwerke ist Ihnen nur unter der Bedingung gestattet, dass Sie, vorbehaltlich etwaiger Mitteilungen im Sinne von Abschnitt 4.a), alle dazu gehörenden Rechtevermerke unberührt lassen. Sie sind verpflichtet, die Urheberschaft oder die Rechteinhaberschaft in einer der Nutzung entsprechenden, angemessenen Form anzuerkennen, indem Sie selbst – soweit bekannt – Folgendes angeben:
-
-        i. Den Namen (oder das Pseudonym, falls ein solches verwendet wird) des Rechteinhabers, und/oder falls der Lizenzgeber im Rechtevermerk, in den Nutzungsbedingungen oder auf andere angemessene Weise eine Zuschreibung an Dritte vorgenommen hat (z.B. an eine Stiftung, ein Verlagshaus oder eine Zeitung) („Zuschreibungsempfänger“), Namen bzw. Bezeichnung dieses oder dieser Dritten;
-
-        ii. den Titel des Inhaltes;
-
-        iii. in einer praktikablen Form den Uniform-Resource-Identifier (URI, z.B. Internetadresse), den der Lizenzgeber zum Schutzgegenstand angegeben hat, es sei denn, dieser URI verweist nicht auf den Rechtevermerk oder die Lizenzinformationen zum Schutzgegenstand;
-
-        iv. und im Falle einer Bearbeitung des Schutzgegenstandes in Übereinstimmung mit Abschnitt 3.b) einen Hinweis darauf, dass es sich um eine Bearbeitung handelt.
-
-    Die nach diesem Abschnitt 4.c) erforderlichen Angaben können in jeder angemessenen Form gemacht werden; im Falle einer Bearbeitung des Schutzgegenstandes oder eines Sammelwerkes müssen diese Angaben das Minimum darstellen und bei gemeinsamer Nennung aller Beitragenden dergestalt erfolgen, dass sie zumindest ebenso hervorgehoben sind wie die Hinweise auf die übrigen Rechteinhaber. Die Angaben nach diesem Abschnitt dürfen Sie ausschließlich zur Angabe der Rechteinhaberschaft in der oben bezeichneten Weise verwenden. Durch die Ausübung Ihrer Rechte aus dieser Lizenz dürfen Sie ohne eine vorherige, separat und schriftlich vorliegende Zustimmung des Urhebers, des Lizenzgebers und/oder des Zuschreibungsempfängers weder implizit noch explizit irgendeine Verbindung mit dem oder eine Unterstützung oder Billigung durch den Lizenzgeber oder den Zuschreibungsempfänger andeuten oder erklären.
-
-    d. Die oben unter 4.a) bis c) genannten Einschränkungen gelten nicht für solche Teile des Schutzgegenstandes, die allein deshalb unter den Schutzgegenstandsbegriff fallen, weil sie als Datenbanken oder Zusammenstellungen von Daten einen immaterialgüterrechtlichen Schutz eigener Art genießen.
-
-    e. (Urheber)Persönlichkeitsrechte bleiben - soweit sie bestehen - von dieser Lizenz unberührt.
-
-5. Gewährleistung
-
-SOFERN KEINE ANDERS LAUTENDE, SCHRIFTLICHE VEREINBARUNG ZWISCHEN DEM LIZENZGEBER UND IHNEN GESCHLOSSEN WURDE UND SOWEIT MÄNGEL NICHT ARGLISTIG VERSCHWIEGEN WURDEN, BIETET DER LIZENZGEBER DEN SCHUTZGEGENSTAND UND DIE ERTEILUNG DER NUTZUNGSBEWILLIGUNG UNTER AUSSCHLUSS JEGLICHER GEWÄHRLEISTUNG AN UND ÜBERNIMMT WEDER AUSDRÜCKLICH NOCH KONKLUDENT GARANTIEN IRGENDEINER ART. DIES UMFASST INSBESONDERE DAS FREISEIN VON SACH- UND RECHTSMÄNGELN, UNABHÄNGIG VON DEREN ERKENNBARKEIT FÜR DEN LIZENZGEBER, DIE VERKEHRSFÄHIGKEIT DES SCHUTZGEGENSTANDES, SEINE VERWENDBARKEIT FÜR EINEN BESTIMMTEN ZWECK SOWIE DIE KORREKTHEIT VON BESCHREIBUNGEN.
-
-6. Haftungsbeschränkung
-
-ÜBER DIE IN ZIFFER 5 GENANNTE GEWÄHRLEISTUNG HINAUS HAFTET DER LIZENZGEBER IHNEN GEGENÜBER FÜR SCHÄDEN JEGLICHER ART NUR BEI GROBER FAHRLÄSSIGKEIT ODER VORSATZ, UND ÜBERNIMMT DARÜBER HINAUS KEINERLEI FREIWILLIGE HAFTUNG FÜR FOLGE- ODER ANDERE SCHÄDEN, AUCH WENN ER ÜBER DIE MÖGLICHKEIT IHRES EINTRITTS UNTERRICHTET WURDE.
-
-7. Erlöschen
-
-    a. Diese Lizenz und die durch sie erteilte Nutzungsbewilligung erlöschen mit Wirkung für die Zukunft im Falle eines Verstoßes gegen die Lizenzbedingungen durch Sie, ohne dass es dazu der Kenntnis des Lizenzgebers vom Verstoß oder einer weiteren Handlung einer der Vertragsparteien bedarf. Mit natürlichen oder juristischen Personen, die Bearbeitungen des Schutzgegenstandes oder diesen enthaltende Sammelwerke sowie entsprechende Vervielfältigungsstücke unter den Bedingungen dieser Lizenz von Ihnen erhalten haben, bestehen nachträglich entstandene Lizenzbeziehungen jedoch solange weiter, wie die genannten Personen sich ihrerseits an sämtliche Lizenzbedingungen halten. Darüber hinaus gelten die Ziffern 1, 2, 5, 6, 7, und 8 auch nach einem Erlöschen dieser Lizenz fort.
-
-    b. Vorbehaltlich der oben genannten Bedingungen gilt diese Lizenz unbefristet bis der rechtliche Schutz für den Schutzgegenstand ausläuft. Davon abgesehen behält der Lizenzgeber das Recht, den Schutzgegenstand unter anderen Lizenzbedingungen anzubieten oder die eigene Weitergabe des Schutzgegenstandes jederzeit einzustellen, solange die Ausübung dieses Rechts nicht einer Kündigung oder einem Widerruf dieser Lizenz (oder irgendeiner Weiterlizenzierung, die auf Grundlage dieser Lizenz bereits erfolgt ist bzw. zukünftig noch erfolgen muss) dient und diese Lizenz unter Berücksichtigung der oben zum Erlöschen genannten Bedingungen vollumfänglich wirksam bleibt.
-
-8. Sonstige Bestimmungen
-
-    a. Jedes Mal wenn Sie den Schutzgegenstand für sich genommen oder als Teil eines Sammelwerkes verbreiten oder öffentlich wiedergeben, bietet der Lizenzgeber dem Empfänger eine Lizenz zu den gleichen Bedingungen und im gleichen Umfang an, wie Ihnen in Form dieser Lizenz.
-
-    b. Jedes Mal wenn Sie eine Bearbeitung des Schutzgegenstandes verbreiten oder öffentlich wiedergeben, bietet der Lizenzgeber dem Empfänger eine Lizenz am ursprünglichen Schutzgegenstand zu den gleichen Bedingungen und im gleichen Umfang an, wie Ihnen in Form dieser Lizenz.
-
-    c. Sollte eine Bestimmung dieser Lizenz unwirksam sein, so bleibt davon die Wirksamkeit der Lizenz im Übrigen unberührt.
-
-    d. Keine Bestimmung dieser Lizenz soll als abbedungen und kein Verstoß gegen sie als zulässig gelten, solange die von dem Verzicht oder von dem Verstoß betroffene Seite nicht schriftlich zugestimmt hat.
-
-    e. Diese Lizenz (zusammen mit in ihr ausdrücklich vorgesehenen Erlaubnissen, Mitteilungen und Zustimmungen, soweit diese tatsächlich vorliegen) stellt die vollständige Vereinbarung zwischen dem Lizenzgeber und Ihnen in Bezug auf den Schutzgegenstand dar. Es bestehen keine Abreden, Vereinbarungen oder Erklärungen in Bezug auf den Schutzgegenstand, die in dieser Lizenz nicht genannt sind. Rechtsgeschäftliche Änderungen des Verhältnisses zwischen dem Lizenzgeber und Ihnen sind nur über Modifikationen dieser Lizenz möglich. Der Lizenzgeber ist an etwaige zusätzliche, einseitig durch Sie übermittelte Bestimmungen nicht gebunden. Diese Lizenz kann nur durch schriftliche Vereinbarung zwischen Ihnen und dem Lizenzgeber modifiziert werden. Derlei Modifikationen wirken ausschließlich zwischen dem Lizenzgeber und Ihnen und wirken sich nicht auf die Dritten gemäß 8.a) und b) angebotenen Lizenzen aus.
-
-    f. Sofern zwischen Ihnen und dem Lizenzgeber keine anderweitige Vereinbarung getroffen wurde und soweit Wahlfreiheit besteht, findet auf diesen Lizenzvertrag das Recht der Republik Österreich Anwendung.
-
-Creative Commons Notice
-
-Creative Commons ist nicht Partei dieser Lizenz und übernimmt keinerlei Gewähr oder dergleichen in Bezug auf den Schutzgegenstand. Creative Commons haftet Ihnen oder einer anderen Partei unter keinem rechtlichen Gesichtspunkt für irgendwelche Schäden, die - abstrakt oder konkret, zufällig oder vorhersehbar - im Zusammenhang mit dieser Lizenz entstehen. Unbeschadet der vorangegangen beiden Sätze, hat Creative Commons alle Rechte und Pflichten eines Lizenzgebers, wenn es sich ausdrücklich als Lizenzgeber im Sinne dieser Lizenz bezeichnet.
-
-Creative Commons gewährt den Parteien nur insoweit das Recht, das Logo und die Marke "Creative Commons" zu nutzen, als dies notwendig ist, um der Öffentlichkeit gegenüber kenntlich zu machen, dass der Schutzgegenstand unter einer CCPL steht. Ein darüber hinaus gehender Gebrauch der Marke "Creative Commons" oder einer verwandten Marke oder eines verwandten Logos bedarf der vorherigen schriftlichen Zustimmung von Creative Commons. Jeder erlaubte Gebrauch richtet sich nach der Creative Commons Marken-Nutzungs-Richtlinie in der jeweils aktuellen Fassung, die von Zeit zu Zeit auf der Website veröffentlicht oder auf andere Weise auf Anfrage zugänglich gemacht wird. Zur Klarstellung: Die genannten Einschränkungen der Markennutzung sind nicht Bestandteil dieser Lizenz.
-
-Creative Commons kann kontaktiert werden über https://creativecommons.org/.
-
-
-
 --- CC-BY-SA-3.0 ---
 
 Creative Commons Legal Code
@@ -7910,6 +8622,167 @@ Creative Commons Notice
     this trademark restriction does not form part of the License.
 
     Creative Commons may be contacted at https://creativecommons.org/.
+
+
+
+--- CC-BY-SA-3.0 AND GPL-2.0-or-later AND CC-BY-4.0 AND GPL-2.0-only ---
+
+This program is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the Free
+Software Foundation; version 2 of the License.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+Full license text: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+
+
+--- CC-BY-SA-3.0-AT ---
+
+CREATIVE COMMONS IST KEINE RECHTSANWALTSKANZLEI UND LEISTET KEINE RECHTSBERATUNG. DIE BEREITSTELLUNG DIESER LIZENZ FÜHRT ZU KEINEM MANDATSVERHÄLTNIS. CREATIVE COMMONS STELLT DIESE INFORMATIONEN OHNE GEWÄHR ZUR VERFÜGUNG. CREATIVE COMMONS ÜBERNIMMT KEINE GEWÄHRLEISTUNG FÜR DIE GELIEFERTEN INFORMATIONEN UND SCHLIEßT DIE HAFTUNG FÜR SCHÄDEN AUS, DIE SICH AUS DEREN GEBRAUCH ERGEBEN.
+
+Lizenz
+
+DER GEGENSTAND DIESER LIZENZ (WIE UNTER „SCHUTZGEGENSTAND“ DEFINIERT) WIRD UNTER DEN BEDINGUNGEN DIESER CREATIVE COMMONS PUBLIC LICENSE ("CCPL", „LIZENZ“ ODER "LIZENZVERTRAG") ZUR VERFÜGUNG GESTELLT. DER SCHUTZGEGENSTAND IST DURCH DAS URHEBERRECHT UND/ODER ANDERE GESETZE GESCHÜTZT. JEDE FORM DER NUTZUNG DES SCHUTZGEGENSTANDES, DIE NICHT AUFGRUND DIESER LIZENZ ODER DURCH GESETZE GESTATTET IST, IST UNZULÄSSIG.
+
+DURCH DIE AUSÜBUNG EINES DURCH DIESE LIZENZ GEWÄHRTEN RECHTS AN DEM SCHUTZGEGENSTAND ERKLÄREN SIE SICH MIT DEN LIZENZBEDINGUNGEN RECHTSVERBINDLICH EINVERSTANDEN. SOWEIT DIESE LIZENZ ALS LIZENZVERTRAG ANZUSEHEN IST, GEWÄHRT IHNEN DER LIZENZGEBER DIE IN DER LIZENZ GENANNTEN RECHTE UNENTGELTLICH UND IM AUSTAUSCH DAFÜR, DASS SIE DAS GEBUNDENSEIN AN DIE LIZENZBEDINGUNGEN AKZEPTIEREN.
+
+1. Definitionen
+
+    a. Der Begriff "Bearbeitung" im Sinne dieser Lizenz bezeichnet das Ergebnis jeglicher Art von Veränderung des Schutzgegenstandes, solange dieses erkennbar vom Schutzgegenstand abgeleitet wurde. Dies kann insbesondere auch eine Umgestaltung, Änderung, Anpassung, Übersetzung oder Heranziehung des Schutzgegenstandes zur Vertonung von Laufbildern sein. Nicht als Bearbeitung des Schutzgegenstandes gelten seine Aufnahme in eine Sammlung oder ein Sammelwerk und die freie Nutzung des Schutzgegenstandes.
+
+    b. Der Begriff "Sammelwerk" im Sinne dieser Lizenz meint eine Zusammenstellung von literarischen, künstlerischen oder wissenschaftlichen Inhalten zu einem einheitlichen Ganzen, sofern diese Zusammenstellung aufgrund von Auswahl und Anordnung der darin enthaltenen selbständigen Elemente eine eigentümliche geistige Schöpfung darstellt, unabhängig davon, ob die Elemente systematisch oder methodisch angelegt und dadurch einzeln zugänglich sind oder nicht.
+
+    c. "Verbreiten" im Sinne dieser Lizenz bedeutet, den Schutzgegenstand oder Bearbeitungen im Original oder in Form von Vervielfältigungsstücken, mithin in körperlich fixierter Form der Öffentlichkeit zugänglich zu machen oder in Verkehr zu bringen.
+
+    d. Unter "Lizenzelementen" werden im Sinne dieser Lizenz die folgenden übergeordneten Lizenzcharakteristika verstanden, die vom Lizenzgeber ausgewählt wurden und in der Bezeichnung der Lizenz zum Ausdruck kommen: "Namensnennung", "Weitergabe unter gleichen Bedingungen".
+
+    e. Der "Lizenzgeber" im Sinne dieser Lizenz ist diejenige natürliche oder juristische Person oder Gruppe, die den Schutzgegenstand unter den Bedingungen dieser Lizenz anbietet und insoweit als Rechteinhaberin auftritt.
+
+    f. "Rechteinhaber" im Sinne dieser Lizenz ist der Urheber des Schutzgegenstandes oder jede andere natürliche oder juristische Person, die am Schutzgegenstand ein Immaterialgüterrecht erlangt hat, welches die in Abschnitt 3 genannten Handlungen erfasst und eine Erteilung, Übertragung oder Einräumung von Nutzungsbewilligungen bzw Nutzungsrechten an Dritte erlaubt.
+
+    g. Der Begriff "Schutzgegenstand" bezeichnet in dieser Lizenz den literarischen, künstlerischen oder wissenschaftlichen Inhalt, der unter den Bedingungen dieser Lizenz angeboten wird. Das kann insbesondere eine eigentümliche geistige Schöpfung jeglicher Art oder ein Werk der kleinen Münze, ein nachgelassenes Werk oder auch ein Lichtbild oder anderes Objekt eines verwandten Schutzrechts sein, unabhängig von der Art seiner Fixierung und unabhängig davon, auf welche Weise jeweils eine Wahrnehmung erfolgen kann, gleichviel ob in analoger oder digitaler Form. Soweit Datenbanken oder Zusammenstellungen von Daten einen immaterialgüterrechtlichen Schutz eigener Art genießen, unterfallen auch sie dem Begriff „Schutzgegenstand“ im Sinne dieser Lizenz.
+
+    h. Mit "Sie" bzw. "Ihnen" ist die natürliche oder juristische Person gemeint, die in dieser Lizenz im Abschnitt 3 genannte Nutzungen des Schutzgegenstandes vornimmt und zuvor in Hinblick auf den Schutzgegenstand nicht gegen Bedingungen dieser Lizenz verstoßen oder aber die ausdrückliche Erlaubnis des Lizenzgebers erhalten hat, die durch diese Lizenz gewährte Nutzungsbewilligung trotz eines vorherigen Verstoßes auszuüben.
+
+    i. Unter "Öffentlich Wiedergeben" im Sinne dieser Lizenz sind Wahrnehmbarmachungen des Schutzgegenstandes in unkörperlicher Form zu verstehen, die für eine Mehrzahl von Mitgliedern der Öffentlichkeit bestimmt sind und mittels öffentlicher Wiedergabe in Form von Vortrag, Aufführung, Vorführung, Darbietung, Sendung, Weitersendung oder zeit- und ortsunabhängiger Zurverfügungstellung erfolgen, unabhängig von den zum Einsatz kommenden Techniken und Verfahren, einschließlich drahtgebundener oder drahtloser Mittel und Einstellen in das Internet.
+
+    j. "Vervielfältigen" im Sinne dieser Lizenz bedeutet, gleichviel in welchem Verfahren, auf welchem Träger, in welcher Menge und ob vorübergehend oder dauerhaft, Vervielfältigungsstücke des Schutzgegenstandes herzustellen, insbesondere durch Ton- oder Bildaufzeichnungen, und umfasst auch das erstmalige Festhalten des Schutzgegenstandes oder dessen Wahrnehmbarmachung auf Mitteln der wiederholbaren Wiedergabe sowie das Herstellen von Vervielfältigungsstücken dieser Festhaltung, sowie die Speicherung einer geschützten Darbietung oder eines Bild- und/oder Schallträgers in digitaler Form oder auf einem anderen elektronischen Medium.
+
+    k. "Mit Creative Commons kompatible Lizenz" bezeichnet eine Lizenz, die unter https://creativecommons.org/compatiblelicenses aufgelistet ist und die durch Creative Commons als grundsätzlich zur vorliegenden Lizenz äquivalent akzeptiert wurde, da zumindest folgende Voraussetzungen erfüllt sind:
+
+    Diese mit Creative Commons kompatible Lizenz
+
+        i. enthält Bestimmungen, welche die gleichen Ziele verfolgen, die gleiche Bedeutung haben und die gleichen Wirkungen erzeugen wie die Lizenzelemente der vorliegenden Lizenz; und
+
+        ii. erlaubt ausdrücklich das Lizenzieren von ihr unterstellten Abwandlungen unter vorliegender Lizenz, unter einer anderen rechtsordnungsspezifisch angepassten Creative-Commons-Lizenz mit denselben Lizenzelementen wie vorliegende Lizenz aufweist oder unter der entsprechenden Creative-Commons-Unported-Lizenz.
+
+2. Beschränkungen der Verwertungsrechte
+
+Diese Lizenz ist in keiner Weise darauf gerichtet, Befugnisse zur Nutzung des Schutzgegenstandes zu vermindern, zu beschränken oder zu vereiteln, die sich aus den Beschränkungen der Verwertungsrechte, anderen Beschränkungen der Ausschließlichkeitsrechte des Rechtsinhabers oder anderen entsprechenden Rechtsnormen oder sich aus dem Fehlen eines immaterialgüterrechtlichen Schutzes ergeben.
+
+3. Lizenzierung
+
+Unter den Bedingungen dieser Lizenz erteilt Ihnen der Lizenzgeber - unbeschadet unverzichtbarer Rechte und vorbehaltlich des Abschnitts 3.e) - die vergütungsfreie, räumlich und zeitlich (für die Dauer des Urheberrechts oder verwandten Schutzrechts am Schutzgegenstand) unbeschränkte Nutzungsbewilligung, den Schutzgegenstand in der folgenden Art und Weise zu nutzen:
+
+    a. Den Schutzgegenstand in beliebiger Form und Menge zu vervielfältigen, ihn in Sammelwerke zu integrieren und ihn als Teil solcher Sammelwerke zu vervielfältigen;
+
+    b. Den Schutzgegenstand zu bearbeiten, einschließlich Übersetzungen unter Nutzung jedweder Medien anzufertigen, sofern deutlich erkennbar gemacht wird, dass es sich um eine Bearbeitung handelt;
+
+    c. Den Schutzgegenstand, allein oder in Sammelwerke aufgenommen, öffentlich wiederzugeben und zu verbreiten; und
+
+    d. Bearbeitungen des Schutzgegenstandes zu veröffentlichen, öffentlich wiederzugeben und zu verbreiten.
+
+    e. Bezüglich Vergütung für die Nutzung des Schutzgegenstandes gilt Folgendes:
+
+        i. Unverzichtbare gesetzliche Vergütungsansprüche: Soweit unverzichtbare Vergütungsansprüche im Gegenzug für gesetzliche Lizenzen vorgesehen oder Pauschalabgabensysteme (zum Beispiel für Leermedien) vorhanden sind, behält sich der Lizenzgeber das ausschließliche Recht vor, die entsprechenden Vergütungsansprüche für jede Ausübung eines Rechts aus dieser Lizenz durch Sie geltend zu machen.
+
+        ii. Vergütung bei Zwangslizenzen: Soweit Zwangslizenzen außerhalb dieser Lizenz vorgesehen sind und zustande kommen, verzichtet der Lizenzgeber für alle Fälle einer lizenzgerechten Nutzung des Schutzgegenstandes durch Sie auf jegliche Vergütung.
+
+        iii. Vergütung in sonstigen Fällen: Bezüglich lizenzgerechter Nutzung des Schutzgegenstandes durch Sie, die nicht unter die beiden vorherigen Abschnitte (i) und (ii) fällt, verzichtet der Lizenzgeber auf jegliche Vergütung, unabhängig davon, ob eine Geltendmachung der Vergütungsansprüche durch ihn selbst oder nur durch eine Verwertungsgesellschaft möglich wäre.
+
+Die vorgenannte Nutzungsbewilligung wird für alle bekannten sowie alle noch nicht bekannten Nutzungsarten eingeräumt. Sie beinhaltet auch das Recht, solche Änderungen am Schutzgegenstand vorzunehmen, die für bestimmte nach dieser Lizenz zulässige Nutzungen technisch erforderlich sind. Alle sonstigen Rechte, die über diesen Abschnitt hinaus nicht ausdrücklich vom Lizenzgeber eingeräumt werden, bleiben diesem allein vorbehalten. Soweit Datenbanken oder Zusammenstellungen von Daten Schutzgegenstand dieser Lizenz oder Teil dessen sind und einen immaterialgüterrechtlichen Schutz eigener Art genießen, verzichtet der Lizenzgeber auf die Geltendmachung sämtlicher daraus resultierender Rechte.
+
+4. Bedingungen
+
+Die Erteilung der Nutzungsbewilligung gemäß Abschnitt 3 dieser Lizenz erfolgt ausdrücklich nur unter den folgenden Bedingungen:
+
+    a. Sie dürfen den Schutzgegenstand ausschließlich unter den Bedingungen dieser Lizenz verbreiten oder öffentlich wiedergeben. Sie müssen dabei stets eine Kopie dieser Lizenz oder deren vollständige Internetadresse in Form des Uniform-Resource-Identifier (URI) beifügen. Sie dürfen keine Vertrags- oder Nutzungsbedingungen anbieten oder fordern, die die Bedingungen dieser Lizenz oder die durch diese Lizenz gewährten Rechte beschränken. Sie dürfen den Schutzgegenstand nicht unterlizenzieren. Bei jeder Kopie des Schutzgegenstandes, die Sie verbreiten oder öffentlich wiedergeben, müssen Sie alle Hinweise unverändert lassen, die auf diese Lizenz und den Haftungsausschluss hinweisen. Wenn Sie den Schutzgegenstand verbreiten oder öffentlich wiedergeben, dürfen Sie (in Bezug auf den Schutzgegenstand) keine technischen Maßnahmen ergreifen, die den Nutzer des Schutzgegenstandes in der Ausübung der ihm durch diese Lizenz gewährten Rechte behindern können. Dasselbe gilt auch für den Fall, dass der Schutzgegenstand einen Bestandteil eines Sammelwerkes bildet, was jedoch nicht bedeutet, dass das Sammelwerk insgesamt dieser Lizenz unterstellt werden muss. Sofern Sie ein Sammelwerk erstellen, müssen Sie - soweit dies praktikabel ist - auf die Mitteilung eines Lizenzgebers hin aus dem Sammelwerk die in Abschnitt 4.c) aufgezählten Hinweise entfernen. Wenn Sie eine Bearbeitung vornehmen, müssen Sie – soweit dies praktikabel ist – auf die Mitteilung eines Lizenzgebers hin von der Bearbeitung die in Abschnitt 4.c) aufgezählten Hinweise entfernen.
+
+    b. Sie dürfen eine Bearbeitung ausschließlich unter den Bedingungen
+
+        i. dieser Lizenz,
+
+        ii. einer späteren Version dieser Lizenz mit denselben Lizenzelementen,
+
+        iii. einer rechtsordnungsspezifischen Creative-Commons-Lizenz mit denselben Lizenzelementen ab Version 3.0 aufwärts (z.B. Namensnennung - Weitergabe unter gleichen Bedingungen 3.0 US),
+
+        iv. der Creative-Commons-Unported-Lizenz mit denselben Lizenzelementen ab Version 3.0 aufwärts, oder
+
+        v. einer mit Creative Commons kompatiblen Lizenz
+
+    verbreiten oder öffentlich wiedergeben.
+
+    Falls Sie die Bearbeitung gemäß Abschnitt b)(v) unter einer mit Creative Commons kompatiblen Lizenz lizenzieren, müssen Sie deren Lizenzbestimmungen Folge leisten.
+
+    Falls Sie die Bearbeitung unter einer der unter b)(i)-(iv) genannten Lizenzen ("Verwendbare Lizenzen") lizenzieren, müssen Sie deren Lizenzbestimmungen sowie folgenden Bestimmungen Folge leisten: Sie müssen stets eine Kopie der verwendbaren Lizenz oder deren vollständige Internetadresse in Form des Uniform-Resource-Identifier (URI) beifügen, wenn Sie die Bearbeitung verbreiten oder öffentlich wiedergeben. Sie dürfen keine Vertrags- oder Nutzungsbedingungen anbieten oder fordern, die die Bedingungen der verwendbaren Lizenz oder die durch sie gewährten Rechte beschränken. Bei jeder Bearbeitung, die Sie verbreiten oder öffentlich wiedergeben, müssen Sie alle Hinweise auf die verwendbare Lizenz und den Haftungsausschluss unverändert lassen. Wenn Sie die Bearbeitung verbreiten oder öffentlich wiedergeben, dürfen Sie (in Bezug auf die Bearbeitung) keine technischen Maßnahmen ergreifen, die den Nutzer der Bearbeitung in der Ausübung der ihm durch die verwendbare Lizenz gewährten Rechte behindern können. Dieser Abschnitt 4.b) gilt auch für den Fall, dass die Bearbeitung einen Bestandteil eines Sammelwerkes bildet; dies bedeutet jedoch nicht, dass das Sammelwerk insgesamt der verwendbaren Lizenz unterstellt werden muss.
+
+    c. Die Verbreitung und die öffentliche Wiedergabe des Schutzgegenstandes oder auf ihm aufbauender Inhalte oder ihn enthaltender Sammelwerke ist Ihnen nur unter der Bedingung gestattet, dass Sie, vorbehaltlich etwaiger Mitteilungen im Sinne von Abschnitt 4.a), alle dazu gehörenden Rechtevermerke unberührt lassen. Sie sind verpflichtet, die Urheberschaft oder die Rechteinhaberschaft in einer der Nutzung entsprechenden, angemessenen Form anzuerkennen, indem Sie selbst – soweit bekannt – Folgendes angeben:
+
+        i. Den Namen (oder das Pseudonym, falls ein solches verwendet wird) des Rechteinhabers, und/oder falls der Lizenzgeber im Rechtevermerk, in den Nutzungsbedingungen oder auf andere angemessene Weise eine Zuschreibung an Dritte vorgenommen hat (z.B. an eine Stiftung, ein Verlagshaus oder eine Zeitung) („Zuschreibungsempfänger“), Namen bzw. Bezeichnung dieses oder dieser Dritten;
+
+        ii. den Titel des Inhaltes;
+
+        iii. in einer praktikablen Form den Uniform-Resource-Identifier (URI, z.B. Internetadresse), den der Lizenzgeber zum Schutzgegenstand angegeben hat, es sei denn, dieser URI verweist nicht auf den Rechtevermerk oder die Lizenzinformationen zum Schutzgegenstand;
+
+        iv. und im Falle einer Bearbeitung des Schutzgegenstandes in Übereinstimmung mit Abschnitt 3.b) einen Hinweis darauf, dass es sich um eine Bearbeitung handelt.
+
+    Die nach diesem Abschnitt 4.c) erforderlichen Angaben können in jeder angemessenen Form gemacht werden; im Falle einer Bearbeitung des Schutzgegenstandes oder eines Sammelwerkes müssen diese Angaben das Minimum darstellen und bei gemeinsamer Nennung aller Beitragenden dergestalt erfolgen, dass sie zumindest ebenso hervorgehoben sind wie die Hinweise auf die übrigen Rechteinhaber. Die Angaben nach diesem Abschnitt dürfen Sie ausschließlich zur Angabe der Rechteinhaberschaft in der oben bezeichneten Weise verwenden. Durch die Ausübung Ihrer Rechte aus dieser Lizenz dürfen Sie ohne eine vorherige, separat und schriftlich vorliegende Zustimmung des Urhebers, des Lizenzgebers und/oder des Zuschreibungsempfängers weder implizit noch explizit irgendeine Verbindung mit dem oder eine Unterstützung oder Billigung durch den Lizenzgeber oder den Zuschreibungsempfänger andeuten oder erklären.
+
+    d. Die oben unter 4.a) bis c) genannten Einschränkungen gelten nicht für solche Teile des Schutzgegenstandes, die allein deshalb unter den Schutzgegenstandsbegriff fallen, weil sie als Datenbanken oder Zusammenstellungen von Daten einen immaterialgüterrechtlichen Schutz eigener Art genießen.
+
+    e. (Urheber)Persönlichkeitsrechte bleiben - soweit sie bestehen - von dieser Lizenz unberührt.
+
+5. Gewährleistung
+
+SOFERN KEINE ANDERS LAUTENDE, SCHRIFTLICHE VEREINBARUNG ZWISCHEN DEM LIZENZGEBER UND IHNEN GESCHLOSSEN WURDE UND SOWEIT MÄNGEL NICHT ARGLISTIG VERSCHWIEGEN WURDEN, BIETET DER LIZENZGEBER DEN SCHUTZGEGENSTAND UND DIE ERTEILUNG DER NUTZUNGSBEWILLIGUNG UNTER AUSSCHLUSS JEGLICHER GEWÄHRLEISTUNG AN UND ÜBERNIMMT WEDER AUSDRÜCKLICH NOCH KONKLUDENT GARANTIEN IRGENDEINER ART. DIES UMFASST INSBESONDERE DAS FREISEIN VON SACH- UND RECHTSMÄNGELN, UNABHÄNGIG VON DEREN ERKENNBARKEIT FÜR DEN LIZENZGEBER, DIE VERKEHRSFÄHIGKEIT DES SCHUTZGEGENSTANDES, SEINE VERWENDBARKEIT FÜR EINEN BESTIMMTEN ZWECK SOWIE DIE KORREKTHEIT VON BESCHREIBUNGEN.
+
+6. Haftungsbeschränkung
+
+ÜBER DIE IN ZIFFER 5 GENANNTE GEWÄHRLEISTUNG HINAUS HAFTET DER LIZENZGEBER IHNEN GEGENÜBER FÜR SCHÄDEN JEGLICHER ART NUR BEI GROBER FAHRLÄSSIGKEIT ODER VORSATZ, UND ÜBERNIMMT DARÜBER HINAUS KEINERLEI FREIWILLIGE HAFTUNG FÜR FOLGE- ODER ANDERE SCHÄDEN, AUCH WENN ER ÜBER DIE MÖGLICHKEIT IHRES EINTRITTS UNTERRICHTET WURDE.
+
+7. Erlöschen
+
+    a. Diese Lizenz und die durch sie erteilte Nutzungsbewilligung erlöschen mit Wirkung für die Zukunft im Falle eines Verstoßes gegen die Lizenzbedingungen durch Sie, ohne dass es dazu der Kenntnis des Lizenzgebers vom Verstoß oder einer weiteren Handlung einer der Vertragsparteien bedarf. Mit natürlichen oder juristischen Personen, die Bearbeitungen des Schutzgegenstandes oder diesen enthaltende Sammelwerke sowie entsprechende Vervielfältigungsstücke unter den Bedingungen dieser Lizenz von Ihnen erhalten haben, bestehen nachträglich entstandene Lizenzbeziehungen jedoch solange weiter, wie die genannten Personen sich ihrerseits an sämtliche Lizenzbedingungen halten. Darüber hinaus gelten die Ziffern 1, 2, 5, 6, 7, und 8 auch nach einem Erlöschen dieser Lizenz fort.
+
+    b. Vorbehaltlich der oben genannten Bedingungen gilt diese Lizenz unbefristet bis der rechtliche Schutz für den Schutzgegenstand ausläuft. Davon abgesehen behält der Lizenzgeber das Recht, den Schutzgegenstand unter anderen Lizenzbedingungen anzubieten oder die eigene Weitergabe des Schutzgegenstandes jederzeit einzustellen, solange die Ausübung dieses Rechts nicht einer Kündigung oder einem Widerruf dieser Lizenz (oder irgendeiner Weiterlizenzierung, die auf Grundlage dieser Lizenz bereits erfolgt ist bzw. zukünftig noch erfolgen muss) dient und diese Lizenz unter Berücksichtigung der oben zum Erlöschen genannten Bedingungen vollumfänglich wirksam bleibt.
+
+8. Sonstige Bestimmungen
+
+    a. Jedes Mal wenn Sie den Schutzgegenstand für sich genommen oder als Teil eines Sammelwerkes verbreiten oder öffentlich wiedergeben, bietet der Lizenzgeber dem Empfänger eine Lizenz zu den gleichen Bedingungen und im gleichen Umfang an, wie Ihnen in Form dieser Lizenz.
+
+    b. Jedes Mal wenn Sie eine Bearbeitung des Schutzgegenstandes verbreiten oder öffentlich wiedergeben, bietet der Lizenzgeber dem Empfänger eine Lizenz am ursprünglichen Schutzgegenstand zu den gleichen Bedingungen und im gleichen Umfang an, wie Ihnen in Form dieser Lizenz.
+
+    c. Sollte eine Bestimmung dieser Lizenz unwirksam sein, so bleibt davon die Wirksamkeit der Lizenz im Übrigen unberührt.
+
+    d. Keine Bestimmung dieser Lizenz soll als abbedungen und kein Verstoß gegen sie als zulässig gelten, solange die von dem Verzicht oder von dem Verstoß betroffene Seite nicht schriftlich zugestimmt hat.
+
+    e. Diese Lizenz (zusammen mit in ihr ausdrücklich vorgesehenen Erlaubnissen, Mitteilungen und Zustimmungen, soweit diese tatsächlich vorliegen) stellt die vollständige Vereinbarung zwischen dem Lizenzgeber und Ihnen in Bezug auf den Schutzgegenstand dar. Es bestehen keine Abreden, Vereinbarungen oder Erklärungen in Bezug auf den Schutzgegenstand, die in dieser Lizenz nicht genannt sind. Rechtsgeschäftliche Änderungen des Verhältnisses zwischen dem Lizenzgeber und Ihnen sind nur über Modifikationen dieser Lizenz möglich. Der Lizenzgeber ist an etwaige zusätzliche, einseitig durch Sie übermittelte Bestimmungen nicht gebunden. Diese Lizenz kann nur durch schriftliche Vereinbarung zwischen Ihnen und dem Lizenzgeber modifiziert werden. Derlei Modifikationen wirken ausschließlich zwischen dem Lizenzgeber und Ihnen und wirken sich nicht auf die Dritten gemäß 8.a) und b) angebotenen Lizenzen aus.
+
+    f. Sofern zwischen Ihnen und dem Lizenzgeber keine anderweitige Vereinbarung getroffen wurde und soweit Wahlfreiheit besteht, findet auf diesen Lizenzvertrag das Recht der Republik Österreich Anwendung.
+
+Creative Commons Notice
+
+Creative Commons ist nicht Partei dieser Lizenz und übernimmt keinerlei Gewähr oder dergleichen in Bezug auf den Schutzgegenstand. Creative Commons haftet Ihnen oder einer anderen Partei unter keinem rechtlichen Gesichtspunkt für irgendwelche Schäden, die - abstrakt oder konkret, zufällig oder vorhersehbar - im Zusammenhang mit dieser Lizenz entstehen. Unbeschadet der vorangegangen beiden Sätze, hat Creative Commons alle Rechte und Pflichten eines Lizenzgebers, wenn es sich ausdrücklich als Lizenzgeber im Sinne dieser Lizenz bezeichnet.
+
+Creative Commons gewährt den Parteien nur insoweit das Recht, das Logo und die Marke "Creative Commons" zu nutzen, als dies notwendig ist, um der Öffentlichkeit gegenüber kenntlich zu machen, dass der Schutzgegenstand unter einer CCPL steht. Ein darüber hinaus gehender Gebrauch der Marke "Creative Commons" oder einer verwandten Marke oder eines verwandten Logos bedarf der vorherigen schriftlichen Zustimmung von Creative Commons. Jeder erlaubte Gebrauch richtet sich nach der Creative Commons Marken-Nutzungs-Richtlinie in der jeweils aktuellen Fassung, die von Zeit zu Zeit auf der Website veröffentlicht oder auf andere Weise auf Anfrage zugänglich gemacht wird. Zur Klarstellung: Die genannten Einschränkungen der Markennutzung sind nicht Bestandteil dieser Lizenz.
+
+Creative Commons kann kontaktiert werden über https://creativecommons.org/.
 
 
 
@@ -10612,34 +11485,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 
 
---- BSD-3-Clause ---
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
-
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
-
-3. Neither the name of the copyright holder nor the names of its contributors
-   may be used to endorse or promote products derived from this software
-   without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
 --- BSD-3-Clause AND GPL-2.0-only AND BSD-3-Clause OR GPL-2.0-or-later AND GPL-1.0-or-later ---
 
 Redistribution and use in source and binary forms, with or without
@@ -10687,30 +11532,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-
---- BSD-2-Clause ---
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
-
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 --- BSD-2-Clause AND BSD-3-Clause ---
@@ -10927,22 +11748,19 @@ Julian Seward, jseward@bzip.org bzip2/libbzip2 version 1.0.6 of 6 September 2010
 
 
 
---- GPL-2.0-or-later ---
+--- Apache-2.0 AND BSD-3-Clause ---
 
-This program is free software; you can redistribute it and/or modify it
-under the terms of the GNU General Public License as published by the Free
-Software Foundation; either version 2 of the License, or (at your option)
-any later version.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-This program is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-You should have received a copy of the GNU General Public License along with
-this program; if not, write to the Free Software Foundation, Inc.,
-51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-
-Full license text: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 
 --- NCSA ---
@@ -11042,22 +11860,9 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
---- GPL-3.0-or-later ---
+--- GPL-2.0 WITH Linux-syscall-note ---
 
-This library is free software; you can redistribute it and/or modify it
-under the terms of the GNU Lesser General Public License as published by
-the Free Software Foundation; either version 3 of the License, or (at
-your option) any later version.
-
-This library is distributed in the hope that it will be useful, but WITHOUT
-ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more
-details.
-
-You should have received a copy of the GNU Lesser General Public License
-along with this library; if not, see <https://www.gnu.org/licenses/>.
-
-Full license text: https://www.gnu.org/licenses/lgpl-3.0.html
+Full license text available at: https://spdx.org/licenses/GPL-2.0 WITH Linux-syscall-note.html
 
 
 --- BSD-3-Clause-LBNL ---
@@ -11088,6 +11893,24 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
+--- LGPL-3.0-or-later ---
+
+This library is free software; you can redistribute it and/or modify it
+under the terms of the GNU Lesser General Public License as published by
+the Free Software Foundation; either version 3 of the License, or (at
+your option) any later version.
+
+This library is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more
+details.
+
+You should have received a copy of the GNU Lesser General Public License
+along with this library; if not, see <https://www.gnu.org/licenses/>.
+
+Full license text: https://www.gnu.org/licenses/lgpl-3.0.html
+
+
 --- Apache-2.0 WITH LLVM-exception AND NCSA AND NCSA OR MIT AND NCSA AND MIT ---
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -11114,6 +11937,32 @@ SOFTWARE.
 Full license text available at: https://spdx.org/licenses/Apache-with-LLVM-Exception.html
 
 
+--- LicenseRef-scanoss-expat-601 ---
+
+Full license text available at: https://spdx.org/licenses/LicenseRef-scanoss-expat-601.html
+
+
+--- BSL-1.0 AND BSL-1.0 AND MIT AND MIT ---
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
 --- Jam ---
 
 License is hereby granted to use this software and distribute it freely,
@@ -11138,4 +11987,73 @@ The Software shall be used for Good, not Evil.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+
+
+--- CMU-Mach ---
+
+Copyright (c) 1991,1990,1989 Carnegie Mellon University
+All Rights Reserved.
+
+Permission to use, copy, modify and distribute this software and its
+documentation is hereby granted, provided that both the copyright
+notice and this permission notice appear in all copies of the
+software, derivative works or modified versions, and any portions
+thereof, and that both notices appear in supporting documentation.
+
+CARNEGIE MELLON ALLOWS FREE USE OF THIS SOFTWARE IN ITS "AS IS"
+CONDITION.  CARNEGIE MELLON DISCLAIMS ANY LIABILITY OF ANY KIND FOR
+ANY DAMAGES WHATSOEVER RESULTING FROM THE USE OF THIS SOFTWARE.
+
+Carnegie Mellon requests users of this software to return to
+
+ Software Distribution Coordinator  or  Software.Distribution@CS.CMU.EDU
+ School of Computer Science
+ Carnegie Mellon University
+ Pittsburgh PA 15213-3890
+
+any improvements or extensions that they make and grant Carnegie Mellon
+the rights to redistribute these changes.
+
+
+
+--- CMU-Mach-nodoc ---
+
+Copyright (C) 2002 Naval Research Laboratory (NRL/CCS)
+
+Permission to use, copy, modify and distribute this software and
+its documentation is hereby granted, provided that both the
+copyright notice and this permission notice appear in all copies of
+the software, derivative works or modified versions, and any
+portions thereof.
+
+NRL ALLOWS FREE USE OF THIS SOFTWARE IN ITS "AS IS" CONDITION AND
+DISCLAIMS ANY LIABILITY OF ANY KIND FOR ANY DAMAGES WHATSOEVER
+RESULTING FROM THE USE OF THIS SOFTWARE.
+
+
+
+--- GNU-All-permissive-Copying-License ---
+
+Full license text available at: https://spdx.org/licenses/GNU-All-permissive-Copying-License.html
+
+
+--- MIT-CMU ---
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
