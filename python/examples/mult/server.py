@@ -15,7 +15,7 @@ BIN = o.BINARY
 
 def main(argv):
     d = argv[1] if len(argv) > 1 else "mult_keys"
-    flags = ["--no-ring-dim-check"] + list(argv[2:])
+    flags = list(argv[2:])  # e.g. --no-ring-dim-check for keys below 2^16 (tests)
 
     cc, ok = o.DeserializeCryptoContext(f"{d}/cc.bin", BIN)
     if not ok:

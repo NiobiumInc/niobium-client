@@ -3,7 +3,7 @@
 
 Generate a bootstrapping-capable CKKS context + keys + bootstrap precompute,
 encrypt a test vector at the deepest level (so bootstrapping is required), and
-serialize for the server. Usage: client.py [dir]   (default: bootstrap_keys)
+serialize for the server. Usage: client.py [dir [ring_dim]]   (defaults: bootstrap_keys, 65536 = 2^16)
 """
 import os
 import sys
@@ -18,13 +18,14 @@ LEVELS_AFTER_BOOTSTRAP = 10
 
 def main(argv):
     d = argv[1] if len(argv) > 1 else "bootstrap_keys"
+    ring_dim = int(argv[2]) if len(argv) > 2 else 65536  # 2^16: the ring dimension Niobium hardware runs
     os.makedirs(d, exist_ok=True)
 
     depth = LEVELS_AFTER_BOOTSTRAP + o.FHECKKSRNS.GetBootstrapDepth(LEVEL_BUDGET, o.UNIFORM_TERNARY)
     p = o.CCParamsCKKSRNS()
     p.SetSecretKeyDist(o.UNIFORM_TERNARY)
     p.SetSecurityLevel(o.SecurityLevel.HEStd_NotSet)
-    p.SetRingDim(2048)
+    p.SetRingDim(ring_dim)
     p.SetScalingModSize(59)
     p.SetScalingTechnique(o.FLEXIBLEAUTO)
     p.SetFirstModSize(60)

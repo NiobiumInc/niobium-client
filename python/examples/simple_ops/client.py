@@ -4,7 +4,7 @@
 Generate a CKKS context + keys, encrypt two values, serialize for the server.
 ct_a packs (a, b) so EvalRotate(ct_a, 1)[0] == b (for the MORPH op); ct_b = (b).
 
-Usage: client.py [dir [a [b]]]   (defaults: simple_ops_keys, 5.0, 6.0)
+Usage: client.py [dir [a [b [ring_dim]]]]   (defaults: simple_ops_keys, 5.0, 6.0, 65536 = 2^16)
 """
 import os
 import sys
@@ -18,11 +18,12 @@ def main(argv):
     d = argv[1] if len(argv) > 1 else "simple_ops_keys"
     a = float(argv[2]) if len(argv) > 2 else 5.0
     b = float(argv[3]) if len(argv) > 3 else 6.0
+    ring_dim = int(argv[4]) if len(argv) > 4 else 65536  # 2^16: the ring dimension Niobium hardware runs
     os.makedirs(d, exist_ok=True)
 
     p = o.CCParamsCKKSRNS()
     p.SetSecurityLevel(o.SecurityLevel.HEStd_NotSet)
-    p.SetRingDim(2048)
+    p.SetRingDim(ring_dim)
     p.SetMultiplicativeDepth(3)
     p.SetScalingModSize(42)
     p.SetFirstModSize(57)

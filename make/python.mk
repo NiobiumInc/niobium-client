@@ -72,19 +72,21 @@ test-wheel-smoke-release: build-wheel-release ## Primary-only smoke against the 
 # --- Example-scenario tests against the assembled package ----------------------
 # The Python analogs of the C++ test-<scenario>-release targets: run the
 # python/examples/<scenario> client → server → decrypt ports against the assembled
-# niobium_sdk tree, each printing the example's own PASS/FAIL line. (The example
-# servers auto-add --no-ring-dim-check.) auto-facade and the ring-dim-check negative
-# test have no analog here — the wheel is built WITH_AUTO_FACADE=OFF and there is no
-# Python ring-dim scenario; the compiler/transport C++ targets are out of scope for
-# the open-source client (submit() is covered by test-submit-python-release).
+# niobium_sdk tree, each printing the example's own PASS/FAIL line. Like the C++
+# targets, clients get N = TEST_RING_DIM (2^11, see the Makefile) and servers get
+# --no-ring-dim-check; the examples themselves default to the hardware's 2^16.
+# auto-facade has no analog here (the wheel is built WITH_AUTO_FACADE=OFF); the
+# ring-dim guard is test-ring-dim-check-python-release below; the
+# compiler/transport C++ targets are out of scope for the open-source client
+# (submit() is covered by test-submit-python-release).
 NB_PY_EX := python/examples
 
 test-mult-python-release: build-wheel-release ## Python mult example: client → server → decrypt (assembled wheel)
 	@rm -rf mult_keys mult_server_workload_*
 	@echo "=== mult client (python) ==="
-	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/mult/client.py mult_keys 7 13
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/mult/client.py mult_keys 7 13 $(TEST_RING_DIM)
 	@echo "=== mult server (python) ==="
-	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/mult/server.py mult_keys
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/mult/server.py mult_keys --no-ring-dim-check
 	@echo "=== mult decrypt (python) ==="
 	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/mult/decrypt.py mult_keys
 
@@ -93,8 +95,8 @@ test-mult-python-release: build-wheel-release ## Python mult example: client →
 define run-simple-op-python
 	@echo "=== $(1) ($(2) $(3)) (python) ==="
 	@rm -rf simple_ops_keys simple_ops_server_workload_*
-	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/simple_ops/client.py simple_ops_keys $(2) $(3) >/dev/null
-	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/simple_ops/server.py simple_ops_keys $(1) >/dev/null
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/simple_ops/client.py simple_ops_keys $(2) $(3) $(TEST_RING_DIM) >/dev/null
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/simple_ops/server.py simple_ops_keys $(1) --no-ring-dim-check >/dev/null
 	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/simple_ops/decrypt.py simple_ops_keys $(1) 2>&1 | grep -E "PASS|FAIL"
 endef
 
@@ -119,18 +121,18 @@ test-op-python-release: build-wheel-release ## Single python simple_ops op: make
 test-plaintext-add-python-release: build-wheel-release ## Python plaintext-add example: client → server → decrypt (assembled wheel)
 	@rm -rf plaintext_add_keys plaintext_add_server_workload_*
 	@echo "=== plaintext_add client (python) ==="
-	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/plaintext_add/client.py plaintext_add_keys
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/plaintext_add/client.py plaintext_add_keys $(TEST_RING_DIM)
 	@echo "=== plaintext_add server (python) ==="
-	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/plaintext_add/server.py plaintext_add_keys
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/plaintext_add/server.py plaintext_add_keys --no-ring-dim-check
 	@echo "=== plaintext_add decrypt (python) ==="
 	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/plaintext_add/decrypt.py plaintext_add_keys
 
 test-bootstrap-python-release: build-wheel-release ## Python bootstrap example: client → server → decrypt (assembled wheel)
 	@rm -rf bootstrap_keys bootstrap_server_workload_*
 	@echo "=== bootstrap client (python) ==="
-	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/bootstrap/client.py bootstrap_keys
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/bootstrap/client.py bootstrap_keys $(TEST_RING_DIM)
 	@echo "=== bootstrap server (python) ==="
-	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/bootstrap/server.py bootstrap_keys
+	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/bootstrap/server.py bootstrap_keys --no-ring-dim-check
 	@echo "=== bootstrap decrypt (python) ==="
 	@$(WHEEL_RUN_ENV) $(PY_EXE) $(NB_PY_EX)/bootstrap/decrypt.py bootstrap_keys
 
@@ -151,7 +153,7 @@ test-ring-dim-check-python-release: build-wheel-release ## Python ring-dim guard
 # into the submodule, so a relative PYTHON (e.g. .venv/bin/python) would not resolve
 # there. PY_EXE is `command -v $(PYTHON)`, so a bare `python3` is PATH-resolved first.
 test-fhetch-python-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Run the fhetch submodule's Python roundtrip sweep (simple_ops + plaintext-add + bootstrap)
-	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) PYTHON="$(abspath $(PY_EXE))" test-roundtrip-python-release
+	$(MAKE) -C $(FHETCH_DIR) TEST_RING_DIM=$(TEST_RING_DIM) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) PYTHON="$(abspath $(PY_EXE))" test-roundtrip-python-release
 
 # --- Aggregates (mirror the C++ test-client-release / test-release) ------------
 # All client-level Python tests: the scenario ports + the ring-dim guard. No

@@ -53,7 +53,7 @@ def apply_op(cc, op, ct_a, ct_b):
 def main(argv):
     d = argv[1] if len(argv) > 1 else "simple_ops_keys"
     op = argv[2] if len(argv) > 2 else "MUL"
-    flags = ["--no-ring-dim-check"] + list(argv[3:])
+    flags = list(argv[3:])  # e.g. --no-ring-dim-check for keys below 2^16 (tests)
 
     cc, ok = o.DeserializeCryptoContext(f"{d}/cc.bin", BIN)
     if not ok:

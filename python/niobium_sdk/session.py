@@ -5,7 +5,7 @@ module (a submodule of ``niobium_sdk``) runs the package ``__init__`` first,
 which RTLD_GLOBAL-preloads libnbfhetch so the extension's probe globals resolve.
 
     from niobium_sdk import session
-    session.init(["--no-ring-dim-check"])
+    session.init([])   # niobium::compiler() flags, e.g. ["--hollow"]
     session.start(); ...; session.stop()
     ok, ct = session.replay(...)   # local, via the bundled fhetch_sim
 """
