@@ -252,6 +252,7 @@ plaintexts come after keys.
 | `examples/bootstrap/` | CKKS bootstrap under hollow recording (large trace, full replay) |
 | `examples/mult/` | CKKS `EvalMult` — client/server/decrypt split with replay + rehydrate |
 | `examples/simple_ops/` | 13 ops (ADD, SUB, MUL, NEG, ADDI/SUBI/MULI, compound chains, MORPH) driven by one harness |
+| `examples/plaintext_add/` | CKKS ciphertext + plaintext add — client/server/decrypt split |
 
 ```bash
 make test-simple-ops-release
@@ -259,6 +260,37 @@ make test-mult-release
 make test-bootstrap-release
 make test-op-release OP=MORPH A=5 B=6   # one specific op
 ```
+
+#### Ring dimension: 2^16 on hardware, 2^11 in the tests
+
+Niobium hardware, and so the Fog, runs exactly one ring dimension: **N = 2^16
+(65536)**. The example clients default to it, so running an example by hand
+gives you Fog-ready keys and ciphertexts.
+
+The `make test-*` targets deliberately pass a smaller **N = 2^11 (2048)**
+(`TEST_RING_DIM` in the `Makefile`). At 2^11, keygen, local replay and decrypt
+are orders of magnitude faster, and what the tests check (that a
+record → replay → decrypt round trip is correct) does not depend on N. Those
+parameters run with `HEStd_NotSet` and are **not secure**: they are for local
+testing only. Override with `make test-release TEST_RING_DIM=65536` to run the
+sweep at hardware size; expect it to be slow, bootstrap especially.
+
+#### `--no-ring-dim-check`
+
+`niobium::compiler()` checks the ring dimension of every crypto context it
+captures and aborts on anything the hardware cannot run:
+
+```
+Ring dimension 2048 is not compatible with Niobium Hardware.
+```
+
+`--no-ring-dim-check`, passed to a server (or to `nbcc.py`), turns that check
+off so a trace can be recorded and replayed locally at a toy ring dimension.
+This is why every server step in the `make test-*` targets carries it. **Do not
+use it for a Fog run:** a trace recorded at any N other than 2^16 cannot run on
+the hardware, so `fog submit` refuses any command line that contains the flag.
+If you hit the error above when targeting the Fog, regenerate your keys at 2^16
+(run the client without a ring-dimension argument) rather than adding the flag.
 
 ## Entry point 3 — FHETCH, for compiler writers
 
@@ -471,8 +503,10 @@ passed straight through to your app.
 
 The `mult_*` example is a three-step client → server → decrypt split. The client
 generates keys and encrypts two integers, the server multiplies them on a Fog
-worker, and decrypt reveals the product. `mult_client`'s last argument is the ring 
-dimension (`65536` = 2^16); the two integers before it are the operands. 
+worker, and decrypt reveals the product. `mult_client`'s optional last argument is the ring 
+dimension (`65536` = 2^16, the default and the only one the hardware runs; see
+[Ring dimension](#ring-dimension-216-on-hardware-211-in-the-tests)); the two
+integers before it are the operands. 
 `fog submit` wraps `mult_server` so its `replay()` dispatches to the assigned worker 
 instead of the local simulator. `--hollow` records the instruction trace without 
 computing the result on your machine; the Fog does the real math.
