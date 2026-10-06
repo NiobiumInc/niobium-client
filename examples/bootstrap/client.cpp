@@ -9,7 +9,7 @@
 // This file is pure OpenFHE — no Niobium compiler dependency.
 //
 // Usage: ./bootstrap_client [output_dir [ring_dim]]
-//   Defaults: output_dir=bootstrap_keys, ring_dim=2048
+//   Defaults: output_dir=bootstrap_keys, ring_dim=65536 (2^16)
 
 #include "openfhe.h"
 
@@ -24,7 +24,7 @@ using namespace lbcrypto;
 
 int main(int argc, char* argv[]) {
     std::string outputDir = "bootstrap_keys";
-    uint32_t ring_dim = 2048;
+    uint32_t ring_dim = 65536;                  // 2^16: the ring dimension Niobium hardware runs
     if (argc > 1) outputDir = argv[1];
     if (argc > 2) ring_dim = static_cast<uint32_t>(std::stoul(argv[2]));
 
