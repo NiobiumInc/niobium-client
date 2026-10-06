@@ -295,11 +295,32 @@ install-cli: ## Install the fog CLI + nbcc_fhetch_replay to $(CLI_PREFIX)/bin
 
 ##@ Testing
 
+# ------------------------------------------------------------------------------
+# Ring dimension for the local test sweep
+#
+# The example clients default to N = 2^16 (65536): the only ring dimension
+# Niobium hardware, and therefore the Fog, accepts (niobium/checks.h). The test
+# targets below instead pass N = 2^11 (TEST_RING_DIM) to every client:
+#   - keygen, the local fhetch_sim replay and decrypt are orders of magnitude
+#     faster (bootstrap keygen at 2^16 takes minutes and GBs of rotation keys),
+#   - and what the tests verify (record -> replay -> decrypt round-trips
+#     correctly) does not depend on N.
+# Because 2^11 is below what the hardware runs, every server step passes
+# --no-ring-dim-check; without it niobium::compiler() aborts with "Ring
+# dimension 2048 is not compatible with Niobium Hardware."
+# (test-ring-dim-check-release asserts exactly that).
+#
+# These are TEST parameters: HEStd_NotSet at N = 2^11 gives no security. To run
+# an example on the Fog, run its client with no ring-dim argument (2^16) and
+# never pass --no-ring-dim-check; `fog submit` refuses it.
+# ------------------------------------------------------------------------------
+TEST_RING_DIM ?= 2048
+
 test-bootstrap: build ## Run the bootstrap example: client → server → decrypt (Debug)
 	$(call set-build-config,Debug,dbuild)
 	@rm -rf bootstrap_keys bootstrap_server_*
 	@echo "=== Running bootstrap client ==="
-	$(BUILD_DIR)/examples/bootstrap_client bootstrap_keys
+	$(BUILD_DIR)/examples/bootstrap_client bootstrap_keys $(TEST_RING_DIM)
 	@echo ""
 	@echo "=== Running bootstrap server ==="
 	$(BUILD_DIR)/examples/bootstrap_server bootstrap_keys --no-ring-dim-check
@@ -311,7 +332,7 @@ test-bootstrap-release: build-release ## Run the bootstrap example: client → s
 	$(call set-build-config,Release,build)
 	@rm -rf bootstrap_keys bootstrap_server_*
 	@echo "=== Running bootstrap client ==="
-	$(BUILD_DIR)/examples/bootstrap_client bootstrap_keys
+	$(BUILD_DIR)/examples/bootstrap_client bootstrap_keys $(TEST_RING_DIM)
 	@echo ""
 	@echo "=== Running bootstrap server ==="
 	$(BUILD_DIR)/examples/bootstrap_server bootstrap_keys --no-ring-dim-check
@@ -323,7 +344,7 @@ test-plaintext-add: build ## Run the plaintext-add example: client → server �
 	$(call set-build-config,Debug,dbuild)
 	@rm -rf plaintext_add_keys plaintext_add_server_*
 	@echo "=== Running plaintext_add client ==="
-	$(BUILD_DIR)/examples/plaintext_add_client plaintext_add_keys
+	$(BUILD_DIR)/examples/plaintext_add_client plaintext_add_keys $(TEST_RING_DIM)
 	@echo ""
 	@echo "=== Running plaintext_add server ==="
 	$(BUILD_DIR)/examples/plaintext_add_server plaintext_add_keys --no-ring-dim-check
@@ -335,7 +356,7 @@ test-plaintext-add-release: build-release ## Run the plaintext-add example: clie
 	$(call set-build-config,Release,build)
 	@rm -rf plaintext_add_keys plaintext_add_server_*
 	@echo "=== Running plaintext_add client ==="
-	$(BUILD_DIR)/examples/plaintext_add_client plaintext_add_keys
+	$(BUILD_DIR)/examples/plaintext_add_client plaintext_add_keys $(TEST_RING_DIM)
 	@echo ""
 	@echo "=== Running plaintext_add server ==="
 	$(BUILD_DIR)/examples/plaintext_add_server plaintext_add_keys --no-ring-dim-check
@@ -377,6 +398,11 @@ test-plaintext-add-release: build-release ## Run the plaintext-add example: clie
 # intercepted).
 #
 # Override AUTO_OP=MUL AUTO_EXPECTED=21 to run the MUL variant.
+#
+# Ring dimension: the ciphers_ops_* binaries take an instance size, not N. The
+# `0` passed below is TOY, which examples/auto/params.h maps to N = 2^11 (the
+# auto-facade's equivalent of TEST_RING_DIM; SMALL and up are 2^16), hence
+# --no-ring-dim-check on the nbcc.py runs.
 AUTO_OP        ?= ADD
 AUTO_A         ?= 7
 AUTO_B         ?= 3
@@ -457,7 +483,7 @@ test-mult: build ## Run the multiply example: client → server → decrypt (Deb
 	$(call set-build-config,Debug,dbuild)
 	@rm -rf mult_keys mult_server_workload_*
 	@echo "=== Running mult client ==="
-	$(BUILD_DIR)/examples/mult_client mult_keys 7 13
+	$(BUILD_DIR)/examples/mult_client mult_keys 7 13 $(TEST_RING_DIM)
 	@echo ""
 	@echo "=== Running mult server ==="
 	$(BUILD_DIR)/examples/mult_server mult_keys --no-ring-dim-check
@@ -469,7 +495,7 @@ test-mult-release: build-release ## Run the multiply example: client → server 
 	$(call set-build-config,Release,build)
 	@rm -rf mult_keys mult_server_workload_*
 	@echo "=== Running mult client ==="
-	$(BUILD_DIR)/examples/mult_client mult_keys 7 13
+	$(BUILD_DIR)/examples/mult_client mult_keys 7 13 $(TEST_RING_DIM)
 	@echo ""
 	@echo "=== Running mult server ==="
 	$(BUILD_DIR)/examples/mult_server mult_keys --no-ring-dim-check
@@ -512,7 +538,7 @@ test-mult-target-release: build-release ## Run mult with --target=$(TARGET). Ove
 	fi
 	@rm -rf mult_keys mult_server_workload_* nbcc_fhetch_replay_source_*
 	@echo "=== [1/3] mult_client: keygen + encrypt ==="
-	$(BUILD_DIR)/examples/mult_client mult_keys 7 13
+	$(BUILD_DIR)/examples/mult_client mult_keys 7 13 $(TEST_RING_DIM)
 	@echo ""
 	@echo "=== [2/3] mult_server --target=$(TARGET) (hollow record → dispatch to compiler) ==="
 	NBCC_FHETCH_REPLAY=$(NIOBIUM_COMPILER_ROOT)/build/nbcc_fhetch_replay \
@@ -559,6 +585,7 @@ test-mult-transport-release: build-release ## End-to-end transport round trip (s
 		exit 2; \
 	fi
 	@NIOBIUM_COMPILER_ROOT="$(NIOBIUM_COMPILER_ROOT)" \
+	 RING_DIM=$(TEST_RING_DIM) \
 	 NIOBIUM_COMPILER_BUILD="$(NIOBIUM_COMPILER_ROOT)/build" \
 	 scripts/test_transport_mult.sh
 
@@ -584,7 +611,7 @@ test-sim-bootstrap-release: test-bootstrap-release ## Record bootstrap trace the
 define run-simple-op
 	@echo "=== Testing $(1): $(2) ==="
 	@rm -rf simple_ops_keys simple_ops_server_*
-	@$(BUILD_DIR)/examples/simple_ops_client simple_ops_keys $(2) $(3) 2>&1 | tail -1
+	@$(BUILD_DIR)/examples/simple_ops_client simple_ops_keys $(2) $(3) $(TEST_RING_DIM) 2>&1 | tail -1
 	@$(BUILD_DIR)/examples/simple_ops_server simple_ops_keys $(1) --no-ring-dim-check 2>&1 | grep -E "Live-in|Complete|ERROR"
 	@$(BUILD_DIR)/examples/simple_ops_decrypt simple_ops_keys $(1) 2>&1 | grep -E "PASS|FAIL"
 	@echo ""
@@ -623,20 +650,24 @@ test-op-release: build-release ## Run a single simple_ops test: make test-op-rel
 	$(call set-build-config,Release,build)
 	$(call run-simple-op,$(OP),$(A),$(B))
 
-# Negative test for the Niobium hardware parameter checks: the mult example
-# uses ring dimension 2048, so running mult_server WITHOUT
-# --no-ring-dim-check must abort with the compatibility error.
+# Negative test for the Niobium hardware parameter checks: keygen at a ring
+# dimension the hardware does not run (anything but 2^16), then run mult_server
+# WITHOUT --no-ring-dim-check; it must abort with the compatibility error. Pinned
+# to its own variable, not TEST_RING_DIM, so `TEST_RING_DIM=65536` cannot turn
+# this into a false failure.
+BAD_RING_DIM := 2048
+
 test-ring-dim-check-release: build-release ## Verify the ring-dimension hardware check rejects incompatible parameters
 	$(call set-build-config,Release,build)
 	@rm -rf mult_keys mult_server_workload_*
 	@echo "=== ring-dim check: mult_server without --no-ring-dim-check must fail ==="
-	$(BUILD_DIR)/examples/mult_client mult_keys 7 13
+	$(BUILD_DIR)/examples/mult_client mult_keys 7 13 $(BAD_RING_DIM)
 	@out=$$($(BUILD_DIR)/examples/mult_server mult_keys 2>&1); status=$$?; \
 	 if [ $$status -eq 0 ]; then \
 	     echo "FAIL: mult_server succeeded despite incompatible ring dimension"; exit 1; \
 	 fi; \
-	 if echo "$$out" | grep -q "Ring dimension 2048 is not compatible with Niobium Hardware."; then \
-	     echo "PASS: ring-dim check rejected ring dimension 2048"; \
+	 if echo "$$out" | grep -q "Ring dimension $(BAD_RING_DIM) is not compatible with Niobium Hardware."; then \
+	     echo "PASS: ring-dim check rejected ring dimension $(BAD_RING_DIM)"; \
 	 else \
 	     echo "FAIL: mult_server failed but without the expected error message:"; \
 	     echo "$$out" | tail -5; exit 1; \
@@ -652,10 +683,10 @@ test-ring-dim-check-release: build-release ## Verify the ring-dimension hardware
 # ==============================================================================
 
 test-fhetch-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Run the fhetch submodule's test-release + bootstrap roundtrip (simple_fhetch + fhetch_driver + simple_ops roundtrip + bootstrap roundtrip)
-	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) config-fhetch-release
-	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) test-release
-	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) test-roundtrip-bootstrap-release
-	$(MAKE) -C $(FHETCH_DIR) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) test-roundtrip-plaintext-add-release
+	$(MAKE) -C $(FHETCH_DIR) TEST_RING_DIM=$(TEST_RING_DIM) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) config-fhetch-release
+	$(MAKE) -C $(FHETCH_DIR) TEST_RING_DIM=$(TEST_RING_DIM) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) test-release
+	$(MAKE) -C $(FHETCH_DIR) TEST_RING_DIM=$(TEST_RING_DIM) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) test-roundtrip-bootstrap-release
+	$(MAKE) -C $(FHETCH_DIR) TEST_RING_DIM=$(TEST_RING_DIM) OPENFHE_INSTALL_DIR="$(OPENFHE_INSTALL_DIR)" $(if $(JSON_INCLUDE_DIR),JSON_INCLUDE_DIR="$(JSON_INCLUDE_DIR)") EXTERNAL_OPENFHE=$(EXTERNAL_OPENFHE) test-roundtrip-plaintext-add-release
 
 # ==============================================================================
 # test-client-release / test-release — Release test aggregates

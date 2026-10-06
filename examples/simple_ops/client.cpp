@@ -4,10 +4,11 @@
 // Simple ops example — client side (CKKS)
 //
 // Generates CKKS crypto context + keys, encrypts two values.
-// Matching compiler's TOY defaults: qi=42, firstMod=57, N=2048, depth=2.
+// Matching compiler's TOY defaults: qi=42, firstMod=57, depth=2 (TOY's N=2048
+// is what the Makefile test targets pass; the default is the hardware's 2^16).
 //
 // Usage: ./simple_ops_client [output_dir [a [b [ring_dim]]]]
-//   Defaults: output_dir=simple_ops_keys, a=5.0, b=6.0, ring_dim=2048
+//   Defaults: output_dir=simple_ops_keys, a=5.0, b=6.0, ring_dim=65536 (2^16)
 
 #include "openfhe.h"
 
@@ -23,7 +24,7 @@ using namespace lbcrypto;
 int main(int argc, char* argv[]) {
     std::string outputDir = "simple_ops_keys";
     double a = 5.0, b = 6.0;
-    uint32_t ring_dim = 2048;
+    uint32_t ring_dim = 65536;                  // 2^16: the ring dimension Niobium hardware runs
 
     if (argc > 1) outputDir = argv[1];
     if (argc > 2) a = std::stod(argv[2]);
@@ -37,7 +38,7 @@ int main(int argc, char* argv[]) {
 
     CCParams<CryptoContextCKKSRNS> parameters;
     parameters.SetSecurityLevel(HEStd_NotSet);     // no HE-standard security check (demo parameters)
-    parameters.SetRingDim(ring_dim);               // polynomial ring size; the Fog runs 2^16
+    parameters.SetRingDim(ring_dim);               // polynomial ring size; defaults to the hardware's 2^16
     parameters.SetMultiplicativeDepth(2);          // chained ct*ct multiplies supported; MUL_MUL uses two
     parameters.SetScalingModSize(42);              // bits of scale consumed by each multiply
     parameters.SetFirstModSize(57);                // bits of the last modulus standing at decrypt

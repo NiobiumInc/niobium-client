@@ -7,7 +7,7 @@
 // All artifacts are serialized to a directory for the server to consume.
 //
 // Usage: ./mult_client [output_dir [a [b [ring_dim]]]]
-//   Defaults: output_dir=mult_keys, a=7.0, b=13.0, ring_dim=2048
+//   Defaults: output_dir=mult_keys, a=7.0, b=13.0, ring_dim=65536 (2^16)
 
 #include "openfhe.h"
 
@@ -23,7 +23,7 @@ using namespace lbcrypto;
 int main(int argc, char* argv[]) {
     std::string outputDir = "mult_keys";
     double a = 7.0, b = 13.0;
-    uint32_t ring_dim = 2048;
+    uint32_t ring_dim = 65536;                  // 2^16: the ring dimension Niobium hardware runs
 
     if (argc > 1) outputDir = argv[1];
     if (argc > 2) a = std::stod(argv[2]);
@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
     // ---- CKKS parameters ----
     CCParams<CryptoContextCKKSRNS> parameters;
     parameters.SetSecurityLevel(HEStd_NotSet);     // no HE-standard security check (demo parameters)
-    parameters.SetRingDim(ring_dim);               // polynomial ring size; the Fog runs 2^16
+    parameters.SetRingDim(ring_dim);               // polynomial ring size; defaults to the hardware's 2^16
     parameters.SetMultiplicativeDepth(1);          // chained ct*ct multiplies supported; this circuit uses one
     parameters.SetScalingModSize(42);              // bits of scale consumed by each multiply
     parameters.SetFirstModSize(57);                // bits of the last modulus standing at decrypt
