@@ -250,6 +250,19 @@ def _split_program(rest):
     return None, rest
 
 
+def _reject_ring_dim_opt_out(argv):
+    """Refuse --no-ring-dim-check before a job is provisioned.
+
+    The flag exists so local tests can record at toy ring dimensions (the
+    Makefile's TEST_RING_DIM = 2^11). The Fog is Niobium hardware, which runs
+    only N = 2^16, so a submission carrying it was keyed for a local test."""
+    if "--no-ring-dim-check" in argv:
+        die("refusing --no-ring-dim-check: it is for local tests at toy ring dimensions,\n"
+            "      and the Fog runs Niobium hardware, which needs ring dimension 2^16 (65536).\n"
+            "      Regenerate keys at 2^16 (the example clients' default, e.g.\n"
+            "      `./mult_client mult_keys 7 13`) and submit without the flag.")
+
+
 def _resolve_replay_bin():
     b = os.environ.get("NBCC_FHETCH_REPLAY_BIN") or shutil.which("nbcc_fhetch_replay")
     if not b:
@@ -279,6 +292,7 @@ def cmd_submit(rest):
     target = _extract_target(rest)
     if not target:
         die("--target is required")
+    _reject_ring_dim_opt_out(rest)
     binary = _resolve_replay_bin()  # fail fast in both modes if the client is missing
 
     # ---- 1. submit ----------------------------------------------------------
@@ -477,6 +491,15 @@ def selftest():
     assert _split_program(["./app", "--target=T"]) == ("./app", ["--target=T"])
     assert _split_program(["--project=d", "--target=T"]) == (None, ["--project=d", "--target=T"])
     assert _split_program([]) == (None, [])
+    # ring-dim opt-out is refused in any position; other args pass
+    _reject_ring_dim_opt_out(["./app", "keys", "--hollow", "--target=FOG"])
+    for argv in (["./app", "keys", "--no-ring-dim-check", "--target=FOG"],
+                 ["--project=d", "--target=T", "--no-ring-dim-check"]):
+        try:
+            _reject_ring_dim_opt_out(argv)
+            assert False, f"--no-ring-dim-check accepted in {argv}"
+        except SystemExit:
+            pass
     # config precedence + credential round-trip, isolated under a temp FOG_HOME
     with tempfile.TemporaryDirectory() as d:
         os.environ["FOG_HOME"] = d
