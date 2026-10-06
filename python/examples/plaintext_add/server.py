@@ -16,7 +16,7 @@ INPUT = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
 
 def main(argv):
     d = argv[1] if len(argv) > 1 else "plaintext_add_keys"
-    flags = ["--no-ring-dim-check"] + list(argv[2:])
+    flags = list(argv[2:])  # e.g. --no-ring-dim-check for keys below 2^16 (tests)
 
     cc, ok = o.DeserializeCryptoContext(f"{d}/cc.bin", BIN)
     if not ok:

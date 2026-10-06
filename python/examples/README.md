@@ -46,6 +46,20 @@ python bootstrap/server.py  out
 python bootstrap/decrypt.py out
 ```
 
+The clients default to ring dimension **2^16 (65536)**, the only one Niobium
+hardware runs, so these commands produce Fog-ready keys; bootstrap keygen at
+2^16 takes minutes. For a quick local run, pass a smaller ring dimension as the
+client's last argument and `--no-ring-dim-check` to the server, which is what the
+`make test-*-python-release` targets do:
+
+```bash
+python mult/client.py  out 7 13 2048
+python mult/server.py  out --no-ring-dim-check
+```
+
+2^11 with `HEStd_NotSet` is a test setting with no security, and the Fog refuses
+`--no-ring-dim-check`; see "Ring dimension" in the top-level README.
+
 The public surfaces used: `niobium_sdk.openfhe` (crypto) and
 `niobium_sdk.session` (record/replay). To send a trace to a compilation
 target instead of replaying locally, see `niobium_sdk.client.submit()`.

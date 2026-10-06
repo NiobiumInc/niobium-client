@@ -4,7 +4,7 @@
 Generate a CKKS context + keys, encrypt two values, serialize everything for the
 server. Pure OpenFHE (no Niobium session).
 
-Usage: client.py [dir [a [b [ring_dim]]]]   (defaults: mult_keys, 7.0, 13.0, 2048)
+Usage: client.py [dir [a [b [ring_dim]]]]   (defaults: mult_keys, 7.0, 13.0, 65536 = 2^16)
 """
 import os
 import sys
@@ -18,7 +18,7 @@ def main(argv):
     d = argv[1] if len(argv) > 1 else "mult_keys"
     a = float(argv[2]) if len(argv) > 2 else 7.0
     b = float(argv[3]) if len(argv) > 3 else 13.0
-    ring_dim = int(argv[4]) if len(argv) > 4 else 2048
+    ring_dim = int(argv[4]) if len(argv) > 4 else 65536  # 2^16: the ring dimension Niobium hardware runs
     os.makedirs(d, exist_ok=True)
 
     # CKKS params (compiler TOY defaults).
