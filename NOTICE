@@ -2,7 +2,7 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-10-08
+Generated: 2026-10-10
 Tool: SCANOSS (snippet detection with License dataset)
 Components: 68
 
@@ -21,7 +21,7 @@ These require manual review to determine licensing terms.
 
 LICENSE SUMMARY
 
-  Apache-2.0: 16 component(s)
+  Apache-2.0: 15 component(s)
   Apache-2.0 WITH LLVM-exception: 2 component(s)
   Apache-2.0 WITH LLVM-exception AND NCSA: 1 component(s)
   Apache-2.0 WITH LLVM-exception AND NCSA AND NCSA OR MIT AND NCSA AND MIT: 1 component(s)
@@ -248,7 +248,7 @@ COMPONENT ATTRIBUTIONS
   License: Apache-2.0, BSD-3-Clause, MIT
 
   doctest
-  Version: 2.4.7
+  Version: v2.4.11
   Source: https://github.com/doctest/doctest
   PURL: pkg:github/doctest/doctest
   Copyright:
@@ -595,7 +595,7 @@ COMPONENT ATTRIBUTIONS
   PURL: pkg:github/philippd3/lab06
   Copyright:
     Copyright 2007; Google Inc.
-  License: Apache-2.0, BSD-3-Clause
+  License: BSD-3-Clause
 
   libbacktrace
   Version: 86885d1
