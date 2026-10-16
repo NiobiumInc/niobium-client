@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/NiobiumInc/niobium-client/security/advisories/new
+    about: Please report security issues privately here, not as a public issue.
+  - name: Ask a question or contact Niobium
+    url: https://niobium.co/contact
+    about: For questions that are not a bug report or a feature request.
