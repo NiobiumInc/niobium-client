@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest a new capability or an improvement.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. For anything substantial, agreeing on the
+        approach here first saves everyone time.
+
+        This repository does not accept outside pull requests, so please
+        describe what you would like rather than sending code. See
+        [CONTRIBUTING.md](https://github.com/NiobiumInc/niobium-client/blob/HEAD/CONTRIBUTING.md).
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do, and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: How you would like it to work.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
