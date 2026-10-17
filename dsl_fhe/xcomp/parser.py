@@ -265,7 +265,8 @@ class Parser:
         while not self.at(TT.RBRACE):
             name = self.expect(TT.IDENT).value
             caps.append(name)
-            # Optional argument: rotate(rotation_indices(inst))
+            # Optional argument: rotate(rotation_indices(inst)). Parsed for
+            # any capability; codegen rejects it on all but rotate.
             if self.match(TT.LPAREN):
                 args[name] = self.parse_expr()
                 self.expect(TT.RPAREN)

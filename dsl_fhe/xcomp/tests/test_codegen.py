@@ -839,6 +839,46 @@ def test_ct_plus_user_vector_materializes_plaintext():
     assert "cc->EvalMult(b, cc->MakeCKKSPackedPlaintext(m))" in body
 
 
+
+def test_requires_arg_on_other_capability_rejected():
+    """Only rotate(<expr>) consumes an argument; any other capability with one
+    is an error instead of a silently ignored argument."""
+    from xcomp.codegen import CodegenError
+    try:
+        compile_str(BOOTSTRAP_PRELUDE + """
+        scheme CKKS { security: not_set depth: 5 }
+        requires { add, mul(rotation_indices(inst)) }
+        @client @stage("key_generation")
+        fn generate_keys(inst: Instance) -> writes(CryptoParams) {
+            let keys = keygen()
+            return CryptoParams { context: keys.context, public_key: keys.public,
+                                  eval_mult_key: keys.eval_mult, eval_rot_keys: keys.eval_rot }
+        }
+        """)
+        assert False, "expected CodegenError"
+    except CodegenError as e:
+        assert "'mul'" in str(e) and "rotate" in str(e)
+
+
+def test_bootstrap_budget_override_rejected():
+    """keygen and the server-side EvalBootstrapSetup must use one budget: a
+    per-stage scheme.override(bootstrap_budget: ...) is refused."""
+    from xcomp.codegen import CodegenError
+    try:
+        compile_str(BOOTSTRAP_PRELUDE + """
+        scheme CKKS { security: not_set depth: 5 }
+        requires { add, mul, bootstrap }
+        @server @stage("compute")
+        fn compute(inst: Instance) -> reads(EncryptedInputs), writes(EncryptedResult) {
+            scheme.override(bootstrap_budget: 2)
+            let inputs = load(EncryptedInputs, from: encdir(inst))
+            return EncryptedResult { ciphertext: bootstrap(inputs.pages[0]) }
+        }
+        """)
+        assert False, "expected CodegenError"
+    except CodegenError as e:
+        assert "bootstrap_budget" in str(e)
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_")]
     passed = 0
