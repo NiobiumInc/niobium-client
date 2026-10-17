@@ -103,7 +103,7 @@ class RequiresDecl(Node):
     generate keys for (a vec<i32>, evaluated in the key-generation stage).
     """
     capabilities: list[str] = field(default_factory=list)
-    args: dict = field(default_factory=dict)  # capability name -> Expr
+    args: dict[str, Expr] = field(default_factory=dict)  # capability name -> Expr
 
 
 @dataclass

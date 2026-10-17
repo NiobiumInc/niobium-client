@@ -153,7 +153,9 @@ context is loaded, and makes `bootstrap(ct)` available. The scheme field
 `bootstrap_budget: N levels` (default 3) is the level budget of each bootstrap
 half (CoeffsToSlots and SlotsToCoeffs). With `bootstrap` required, `depth` is
 the number of levels available **after** a refresh; OpenFHE's own bootstrap
-depth is added on top. The bootstrap rotation keys travel to the server in
+depth is added on top. The bootstrap keys are generated for full packing
+(`ring_dim / 2` slots): the DSL has no batch-size setting, so a circuit that
+uses fewer slots still gets the full-slot keys. The bootstrap rotation keys travel to the server in
 `rk.bin` with the other rotation keys.
 
 ---

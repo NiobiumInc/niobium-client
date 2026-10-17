@@ -186,6 +186,23 @@ class CodeGenerator:
             elif isinstance(item, ast.RequiresDecl):
                 self.requires = item.capabilities
                 self.requires_args = dict(getattr(item, "args", {}) or {})
+                # Only rotate(<expr>) reads its argument; reject the others
+                # instead of silently ignoring them.
+                unused = sorted(set(self.requires_args) - {"rotate"})
+                if unused:
+                    raise CodegenError(
+                        f"capability {unused[0]!r} takes no argument in the "
+                        "requires declaration (only rotate(<indices>) does)")
+        # The bootstrap budget is static: keygen sizes the keys with it and
+        # every server stage re-runs EvalBootstrapSetup with it, so a
+        # per-stage override would make the two diverge silently.
+        for fn in self.shared_fns + [s.fn for s in self.stages]:
+            for ov in self._scheme_overrides(fn):
+                if "bootstrap_budget" in ov:
+                    raise CodegenError(
+                        f"scheme.override(bootstrap_budget: ...) in {fn.name!r}: "
+                        "the bootstrap budget cannot be overridden per stage "
+                        "(set it once in the scheme block)")
 
     def _get_stage(self, fn: ast.FnDecl) -> StageInfo | None:
         stage_name = None
@@ -1723,8 +1740,11 @@ endforeach()
         self.wl("}")
         if "bootstrap" in self.requires:
             # The bootstrap precomputations are not serialized with the
-            # context: redo the setup (same level budget as keygen) before
-            # any EvalBootstrap. The keys themselves arrive in rk.bin.
+            # context: redo the setup before any EvalBootstrap. The keys
+            # themselves arrive in rk.bin. The budget must be the one keygen
+            # used; both read the static scheme field through
+            # _bootstrap_budget(), and scheme.override(bootstrap_budget: ..)
+            # is rejected in _classify_items so they cannot diverge.
             budget = self._bootstrap_budget()
             self.wl(f"cc->EvalBootstrapSetup(std::vector<uint32_t>{{{budget}, {budget}}});")
         self.blank()
@@ -1965,6 +1985,12 @@ endforeach()
             for stmt in block.stmts:
                 self._gen_stmt(stmt)
         finally:
+            # Names first declared inside the block go out of scope with it:
+            # forget their encrypted-ness too, so no stale entry survives.
+            # Names declared before the block keep whatever the block assigned.
+            for name in self._declared_vars - saved:
+                self._enc_vars.discard(name)
+                self._plain_vars.discard(name)
             self._declared_vars = saved
 
     # ===== Statement generation =====
@@ -2616,6 +2642,12 @@ endforeach()
             # lvalue reference; a freshly wrapped MakeCKKSPackedPlaintext
             # rvalue can't bind (EvalMult takes ConstPlaintext&, which can).
             # Materialize the plaintext operand in an IIFE local.
+            # The instrumented OpenFHE declares both
+            #   EvalAdd(ConstCiphertext<Element>&, Plaintext&)
+            #   EvalSub(ConstCiphertext<Element>&, Plaintext&)
+            # with an lvalue Plaintext&, so a MakeCKKSPackedPlaintext(...)
+            # temporary cannot bind directly to either: bind it to a local
+            # first. (EvalMult takes a ConstPlaintext& and needs no wrapper.)
             def _with_pt(fn_name, a, b, b_wrapped):
                 if b_wrapped:
                     return (f"[&]() {{ auto _pt = {b}; "
@@ -3761,6 +3793,10 @@ endforeach()
         #  - ring_dim from the Instance struct -> build them at run time.
         # Limitation: covers positive indices 1..n_slots-1 only; a very large
         # ring makes this many keys, and negative indices aren't covered.
+        # Precedence: an explicit rotate(<expr>) always wins and is never
+        # merged with the full range; replicate / running_sums contribute
+        # their own indices either way (rot_parts above); the full 1..N/2-1
+        # range is only the fallback for a bare `rotate` with none of them.
         if has_rotate and rotate_arg is not None:
             # rotate(<expr>): keys for exactly the indices the expression
             # yields (a vec<i32> from shared geometry functions), nothing else.
