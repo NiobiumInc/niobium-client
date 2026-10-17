@@ -471,6 +471,62 @@ wires); duplicate stems and paths not re-evaluable from `main()` raise
 `CodegenError`. Pinned by `test_hardware_save_probe_and_rehydrate`,
 `test_hardware_save_duplicate_stem_rejected`, `test_client_save_has_no_probe`.
 
+### 13. `enumerate()` Index Never Advanced
+
+**Problem**: `for (i, x) in enumerate(v)` emitted `i++` after the loop's closing
+brace, so `i` was 0 in every iteration (a loop over cache pages masked every
+page as page 0).
+
+**Fix**: `_gen_for_impl()` emits the increment at the end of the loop body.
+Pinned by `test_enumerate_index_advances_inside_loop`.
+
+### 14. `let` Rebinding Ignored Block Scope
+
+**Problem**: `_declared_vars` was per function, so a second `let d = ...` in a
+sibling loop body became `d = ...;` and referenced a variable that was out of
+scope.
+
+**Fix**: `_gen_block_contents()` restores the declared set when the block ends.
+Pinned by `test_let_in_sibling_blocks_redeclares`.
+
+### 15. `encrypt()` Evaluated Its Source Twice
+
+**Problem**: `encrypt(pk, f(x))` generated
+`std::vector<double>(f(x).begin(), f(x).end())` — iterators of two different
+temporaries.
+
+**Fix**: `_gen_encrypt()` binds the source once (`const auto& _src = f(x);`),
+in both the encrypted and the cleartext twin. Pinned by
+`test_encrypt_evaluates_source_once`.
+
+### 16. Plaintext Vectors from User Functions Were Not Wrapped
+
+**Problem**: `ct * mask_fn(inst)` with a user function declared `-> vec<f64>`
+emitted `cc->EvalMult(ct, std::vector<double>)`, which does not compile; only
+builtin mask functions (`slot_mask`, `tile`, ...) were recognised as vectors.
+A `let m: vec<f64> = ...` annotation was not recorded either.
+
+**Fix**: `_infer_expr_cpp_type()` consults the user function's declared return
+type, and an annotated plaintext `let` records its C++ type, so both wrap in
+`MakeCKKSPackedPlaintext`. The for-expression collector also uses the
+mode-aware ciphertext type (`_ct_type()`), so a `for` of `encrypt()` results
+compiles in the cleartext twin.
+
+### Bootstrap and `rotate(<indices>)`
+
+`requires { bootstrap }` makes `_gen_keygen()` enable `FHE`, add
+`FHECKKSRNS::GetBootstrapDepth(budget, key_dist)` to the declared `depth`,
+run `EvalBootstrapSetup` and `EvalBootstrapKeyGen` (the keys land in the
+automorphism key map, hence in `rk.bin`); `_gen_key_loading()` repeats the
+setup on every server stage after `cc.bin` is loaded, because the
+precomputations are not serialized. `bootstrap(ct)` compiles to
+`cc->EvalBootstrap(ct)` and to the identity in the cleartext twin; using it
+without the capability is a `CodegenError`. `rotate(<expr>)` stores the
+expression in `RequiresDecl.args` and keygen generates keys for exactly the
+indices it yields (`std::vector<int>` from the expression's `vec<i32>`),
+replacing the 1..N/2-1 range. Pinned by `test_bootstrap_keygen_setup_and_call`,
+`test_bootstrap_budget_defaults_to_three`, `test_bootstrap_call_requires_capability`.
+
 ## File Structure
 
 ```

@@ -146,7 +146,8 @@ scheme_value    = IDENT                         (* enum-like: flexible_auto *)
                 | 'auto' ;
 
 (* Requires declaration — operations needed for key generation *)
-requires_decl   = 'requires' '{' ident_list '}' ;
+requires_decl   = 'requires' '{' capability { ',' capability } [ ',' ] '}' ;
+capability      = IDENT [ '(' expr ')' ] ;      (* rotate(rotation_indices(inst)) *)
 ident_list      = IDENT { ',' IDENT } [ ',' ] ;
 
 (* Domain declaration — trust boundary specification *)

@@ -96,8 +96,14 @@ class ExternDecl(Node):
 
 @dataclass
 class RequiresDecl(Node):
-    """requires { add, mul, rotate }"""
+    """requires { add, mul, rotate(rotation_indices(inst)), bootstrap }
+
+    A capability may carry one argument expression in parentheses. Today only
+    `rotate(<expr>)` reads it: the expression yields the rotation indices to
+    generate keys for (a vec<i32>, evaluated in the key-generation stage).
+    """
     capabilities: list[str] = field(default_factory=list)
+    args: dict = field(default_factory=dict)  # capability name -> Expr
 
 
 @dataclass

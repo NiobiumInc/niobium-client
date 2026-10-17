@@ -260,9 +260,19 @@ class Parser:
         loc = self.loc()
         self.expect(TT.REQUIRES)
         self.expect(TT.LBRACE)
-        caps = self.parse_ident_list()
+        caps: list[str] = []
+        args: dict = {}
+        while not self.at(TT.RBRACE):
+            name = self.expect(TT.IDENT).value
+            caps.append(name)
+            # Optional argument: rotate(rotation_indices(inst))
+            if self.match(TT.LPAREN):
+                args[name] = self.parse_expr()
+                self.expect(TT.RPAREN)
+            if not self.match(TT.COMMA):
+                break
         self.expect(TT.RBRACE)
-        return ast.RequiresDecl(loc=loc, capabilities=caps)
+        return ast.RequiresDecl(loc=loc, capabilities=caps, args=args)
 
     def parse_ident_list(self) -> list[str]:
         items = [self.expect(TT.IDENT).value]

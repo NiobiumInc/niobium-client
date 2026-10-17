@@ -62,6 +62,7 @@ BUILTINS: list[Builtin] = [
     Builtin("zero", "enc"),
     Builtin("relin", "enc"),
     Builtin("rotate", "enc"),
+    Builtin("bootstrap", "enc"),            # refresh; needs `requires { bootstrap }`
     Builtin("negate", "enc"),
     Builtin("mul_monomial", "enc"),
     Builtin("chebyshev", "enc", depth_opaque=True),
