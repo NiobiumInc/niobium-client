@@ -644,6 +644,201 @@ def test_closure_generation():
     assert "[&]" in impl
 
 
+
+
+# ── bootstrap / rotate(<indices>) / codegen fixes ────────────────────────────
+
+BOOTSTRAP_PRELUDE = """
+enum InstanceSize { Toy, Small }
+struct Instance { size: InstanceSize, ring_dim: u32, tokens: u32 }
+fn instance(size: InstanceSize) -> Instance {
+    match size {
+        Toy   => Instance { size, ring_dim: 8192, tokens: 100 },
+        Small => Instance { size, ring_dim: 65536, tokens: 800 },
+    }
+}
+fn keydir(inst: Instance) -> path { root() / "keys" }
+fn encdir(inst: Instance) -> path { root() / "enc" }
+fn rotation_indices(inst: Instance) -> vec<i32> {
+    let idx: vec<i32> = []
+    idx.push(1)
+    idx.push(-3)
+    return idx
+}
+wire CryptoParams {
+    context: CryptoContext,
+    public_key: PublicKey,
+    eval_mult_key: EvalMultKey,
+    eval_rot_keys: EvalAutomorphismKeys,
+}
+wire EncryptedInputs { pages: vec<enc<vec<f64>>> }
+wire EncryptedResult { ciphertext: enc<vec<f64>> }
+"""
+
+
+def test_bootstrap_keygen_setup_and_call():
+    """`requires { bootstrap }` drives key generation (FHE feature, setup,
+    bootstrap keys, depth on top of the refresh budget), the server-side
+    setup after the context is loaded, and `bootstrap(ct)` itself."""
+    files = compile_str(BOOTSTRAP_PRELUDE + """
+    scheme CKKS {
+        security: not_set
+        depth: 14
+        bootstrap_budget: 4 levels
+    }
+    requires { add, mul, rotate(rotation_indices(inst)), bootstrap }
+
+    @client @stage("key_generation")
+    fn generate_keys(inst: Instance) -> writes(CryptoParams) {
+        let keys = keygen()
+        return CryptoParams {
+            context: keys.context, public_key: keys.public,
+            eval_mult_key: keys.eval_mult, eval_rot_keys: keys.eval_rot,
+        }
+    }
+
+    @server @stage("compute")
+    fn compute(inst: Instance) -> reads(CryptoParams, EncryptedInputs), writes(EncryptedResult) {
+        let params = load(CryptoParams, from: keydir(inst))
+        let inputs = load(EncryptedInputs, from: encdir(inst))
+        let ct = inputs.pages[0] * inputs.pages[0]
+        ct = bootstrap(ct)
+        return EncryptedResult { ciphertext: ct }
+    }
+    """)
+    kg = files["key_generation.cpp"]
+    assert "std::vector<uint32_t> _level_budget = {4, 4};" in kg
+    assert ("parameters.SetMultiplicativeDepth(14 + "
+            "FHECKKSRNS::GetBootstrapDepth(_level_budget, UNIFORM_TERNARY));") in kg
+    assert "cc->Enable(FHE);" in kg
+    assert "cc->EvalBootstrapSetup(_level_budget);" in kg
+    assert "cc->EvalBootstrapKeyGen(kp.secretKey, cc->GetRingDimension() / 2);" in kg
+    # rotate(<expr>): keys for exactly those indices, not the 1..N/2-1 range
+    assert "auto _rot_src = rotation_indices(inst);" in kg
+    assert "std::vector<int> _rot_indices(_rot_src.begin(), _rot_src.end());" in kg
+    assert "cc->EvalRotateKeyGen(kp.secretKey, _rot_indices);" in kg
+    assert "_rot_indices.push_back(_i)" not in kg
+
+    srv = files["compute.cpp"]
+    assert "cc->EvalBootstrapSetup(std::vector<uint32_t>{4, 4});" in srv
+    assert srv.index('"cc.bin"') < srv.index("EvalBootstrapSetup")
+    assert "ct = cc->EvalBootstrap(ct);" in srv
+    # the cleartext twin treats a refresh as the identity
+    ref = files["compute_ref.cpp"]
+    assert "ct = (ct);" in ref
+    assert "EvalBootstrap" not in ref
+
+
+def test_bootstrap_budget_defaults_to_three():
+    files = compile_str(BOOTSTRAP_PRELUDE + """
+    scheme CKKS { security: not_set depth: 5 }
+    requires { add, bootstrap }
+    @client @stage("key_generation")
+    fn generate_keys(inst: Instance) -> writes(CryptoParams) {
+        let keys = keygen()
+        return CryptoParams {
+            context: keys.context, public_key: keys.public,
+            eval_mult_key: keys.eval_mult, eval_rot_keys: keys.eval_rot,
+        }
+    }
+    """)
+    assert "std::vector<uint32_t> _level_budget = {3, 3};" in files["key_generation.cpp"]
+
+
+def test_bootstrap_call_requires_capability():
+    from xcomp.codegen import CodegenError
+    try:
+        compile_str(BOOTSTRAP_PRELUDE + """
+        scheme CKKS { security: not_set depth: 5 }
+        requires { add, mul }
+        @server @stage("compute")
+        fn compute(inst: Instance) -> reads(EncryptedInputs), writes(EncryptedResult) {
+            let inputs = load(EncryptedInputs, from: encdir(inst))
+            return EncryptedResult { ciphertext: bootstrap(inputs.pages[0]) }
+        }
+        """)
+        assert False, "expected CodegenError"
+    except CodegenError as e:
+        assert "requires" in str(e)
+
+
+def test_enumerate_index_advances_inside_loop():
+    files = compile_str(BOOTSTRAP_PRELUDE + """
+    fn f(pages: vec<enc<vec<f64>>>) -> enc<vec<f64>> {
+        let acc: enc<vec<f64>> = zero()
+        for (p, ct_page) in enumerate(pages) {
+            acc = acc + ct_page * (p |> as f64)
+        }
+        return acc
+    }
+    """)
+    body = files["nb_shared.cpp"]
+    loop = body[body.index("for (auto& ct_page : pages) {"):]
+    close = loop.index("\n  }\n")          # end of the for body
+    assert "p++;" in loop[:close], "index must advance inside the loop body"
+
+
+def test_let_in_sibling_blocks_redeclares():
+    files = compile_str(BOOTSTRAP_PRELUDE + """
+    fn f(n: u32) -> u32 {
+        let total = 0
+        for i in 0..n {
+            let d = i * 2
+            total = total + d
+        }
+        for i in 0..n {
+            let d = i * 3
+            total = total + d
+        }
+        return total
+    }
+    """)
+    body = files["nb_shared.cpp"]
+    assert body.count("auto d = ") == 2, body
+
+
+def test_encrypt_evaluates_source_once():
+    files = compile_str(BOOTSTRAP_PRELUDE + """
+    fn make_row(inst: Instance, i: u32) -> vec<f64> {
+        let v = vec_zeros<f64>(4)
+        return v
+    }
+    @client @stage("encrypt_inputs")
+    fn encrypt_inputs(inst: Instance) -> reads(CryptoParams), writes(EncryptedInputs) {
+        let params = load(CryptoParams, from: keydir(inst))
+        let pages = for i in 0..2 { encrypt(params.public_key, make_row(inst, i)) }
+        return EncryptedInputs { pages: pages }
+    }
+    """)
+    cpp = files["encrypt_inputs.cpp"]
+    assert cpp.count("make_row(inst, i)") == 1, cpp
+    assert "const auto& _src = make_row(inst, i);" in cpp
+    assert "std::vector<double>(_src.begin(), _src.end())" in cpp
+    ref = files["encrypt_inputs_ref.cpp"]
+    assert ref.count("make_row(inst, i)") == 1, ref
+
+
+def test_ct_plus_user_vector_materializes_plaintext():
+    """EvalAdd(ct, Plaintext&) needs an lvalue plaintext: `f(ct) + mask_fn()`
+    with a user `-> vec<f64>` function wraps the mask and binds it first."""
+    files = compile_str(BOOTSTRAP_PRELUDE + """
+    fn mask(inst: Instance) -> vec<f64> { return vec_zeros<f64>(4) }
+    fn g(ct: enc<vec<f64>>) -> enc<vec<f64>> { return ct }
+    fn f(inst: Instance, ct: enc<vec<f64>>) -> enc<vec<f64>> {
+        let a = g(ct) + mask(inst)
+        let b = mask(inst) + g(ct)
+        let m = mask(inst)
+        return a + b * m
+    }
+    """)
+    body = files["nb_shared.cpp"]
+    assert ("auto a = [&]() { auto _pt = cc->MakeCKKSPackedPlaintext(mask(inst)); "
+            "return cc->EvalAdd(g(cc, ct), _pt); }();") in body
+    assert ("auto b = [&]() { auto _pt = cc->MakeCKKSPackedPlaintext(mask(inst)); "
+            "return cc->EvalAdd(g(cc, ct), _pt); }();") in body
+    assert "cc->EvalMult(b, cc->MakeCKKSPackedPlaintext(m))" in body
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_")]
     passed = 0

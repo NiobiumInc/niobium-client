@@ -258,9 +258,12 @@ scheme CKKS {
 requires { add, mul, rotate }  // generates appropriate key types
 ```
 
-**Available capabilities**: `add`, `mul`, `rotate`, `chebyshev`, `running_sums`, `replicate`
+**Available capabilities**: `add`, `mul`, `rotate`, `chebyshev`, `running_sums`, `replicate`, `bootstrap`
 
-- `rotate` generates `EvalRotateKeyGen` with indices 1..ring_dim/2-1
+- `rotate` generates `EvalRotateKeyGen` with indices 1..ring_dim/2-1; `rotate(<expr>)`
+  generates keys only for the indices the expression yields (a `vec<i32>`)
+- `bootstrap` enables `bootstrap(ct)`; `depth` then counts the levels left after a refresh
+  and `bootstrap_budget: N levels` sets the per-half level budget (see NB_LANGUAGE.md)
 - `replicate` uses `DFSSlotReplicator::get_rotation_amounts(inst.degrees)`
 - `running_sums` uses `RunningSums::get_shift_amounts(n_slots, n_cols, ...)`
 

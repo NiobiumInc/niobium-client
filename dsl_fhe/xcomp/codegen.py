@@ -125,6 +125,7 @@ class CodeGenerator:
         self.externs: list[ast.ExternDecl] = []
         self.scheme: ast.SchemeDecl | None = None
         self.requires: list[str] = []
+        self.requires_args: dict = {}  # capability -> argument Expr (rotate(...))
         self._current_fn: ast.FnDecl | None = None
         self._in_return_expr: bool = False  # set when generating return expression value
         self._keygen_vars: set[str] = set()  # variables assigned from keygen()
@@ -184,6 +185,7 @@ class CodeGenerator:
                 self.scheme = item
             elif isinstance(item, ast.RequiresDecl):
                 self.requires = item.capabilities
+                self.requires_args = dict(getattr(item, "args", {}) or {})
 
     def _get_stage(self, fn: ast.FnDecl) -> StageInfo | None:
         stage_name = None
@@ -429,10 +431,12 @@ include_directories(${{OPENFHE_INCLUDE_PATH}}/binfhe)
 include_directories(${{OPENFHE_INCLUDE_PATH}}/third-party/include)
 include_directories(${{FHETCH_INCLUDE_PATH}})
 
-# Find the prebuilt libnbfhetch (built by the client's `make build`). Both the
-# top-level build tree and niobium-fhetch's own build tree are searched.
+# Find the prebuilt libnbfhetch (built by the client's `make build`). The
+# top-level build tree (as a subdirectory or as an injected FetchContent dep)
+# and niobium-fhetch's own build tree are searched, in that order.
 set(FHETCH_LIB_DIRS
   "${{NIOBIUM_CLIENT_ROOT}}/build/vendor/niobium-fhetch"
+  "${{NIOBIUM_CLIENT_ROOT}}/build/_deps/niobium-fhetch-build"
   "${{NIOBIUM_CLIENT_ROOT}}/vendor/niobium-fhetch/build")
 find_library(NBFHETCH_LIB
   NAMES nbfhetch
@@ -1419,6 +1423,15 @@ endforeach()
                     return int(str(f.value).split()[0])
         return 23
 
+    def _bootstrap_budget(self) -> int:
+        """Per-half level budget of the bootstrap (scheme `bootstrap_budget`,
+        default 3): levels spent by CoeffsToSlots and by SlotsToCoeffs."""
+        if self.scheme:
+            for f in self.scheme.fields:
+                if f.key == "bootstrap_budget":
+                    return int(str(f.value).split()[0])
+        return 3
+
     SEC_MAP = {
         "not_set": "HEStd_NotSet",
         "128-classic": "HEStd_128_classic",
@@ -1708,6 +1721,12 @@ endforeach()
         self.wl('throw std::runtime_error("Failed to load CryptoContext");')
         self.dedent()
         self.wl("}")
+        if "bootstrap" in self.requires:
+            # The bootstrap precomputations are not serialized with the
+            # context: redo the setup (same level budget as keygen) before
+            # any EvalBootstrap. The keys themselves arrive in rk.bin.
+            budget = self._bootstrap_budget()
+            self.wl(f"cc->EvalBootstrapSetup(std::vector<uint32_t>{{{budget}, {budget}}});")
         self.blank()
 
         self.wl("PublicKey<DCRTPoly> pk;")
@@ -1938,8 +1957,15 @@ endforeach()
         self.blank()
 
     def _gen_block_contents(self, block: ast.Block):
-        for stmt in block.stmts:
-            self._gen_stmt(stmt)
+        # A `let` declared inside this block is out of scope once it ends: a
+        # sibling block's `let` of the same name must declare again, not
+        # assign. Restore the declared set on exit.
+        saved = set(self._declared_vars)
+        try:
+            for stmt in block.stmts:
+                self._gen_stmt(stmt)
+        finally:
+            self._declared_vars = saved
 
     # ===== Statement generation =====
 
@@ -2020,6 +2046,8 @@ endforeach()
                 return
             # Track local variable types for later use (e.g. in ArrayLiteral inference)
             inferred_type = self._infer_expr_cpp_type(stmt.value)
+            if stmt.type_ann and not self._has_enc_type(stmt.type_ann):
+                inferred_type = cpp_type
             if inferred_type:
                 self._local_var_cpp_types[stmt.name] = inferred_type
             # Let-rebinding: if variable already declared in this scope, use assignment
@@ -2170,13 +2198,16 @@ endforeach()
 
         self.indent()
         self._gen_block_contents(stmt.body)
+        if len(stmt.pattern.names) == 2:
+            if not (isinstance(stmt.iterable, ast.MethodCall) and stmt.iterable.method == "replicate"):
+                # The index advances with the element, inside the loop body
+                # (the replicator loop increments it in its for-header).
+                idx = stmt.pattern.names[0]
+                self.wl(f"{idx}++;")
         self.dedent()
         self.wl("}")
 
         if len(stmt.pattern.names) == 2:
-            if not (isinstance(stmt.iterable, ast.MethodCall) and stmt.iterable.method == "replicate"):
-                idx = stmt.pattern.names[0]
-                self.wl(f"{idx}++;")
             self.wl("}")
 
     def _gen_match(self, stmt: ast.MatchStmt):
@@ -2265,7 +2296,7 @@ endforeach()
                     if isinstance(last_ast, ast.CastExpr) and last_ast.target_type:
                         elem_type = self._type_to_cpp(last_ast.target_type)
                     elif self._is_encrypted_expr(last_ast):
-                        elem_type = "Ciphertext<DCRTPoly>"
+                        elem_type = self._ct_type()
                     if elem_type:
                         self.wl(f"std::vector<{elem_type}> {name};")
                     else:
@@ -2581,20 +2612,25 @@ endforeach()
                     return f"nb_plain::mul({left}, {right})"
             l = _maybe_wrap_plaintext(left, left_enc, expr.left)
             r = _maybe_wrap_plaintext(right, right_enc, expr.right)
+            # OpenFHE's EvalAdd/EvalSub(ct, Plaintext&) take a NON-const
+            # lvalue reference; a freshly wrapped MakeCKKSPackedPlaintext
+            # rvalue can't bind (EvalMult takes ConstPlaintext&, which can).
+            # Materialize the plaintext operand in an IIFE local.
+            def _with_pt(fn_name, a, b, b_wrapped):
+                if b_wrapped:
+                    return (f"[&]() {{ auto _pt = {b}; "
+                            f"return cc->{fn_name}({a}, _pt); }}()")
+                return f"cc->{fn_name}({a}, {b})"
             if expr.op == "+":
                 # Use NullSafeEvalAdd only when both are ciphertexts;
                 # for enc + scalar, use cc->EvalAdd directly
                 if left_enc and right_enc:
                     return f"NullSafeEvalAdd(cc, {l}, {r})"
-                return f"cc->EvalAdd({l}, {r})"
+                if l != left and not left_enc:
+                    return _with_pt(FHE_ADD, r, l, True)  # pt + ct commutes
+                return _with_pt(FHE_ADD, l, r, r != right and not right_enc)
             if expr.op == "-":
-                # OpenFHE's EvalSub(ct, Plaintext&) takes a NON-const lvalue
-                # reference; a freshly wrapped MakeCKKSPackedPlaintext rvalue
-                # can't bind. Materialize the plaintext in an IIFE local.
-                if r != right and not right_enc:
-                    return (f"[&]() {{ auto _pt = {r}; "
-                            f"return cc->{FHE_SUB}({l}, _pt); }}()")
-                return f"cc->{FHE_SUB}({l}, {r})"
+                return _with_pt(FHE_SUB, l, r, r != right and not right_enc)
             if expr.op == "*":
                 return f"cc->{FHE_MUL}({l}, {r})"
             if expr.op == "*_norelin":
@@ -2686,6 +2722,14 @@ endforeach()
                 if self._plain_mode:
                     return f"nb_plain::rotate({', '.join(args)})"
                 return f"cc->{FHE_ROTATE}({', '.join(args)})"
+            if fname == "bootstrap":
+                if "bootstrap" not in self.requires:
+                    raise CodegenError(
+                        "bootstrap(ct) needs `bootstrap` in the requires "
+                        "declaration (it drives key generation and setup)")
+                if self._plain_mode:
+                    return f"({args[0]})"  # a refresh is the identity on values
+                return f"cc->EvalBootstrap({args[0]})"
             if fname == "relin":
                 if self._plain_mode:
                     return f"({args[0]})"
@@ -3263,13 +3307,18 @@ endforeach()
         data_ast = positional_args[1].value if len(positional_args) > 1 else None
         if isinstance(data_ast, ast.ArrayLiteral):
             data_init = f"std::vector<double>{data}"
+            data_bind = ""
         else:
-            # Use iterator construction to handle type conversion (e.g. float→double)
-            data_init = f"std::vector<double>({data}.begin(), {data}.end())"
+            # Bind the source once (it may be a call), then convert through
+            # iterators so element types such as float widen to double.
+            data_bind = f"const auto& _src = {data}; "
+            data_init = "std::vector<double>(_src.begin(), _src.end())"
         if self._plain_mode:
+            if data_bind:
+                return f"[&]() {{ {data_bind}return {data_init}; }}()"
             return data_init  # the slot vector IS the "ciphertext"
         return (f"[&]() {{ auto _cc = {pk}->GetCryptoContext(); "
-                f"auto _data = {data_init}; "
+                f"{data_bind}auto _data = {data_init}; "
                 f"return _cc->Encrypt({pk}, "
                 f"_cc->MakeCKKSPackedPlaintext(_data, 1, {level})); }}()")
 
@@ -3636,14 +3685,27 @@ endforeach()
         first_mod_raw = scheme_cfg.get("first_mod", None)
         first_mod = int(str(first_mod_raw).split()[0]) if first_mod_raw else None
 
+        has_bootstrap = "bootstrap" in self.requires
         lines = [
             "[&]() {",
             "    CCParams<CryptoContextCKKSRNS> parameters;",
             f"    parameters.SetSecretKeyDist({key_dist});",
             f"    parameters.SetSecurityLevel({sec_level});",
-            f"    parameters.SetMultiplicativeDepth({depth});",
-            f"    parameters.SetScalingModSize({precision});",
         ]
+        if has_bootstrap:
+            # `depth` is the budget left after a refresh; OpenFHE's own
+            # bootstrap depth (for this level budget and key distribution)
+            # comes on top so the refreshed ciphertext really has `depth`
+            # levels. The budget is the scheme's bootstrap_budget (default 3).
+            budget = self._bootstrap_budget()
+            lines += [
+                f"    std::vector<uint32_t> _level_budget = {{{budget}, {budget}}};",
+                f"    parameters.SetMultiplicativeDepth({depth} + "
+                f"FHECKKSRNS::GetBootstrapDepth(_level_budget, {key_dist}));",
+            ]
+        else:
+            lines.append(f"    parameters.SetMultiplicativeDepth({depth});")
+        lines.append(f"    parameters.SetScalingModSize({precision});")
         if first_mod is not None:
             lines.append(f"    parameters.SetFirstModSize({first_mod});")
         ring_dim = scheme_cfg.get("ring_dim", None)
@@ -3663,12 +3725,25 @@ endforeach()
             "    auto cc = GenCryptoContext(parameters);",
             "    cc->Enable(PKE); cc->Enable(KEYSWITCH);",
             "    cc->Enable(LEVELEDSHE); cc->Enable(ADVANCEDSHE);",
+        ]
+        if has_bootstrap:
+            lines += [
+                "    cc->Enable(FHE);",
+                "    cc->EvalBootstrapSetup(_level_budget);",
+            ]
+        lines += [
             "    auto kp = cc->KeyGen();",
             "    cc->EvalMultKeyGen(kp.secretKey);",
         ]
+        if has_bootstrap:
+            # The bootstrap rotation keys land in the automorphism key map, so
+            # they travel to the server inside rk.bin with the other rotations.
+            lines.append("    cc->EvalBootstrapKeyGen(kp.secretKey, "
+                         "cc->GetRingDimension() / 2);")
         # Generate rotation key indices from capabilities
         rot_parts = []
         has_rotate = "rotate" in self.requires
+        rotate_arg = self.requires_args.get("rotate")
         if has_replicate:
             lines.append("    auto _degrees = std::vector<int>(inst.degrees.begin(), inst.degrees.end());")
             lines.append("    auto rots4reps = DFSSlotReplicator::get_rotation_amounts(_degrees);")
@@ -3686,7 +3761,14 @@ endforeach()
         #  - ring_dim from the Instance struct -> build them at run time.
         # Limitation: covers positive indices 1..n_slots-1 only; a very large
         # ring makes this many keys, and negative indices aren't covered.
-        if has_rotate and not has_replicate and not has_running_sums:
+        if has_rotate and rotate_arg is not None:
+            # rotate(<expr>): keys for exactly the indices the expression
+            # yields (a vec<i32> from shared geometry functions), nothing else.
+            rot_src = self._expr_to_cpp(rotate_arg)
+            lines.append(f"    auto _rot_src = {rot_src};")
+            lines.append("    std::vector<int> _rot_indices(_rot_src.begin(), _rot_src.end());")
+            rot_parts.append("_rot_indices")
+        elif has_rotate and not has_replicate and not has_running_sums:
             if ring_dim is not None:
                 n_slots = int(ring_dim) // 2
                 rot_indices = ", ".join(str(i) for i in range(1, n_slots))
@@ -3946,6 +4028,15 @@ endforeach()
                 return "std::vector<double>"
             if expr.func.name == "round":
                 return "double"
+            # A user function declared `-> vec<T>` (plaintext) yields a
+            # std::vector too, so `ct * mask_fn(inst)` wraps the mask in a
+            # packed plaintext like a builtin mask would.
+            fn = self._fn_sigs.get(expr.func.name)
+            if (fn is not None and fn.return_type is not None
+                    and not self._has_enc_type(fn.return_type)):
+                cpp = self._type_to_cpp(fn.return_type)
+                if cpp.startswith("std::vector"):
+                    return cpp
         if isinstance(expr, ast.IntLiteral):
             return "int64_t"
         if isinstance(expr, ast.FloatLiteral):

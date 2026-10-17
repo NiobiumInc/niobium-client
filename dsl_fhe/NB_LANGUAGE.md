@@ -134,8 +134,27 @@ appropriate key generation calls:
 
 ```nb
 requires { add, mul, rotate }
-// Also available: chebyshev, running_sums, replicate
+// Also available: chebyshev, running_sums, replicate, bootstrap
 ```
+
+A capability may take one argument. `rotate(<expr>)` generates rotation keys
+for exactly the indices the expression yields (a `vec<i32>`, evaluated in the
+key-generation stage, so it may call shared functions on `inst`). A bare
+`rotate` generates every index up to `ring_dim / 2`, which is only sensible
+for small rings and never covers negative indices:
+
+```nb
+requires { add, mul, rotate(rotation_indices(inst)), bootstrap }
+```
+
+`bootstrap` enables the FHE feature, runs the bootstrap setup and key
+generation in `keygen()`, repeats the setup in every server stage after the
+context is loaded, and makes `bootstrap(ct)` available. The scheme field
+`bootstrap_budget: N levels` (default 3) is the level budget of each bootstrap
+half (CoeffsToSlots and SlotsToCoeffs). With `bootstrap` required, `depth` is
+the number of levels available **after** a refresh; OpenFHE's own bootstrap
+depth is added on top. The bootstrap rotation keys travel to the server in
+`rk.bin` with the other rotation keys.
 
 ---
 
@@ -508,7 +527,8 @@ scheme.override(security: not_set, ring_dim: 2048)
 | `encrypt(pk, data, level: n)` | Encrypt data with public key | `MakeCKKSPackedPlaintext` + `Encrypt` |
 | `decrypt(sk, ct)` | Decrypt ciphertext | `Decrypt` + `GetRealPackedValue` |
 | `keygen()` | Generate keys from scheme config | Full key generation IIFE |
-| `rotate(ct, n)` | Rotate ciphertext slots | `cc->EvalRotate(ct, n)` |
+| `rotate(ct, n)` | Rotate ciphertext slots (`n != 0`: OpenFHE wants a key even for 0) | `cc->EvalRotate(ct, n)` |
+| `bootstrap(ct)` | Refresh a ciphertext (requires `bootstrap`; identity in the cleartext twin) | `cc->EvalBootstrap(ct)` |
 | `negate(ct)` | Negate ciphertext | `cc->EvalNegate(ct)` |
 | `relin(ct)` | Relinearize after *_norelin | `cc->Relinearize(ct)` |
 | `chebyshev(fn, ct, domain:, degree:)` | Chebyshev function evaluation | `cc->EvalChebyshevFunction(...)` |

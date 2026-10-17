@@ -306,7 +306,7 @@ password-retrieval:
 # End-to-end tests (run the built binaries)
 # ---------------------------------------------------------------------------
 
-LD_LIB_PATH := $(NIOBIUM_CLIENT_ROOT)/vendor/lib/openfhe/lib:$(NIOBIUM_CLIENT_ROOT)/build/vendor/niobium-fhetch:$(NIOBIUM_CLIENT_ROOT)/vendor/niobium-fhetch/build:$(NIOBIUM_CLIENT_ROOT)/build/_deps/yaml_cpp-build
+LD_LIB_PATH := $(NIOBIUM_CLIENT_ROOT)/vendor/lib/openfhe/lib:$(NIOBIUM_CLIENT_ROOT)/build/vendor/niobium-fhetch:$(NIOBIUM_CLIENT_ROOT)/build/_deps/niobium-fhetch-build:$(NIOBIUM_CLIENT_ROOT)/vendor/niobium-fhetch/build:$(NIOBIUM_CLIENT_ROOT)/build/_deps/yaml_cpp-build
 
 # @hardware server stages replay via the cooperative path, which spawns the
 # fhetch_driver helper. It's built alongside niobium-fhetch's tests. Export

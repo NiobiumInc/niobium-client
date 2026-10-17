@@ -77,6 +77,15 @@ def test_requires_decl():
     assert r.capabilities == ["add", "mul", "rotate"]
 
 
+def test_requires_decl_with_argument():
+    prog = parse_str("requires { add, rotate(rotation_indices(inst)), bootstrap }")
+    r = prog.items[0]
+    assert isinstance(r, ast.RequiresDecl)
+    assert r.capabilities == ["add", "rotate", "bootstrap"]
+    assert set(r.args) == {"rotate"}
+    assert isinstance(r.args["rotate"], ast.CallExpr)
+
+
 def test_use_decl():
     prog = parse_str("use shared::*")
     u = prog.items[0]
