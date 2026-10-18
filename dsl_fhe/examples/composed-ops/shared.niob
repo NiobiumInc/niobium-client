@@ -1,0 +1,26 @@
+// shared.niob — A module that composes the `simple` module
+//============================================================================
+// Demonstrates modules: `use simple` imports the simple cipher-ops module
+// (found through the module search path: examples/simple/*.niob declare
+// `module simple`). Everything of simple is referenced as simple::name —
+// its Instance struct, its wire types, its Operation enum, its path helpers
+// and its dispatch() function — and compiles into namespace simple of this
+// program. simple's own stages come along as simple_key_generation,
+// simple_encrypt, simple_compute and simple_decrypt_verify binaries, so this
+// module only adds the stage that is new: compute_pair, which applies two
+// simple operations and sums the results.
+//
+// The directory helpers below have the same names as simple's. That is the
+// point of modules: composed_ops::keydir and simple::keydir are different
+// functions in different namespaces, and no name collides.
+//============================================================================
+
+module composed_ops
+
+use simple
+
+// This module's own instance helpers delegate to simple's, so the key and
+// data files land where simple's stages expect them.
+fn iodir(inst: simple::Instance) -> path  { simple::iodir(inst) }
+fn keydir(inst: simple::Instance) -> path { simple::keydir(inst) }
+fn encdir(inst: simple::Instance) -> path { simple::encdir(inst) }

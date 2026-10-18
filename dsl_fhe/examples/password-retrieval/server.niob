@@ -10,6 +10,8 @@
 // password. Only when ALL questions match does the password emerge.
 //============================================================================
 
+module password_retrieval
+
 use shared::*
 
 // ============================================================================

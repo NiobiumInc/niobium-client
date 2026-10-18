@@ -14,6 +14,8 @@
 // Instance sizes
 // ============================================================================
 
+module password_retrieval
+
 enum InstanceSize { Toy, Small }
 
 struct Instance {

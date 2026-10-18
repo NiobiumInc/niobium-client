@@ -1,0 +1,22 @@
+// client.niob — Scheme and capabilities of the composed_ops module
+//============================================================================
+// Key generation, encryption and decryption are simple's stages, imported
+// with `use simple` in shared.niob and built here as simple_key_generation,
+// simple_encrypt and simple_decrypt_verify. This file declares what the
+// program itself needs; the capabilities simple's own code requires (rotate,
+// for its rotation operations) are unioned in by the compiler, so the keys
+// simple_key_generation makes cover both modules.
+//============================================================================
+
+module composed_ops
+
+use shared::*
+
+scheme CKKS {
+    security: 128-classic    // Toy overrides to not_set (small ring for speed)
+    key_dist: uniform_ternary
+    scaling: flexible_auto
+    depth: 20
+}
+
+requires { add, mul }

@@ -26,6 +26,7 @@ class TT(Enum):
     RETURN = auto()
     CONST = auto()
     USE = auto()
+    MODULE = auto()
     STRUCT = auto()
     ENUM = auto()
     WIRE = auto()
@@ -116,6 +117,7 @@ KEYWORDS: dict[str, TT] = {
     "return": TT.RETURN,
     "const": TT.CONST,
     "use": TT.USE,
+    "module": TT.MODULE,
     "struct": TT.STRUCT,
     "enum": TT.ENUM,
     "wire": TT.WIRE,

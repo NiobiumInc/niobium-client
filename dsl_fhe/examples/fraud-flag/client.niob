@@ -9,6 +9,8 @@
 // Profiles: 0=Toy (ring 2048, dev security), 1=Full (ring 32768, 128-classic)
 //============================================================================
 
+module fraud_flag
+
 use shared::*
 
 // CKKS, depth = 2 + K (distance squaring + normalization + K iterated

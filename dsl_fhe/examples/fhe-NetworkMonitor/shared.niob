@@ -9,6 +9,8 @@
 // Constants
 // ============================================================================
 
+module fhe_network_monitor
+
 const BATCH_SIZE_FULL: u32 = 32768    // packets per batch (= n_slots for FULL)
 const BATCH_SIZE_TOY: u32 = 1024      // packets per batch (= n_slots for TOY)
 

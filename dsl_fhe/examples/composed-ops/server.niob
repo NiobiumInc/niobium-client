@@ -1,0 +1,33 @@
+// server.niob — The one stage composed_ops adds on top of simple
+//============================================================================
+// Runs on the SERVER machine. Compiles to:
+//   compute_pair <size> <op_a> <op_b> [immediate]
+//
+// Loads the two ciphertexts simple_encrypt wrote, applies two of simple's
+// operations through simple::dispatch and returns their sum. With a=3, b=5:
+//   compute_pair 0 0 1   ->  ADD + MUL  =  (3+5) + (3*5) = 23
+//   compute_pair 0 1 1   ->  MUL + MUL  =  15 + 15      = 30
+// simple_decrypt_verify <size> <expected> checks the result.
+//============================================================================
+
+module composed_ops
+
+use shared::*
+use simple
+
+@server @stage("compute_pair")
+@hardware(cache_key: ["workload_size", "op_a", "op_b"])
+fn compute_pair(inst: simple::Instance, op_a: simple::Operation = 0,
+                op_b: simple::Operation = 1, immediate: f64 = 0.0)
+    -> reads(simple::CryptoParams, simple::EncryptedInput),
+       writes(simple::EncryptedResult)
+{
+    let params = load(simple::CryptoParams, from: keydir(inst))
+    let ct1 = load(simple::EncryptedInput, from: iodir(inst) / "input_a.bin").ciphertext
+    let ct2 = load(simple::EncryptedInput, from: iodir(inst) / "input_b.bin").ciphertext
+
+    let first = simple::dispatch(op_a, ct1, ct2, immediate)
+    let second = simple::dispatch(op_b, ct1, ct2, immediate)
+
+    return simple::EncryptedResult { ciphertext: first + second }
+}

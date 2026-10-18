@@ -102,7 +102,8 @@ DOTDOTEQ    = '..=' ;
 ```ebnf
 program         = { top_level_item } EOF ;
 
-top_level_item  = use_decl
+top_level_item  = module_decl
+                | use_decl
                 | const_decl
                 | enum_decl
                 | struct_decl
@@ -117,9 +118,24 @@ top_level_item  = use_decl
 ### 3.2 Declarations
 
 ```ebnf
-(* Use declarations *)
-use_decl        = 'use' module_path '::' ( IDENT | '*' ) ;
+(* Module declaration — names the module every file of a program belongs to.
+   At most one per file, the same in every file compiled together; a file
+   without it belongs to the unnamed root module (global namespace). *)
+module_decl     = 'module' IDENT ;
+
+(* Use declarations.
+   `use IDENT` imports the module IDENT, found through the module search
+   path; its declarations are then referenced as qualified names.
+   `use path :: ( IDENT | '*' )` names a file of this module (shared,
+   client, server) and has no effect. *)
+use_decl        = 'use' IDENT
+                | 'use' module_path '::' ( IDENT | '*' ) ;
 module_path     = IDENT { '::' IDENT } ;
+
+(* Qualified names — a declaration of an imported module (or of this one).
+   Allowed wherever a declared name is referenced: in expressions, types,
+   struct literals, io specs and match patterns. One qualifier at most. *)
+qualified_name  = IDENT '::' IDENT ;
 
 (* Constants *)
 const_decl      = 'const' IDENT ':' type '=' expr ;
@@ -656,6 +672,6 @@ The following are reserved but not yet defined in the grammar:
 - `trait` / `impl` — for generic programming over schemes
 - `macro` — for compile-time code generation
 - `extern` — now implemented for `extern name from "module"` declarations
-- `module` — for explicit module declarations (currently implicit from file name)
+- `module` — now implemented (`module_decl`); `use IDENT` imports a module
 - `pub` / `priv` — for visibility control within modules
 - `test` — for inline test declarations (`@test fn ...`)

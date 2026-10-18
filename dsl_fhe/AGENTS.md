@@ -153,7 +153,47 @@ otherwise it must be on `PATH`.
 | `xcomp/nb_types.py` | Type system (TypeKind, NbType, enc depth tracking) |
 | `xcomp/semantic.py` | Semantic analysis — domain enforcement, depth tracking |
 | `xcomp/codegen.py` | C++ code generation targeting openFHE |
-| `xcomp/nbc.py` | CLI driver: `parse`, `check`, `compile` |
+| `xcomp/modules.py` | Modules: `use` loading through the search path, canonical-name resolution, merge |
+| `xcomp/nbc.py` | CLI driver: `parse`, `check`, `compile` (`--module-path`) |
+
+## Modules — How Names Are Resolved
+
+`module <name>` names the module a file belongs to; `use <name>` imports
+another, found through the search path (`modules.py`, `nbc --module-path`).
+The design that keeps the rest of the compiler unaware of modules:
+
+- **References are canonicalized once, after parsing.** `NameResolver`
+  rewrites every reference in a module (identifiers, call targets, named
+  types, struct literals, io types, match patterns) to the canonical name:
+  `<module>::name` for a declaration of a named module, bare for the root
+  module without a name. Local bindings shadow module declarations. A
+  qualified name must name an imported module and one of its declarations;
+  anything else is a `ModuleError` at load time.
+- **Declarations keep their bare `name`; `node.module` carries the rest.**
+  Every table in the analyzer and the generator is keyed by
+  `fqn(item.module, item.name)` (`modules.fqn`), and every lookup uses the
+  canonical reference as it stands, so there is no module context to thread
+  through. Compare a *reference* to a literal with `base_name(ref)`
+  (`"Instance"`, `"CryptoParams"`), never with `==`.
+- **The canonical name is the C++ name.** The generator emits each module's
+  declarations inside `namespace <module> { }` (header and implementation,
+  in dependency order), the stage function inside its namespace, and `main()`
+  outside it, calling `<module>::stage`. Hand-written references in `main()`
+  (`instance`, `keydir`, `encdir`, the `InstanceSize` cast) are qualified with
+  the module that declares the stage's `Instance` type, or the stage's own
+  module when it declares the helper (`_helper_module`). The reference twin
+  mirrors each module as `nbref::<module>` with `using namespace ::<module>;`
+  so untwinned helpers resolve through the same qualified names.
+- **Imported stages are prefixed** `<module>_<stage>` (`_get_stage`), the
+  imported `requires` are unioned into the root's, the imported `scheme` is
+  dropped (warning if it differs), `use shared::*` stays a no-op.
+- **An extern wrapper's C++ function is global** and keeps the extern's name
+  whatever module the wrapper lives in (`ml-inference-fhe`'s `mlp`).
+
+A program without `module` generates byte-identical C++ to what it did
+before modules existed; `test_unnamed_root_generates_exactly_as_before` and
+the `examples` regeneration pin that. `test_modules.py` covers the loader,
+the resolver and the namespaced output.
 
 ## Codegen Internals — Key Mappings
 
@@ -546,7 +586,8 @@ dsl_fhe/
     ast_nodes.py, nb_types.py        # Type system
     semantic.py                      # Analysis
     codegen.py                       # C++ codegen
-    tests/                           # Unit tests (76 tests)
+    modules.py                       # `use` loading, name resolution, merge
+    tests/                           # Unit tests
   examples/
     fetch-by-similarity/             # Full pipeline: DB search (compilable, runnable)
       shared.niob, client.niob, server.niob
@@ -554,6 +595,8 @@ dsl_fhe/
     simple/                          # Basic cipher operations (compilable, runnable)
       shared.niob, client.niob, server.niob
       nb_out/                        # Generated C++ + build
+    composed-ops/                    # Modules: `use simple`, adds one stage over its ops
+      shared.niob, client.niob, server.niob
     fhe-NetworkMonitor/              # KitNET anomaly detection (compilable, runnable)
       shared.niob, client.niob, server.niob
       nb_out/                        # Generated C++ + build

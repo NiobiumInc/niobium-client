@@ -13,6 +13,8 @@
 // Slot rotations and multiplications implement the matrix operations.
 //============================================================================
 
+module ml_inference_fhe
+
 use shared::*
 
 // ============================================================================

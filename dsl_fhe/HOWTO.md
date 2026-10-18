@@ -159,6 +159,16 @@ Before writing any `.niob` code, read the reference C++ to identify:
 
 This file contains everything shared between client and server.
 
+### Module
+
+Every file of the example names its module (the same name in all three);
+another example can then `use my_example` and refer to `my_example::name`.
+See "Modules" in [NB_LANGUAGE.md](NB_LANGUAGE.md).
+
+```nb
+module my_example
+```
+
 ### Constants
 
 ```nb
@@ -245,6 +255,8 @@ and point `-DLOCAL_SRC_DIR=...` at it so the example stays self-contained.
 ### Scheme Configuration
 
 ```nb
+module my_example
+
 use shared::*
 
 scheme CKKS {
@@ -347,6 +359,8 @@ fn decrypt_decode(inst: Instance)
 ### Computation Stage
 
 ```nb
+module my_example
+
 use shared::*
 
 // Wrapper for the external MLP function
