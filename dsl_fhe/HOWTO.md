@@ -402,7 +402,7 @@ my-example:
 	@echo "=== Building my-example (C++ → binaries) ==="
 	@mkdir -p $(MY_NB_OUT)/build
 	@cd $(MY_NB_OUT)/build && \
-		cmake .. -DNIOBIUM_CLIENT_ROOT=$(NIOBIUM_CLIENT_ROOT) \
+		cmake .. $(NB_CMAKE_FLAGS) \
 		         -DLOCAL_SRC_DIR=$(MY_LOCAL_SRCS) && \
 		$(MAKE) -j$(NPROC) 2>&1
 	@echo ""

@@ -879,6 +879,34 @@ def test_bootstrap_budget_override_rejected():
     except CodegenError as e:
         assert "bootstrap_budget" in str(e)
 
+def test_cmake_dependency_overrides():
+    """The generated CMake takes OPENFHE_INSTALL_DIR and
+    NIOBIUM_CLIENT_FHETCH_DIR, defaulting both under NIOBIUM_CLIENT_ROOT, so a
+    parent build (niobium-compiler) can supply its own trees. Every OpenFHE
+    and FHETCH path must derive from those two, never from the root directly."""
+    files = compile_str("""
+    struct Instance { ring_dim: u32 }
+    wire EncOut { ciphertext: enc<f64> }
+    fn encdir(inst: Instance) -> path { "io" / "encrypted" }
+    @client @stage(name: "enc")
+    fn enc_stage(inst: Instance) {
+        let ct: enc<f64> = zero()
+        save(EncOut { ciphertext: ct }, to: encdir(inst) / "input.bin")
+    }
+    """)
+    cmake = files["CMakeLists.txt"]
+    assert 'if(NOT OPENFHE_INSTALL_DIR)' in cmake
+    assert 'set(OPENFHE_INSTALL_DIR "${NIOBIUM_CLIENT_ROOT}/vendor/lib/openfhe")' in cmake
+    assert 'if(NOT NIOBIUM_CLIENT_FHETCH_DIR)' in cmake
+    assert 'set(NIOBIUM_CLIENT_FHETCH_DIR "${NIOBIUM_CLIENT_ROOT}/vendor/niobium-fhetch")' in cmake
+    assert 'set(OPENFHE_LIBRARY_PATH "${OPENFHE_INSTALL_DIR}/lib")' in cmake
+    assert 'set(OPENFHE_INCLUDE_PATH "${OPENFHE_INSTALL_DIR}/include/openfhe")' in cmake
+    assert 'set(FHETCH_INCLUDE_PATH "${NIOBIUM_CLIENT_FHETCH_DIR}/include")' in cmake
+    assert '"${NIOBIUM_CLIENT_FHETCH_DIR}/build")' in cmake
+    assert "${NIOBIUM_CLIENT_ROOT}/vendor/lib/openfhe/" not in cmake
+    assert "${NIOBIUM_CLIENT_ROOT}/vendor/niobium-fhetch/" not in cmake
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_")]
     passed = 0

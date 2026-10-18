@@ -109,7 +109,11 @@ The CMakeLists.txt auto-detects `NIOBIUM_CLIENT_ROOT` by walking up from
 It then links the Niobium-instrumented OpenFHE (`vendor/lib/openfhe`), the
 FHETCH client library `libnbfhetch` (`vendor/niobium-fhetch`), and — for
 `@hardware` server stages — `libniobium_client_autofacade` (whole-archive) plus
-`yaml-cpp`. No hardcoded paths.
+`yaml-cpp`. No hardcoded paths. A parent build that vendors this client
+(niobium-compiler) passes `-DOPENFHE_INSTALL_DIR` and
+`-DNIOBIUM_CLIENT_FHETCH_DIR` -- the knobs the client's own CMake takes -- so
+the OpenFHE install and the niobium-fhetch headers come from its trees; the
+Makefile forwards both (`NB_CMAKE_FLAGS`).
 
 ### Target: the Niobium *client* API (libnbfhetch), not the compiler
 

@@ -433,12 +433,23 @@ if(NOT DEFINED NIOBIUM_CLIENT_ROOT)
   endif()
 endif()
 
-set(OPENFHE_LIBRARY_PATH "${{NIOBIUM_CLIENT_ROOT}}/vendor/lib/openfhe/lib")
-set(OPENFHE_INCLUDE_PATH "${{NIOBIUM_CLIENT_ROOT}}/vendor/lib/openfhe/include/openfhe")
+# A parent build that vendors this client (niobium-compiler) supplies its own
+# OpenFHE install and niobium-fhetch checkout in place of the client's vendored
+# copies, through the two knobs the client's own CMake takes. Left unset, both
+# resolve under NIOBIUM_CLIENT_ROOT.
+if(NOT OPENFHE_INSTALL_DIR)
+  set(OPENFHE_INSTALL_DIR "${{NIOBIUM_CLIENT_ROOT}}/vendor/lib/openfhe")
+endif()
+if(NOT NIOBIUM_CLIENT_FHETCH_DIR)
+  set(NIOBIUM_CLIENT_FHETCH_DIR "${{NIOBIUM_CLIENT_ROOT}}/vendor/niobium-fhetch")
+endif()
+
+set(OPENFHE_LIBRARY_PATH "${{OPENFHE_INSTALL_DIR}}/lib")
+set(OPENFHE_INCLUDE_PATH "${{OPENFHE_INSTALL_DIR}}/include/openfhe")
 set(OPENFHE_LIBRARIES OPENFHEpke OPENFHEcore OPENFHEbinfhe)
 
 # FHETCH client library headers (niobium/compiler.h, fhetch_api.h, ...).
-set(FHETCH_INCLUDE_PATH "${{NIOBIUM_CLIENT_ROOT}}/vendor/niobium-fhetch/include")
+set(FHETCH_INCLUDE_PATH "${{NIOBIUM_CLIENT_FHETCH_DIR}}/include")
 
 include_directories(${{CMAKE_CURRENT_SOURCE_DIR}})
 include_directories(${{OPENFHE_INCLUDE_PATH}})
@@ -454,7 +465,7 @@ include_directories(${{FHETCH_INCLUDE_PATH}})
 set(FHETCH_LIB_DIRS
   "${{NIOBIUM_CLIENT_ROOT}}/build/vendor/niobium-fhetch"
   "${{NIOBIUM_CLIENT_ROOT}}/build/_deps/niobium-fhetch-build"
-  "${{NIOBIUM_CLIENT_ROOT}}/vendor/niobium-fhetch/build")
+  "${{NIOBIUM_CLIENT_FHETCH_DIR}}/build")
 find_library(NBFHETCH_LIB
   NAMES nbfhetch
   PATHS ${{FHETCH_LIB_DIRS}}

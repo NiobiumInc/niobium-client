@@ -92,7 +92,7 @@ instrumentation generated automatically. It targets the open-source client
 (`libnbfhetch`) via cooperative auto-tagging — no proprietary-compiler
 dependency. Its examples build self-contained (`make -C dsl_fhe examples`);
 ml-inference and fhe-NetworkMonitor build against stub models (real
-model/weights are an opt-in via `NIOBIUM_COMPILER_ROOT`).
+model/weights are an opt-in via `SUBMISSION_REPO`).
 
 | File | Purpose |
 |---|---|
