@@ -151,6 +151,12 @@ def test_error_unterminated_string():
         pass
 
 
+def test_module_keyword():
+    toks = lex("module fraud_flag")
+    assert toks[0].type == TT.MODULE and toks[1].type == TT.IDENT
+    assert toks[1].value == "fraud_flag"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_")]
     passed = 0

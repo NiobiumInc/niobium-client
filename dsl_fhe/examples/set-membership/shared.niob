@@ -29,6 +29,8 @@
 // Instance profiles
 // ============================================================================
 
+module set_membership
+
 enum Profile { Exact, Soundex, ExactFull }
 
 struct Instance {

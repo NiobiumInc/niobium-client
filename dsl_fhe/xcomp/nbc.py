@@ -20,6 +20,7 @@ from .parser import parse
 from .semantic import analyze as semantic_analyze
 from .codegen import generate
 from .errors import CompileError
+from .modules import load_program
 
 
 # One-line pointer to the design skill. Printed to stderr by check/compile so an
@@ -70,22 +71,18 @@ def cmd_parse(args):
 def cmd_check(args):
     """Parse and run semantic analysis on input files."""
     _print_design_banner()
-    combined_source, tokens = _lex_all(args.files)
-    if tokens is None:
-        return 1
-
     try:
-        program = parse(tokens)
+        program, loader = load_program(args.files, args.module_path)
         sa = semantic_analyze(program)
         if sa.errors.has_errors():
             print(sa.errors.report(), file=sys.stderr)
             return 1
-        for w in sa.errors.warnings:
+        for w in loader.warnings + sa.errors.warnings:
             print(w, file=sys.stderr)
         for n in sa.errors.notes:
             print(n, file=sys.stderr)
         print(f"OK: {sum(1 for i in program.items)} declarations, "
-              f"{len(sa.errors.warnings)} warnings, 0 errors.")
+              f"{len(loader.warnings) + len(sa.errors.warnings)} warnings, 0 errors.")
         return 0
     except CompileError as e:
         print(e.format(), file=sys.stderr)
@@ -95,12 +92,8 @@ def cmd_check(args):
 def cmd_compile(args):
     """Compile .niob files to OpenFHE C++."""
     _print_design_banner()
-    combined_source, tokens = _lex_all(args.files)
-    if tokens is None:
-        return 1
-
     try:
-        program = parse(tokens)
+        program, loader = load_program(args.files, args.module_path)
         sa = semantic_analyze(program)
 
         if sa.errors.has_errors():
@@ -109,8 +102,9 @@ def cmd_compile(args):
 
         files = generate(program, sa)
 
-        # Warnings from analysis AND code generation (heuristic fallbacks).
-        for w in sa.errors.warnings:
+        # Warnings from module loading, analysis AND code generation
+        # (heuristic fallbacks).
+        for w in loader.warnings + sa.errors.warnings:
             print(w, file=sys.stderr)
         for n in sa.errors.notes:
             print(n, file=sys.stderr)
@@ -131,29 +125,6 @@ def cmd_compile(args):
         return 1
 
 
-def _lex_all(files: list[str]) -> tuple[str, list[Token] | None]:
-    """Lex all input files and merge token streams."""
-    all_tokens: list[Token] = []
-    for path in files:
-        source = Path(path).read_text()
-        try:
-            tokens = lex(source, path)
-            # Remove the EOF token from all but the last file
-            all_tokens.extend(t for t in tokens if t.type != TT.EOF)
-        except CompileError as e:
-            print(e.format(), file=sys.stderr)
-            return "", None
-
-    # Add a single EOF at the end
-    if all_tokens:
-        all_tokens.append(Token(TT.EOF, "", all_tokens[-1].loc))
-    else:
-        from .errors import SourceLocation
-        all_tokens.append(Token(TT.EOF, "", SourceLocation()))
-
-    return "", all_tokens
-
-
 def _print_ast(node, indent=0):
     """Pretty-print an AST node."""
     prefix = "  " * indent
@@ -163,13 +134,17 @@ def _print_ast(node, indent=0):
     from . import ast_nodes as ast
 
     if isinstance(node, ast.Program):
-        print(f"{prefix}Program ({len(node.items)} items)")
+        mod = f" module {node.module_name}" if node.module_name else ""
+        print(f"{prefix}Program{mod} ({len(node.items)} items)")
         for item in node.items:
             _print_ast(item, indent + 1)
 
     elif isinstance(node, ast.UseDecl):
-        path = "::".join(node.module_path)
-        print(f"{prefix}Use {path}::{node.imported}")
+        if node.is_module_import:
+            print(f"{prefix}Use module {node.module_path[0]}")
+        else:
+            path = "::".join(node.module_path)
+            print(f"{prefix}Use {path}::{node.imported}")
 
     elif isinstance(node, ast.ConstDecl):
         print(f"{prefix}Const {node.name}")
@@ -220,14 +195,25 @@ def main():
     p_parse = subparsers.add_parser("parse", help="Parse and print AST")
     p_parse.add_argument("files", nargs="+", help="Input .niob files")
 
+    # The module search path: where `use <module>` finds the files declaring
+    # `module <name>` (each directory and one level below it). Given
+    # directories come first; the parent of the inputs' directory and the
+    # inputs' directory itself are always searched after them.
+    module_path_help = ("Directory searched for `use`d modules (repeatable); "
+                        "the inputs' parent directory is always searched too")
+
     # check
     p_check = subparsers.add_parser("check", help="Semantic analysis only")
     p_check.add_argument("files", nargs="+", help="Input .niob files")
+    p_check.add_argument("--module-path", action="append", default=[],
+                         metavar="DIR", help=module_path_help)
 
     # compile
     p_compile = subparsers.add_parser("compile", help="Compile to OpenFHE C++")
     p_compile.add_argument("files", nargs="+", help="Input .niob files")
     p_compile.add_argument("--outdir", default="nb_out", help="Output directory")
+    p_compile.add_argument("--module-path", action="append", default=[],
+                           metavar="DIR", help=module_path_help)
 
     args = parser.parse_args()
 

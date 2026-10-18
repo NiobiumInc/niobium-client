@@ -316,6 +316,44 @@ def test_cast_expr():
     assert isinstance(let.value, ast.CastExpr)
 
 
+def test_module_decl():
+    prog = parse_str("module fraud_flag\nuse shared::*\nuse set_membership\nconst X: u32 = 1")
+    assert prog.module_name == "fraud_flag"
+    # The declaration is recorded on the program, not kept as an item.
+    assert [type(i).__name__ for i in prog.items] == ["UseDecl", "UseDecl", "ConstDecl"]
+    glob, imp = prog.items[0], prog.items[1]
+    assert not glob.is_module_import and glob.module_path == ["shared"] and glob.imported == "*"
+    assert imp.is_module_import and imp.module_path == ["set_membership"]
+
+
+def test_module_decl_conflict_is_a_parse_error():
+    try:
+        parse_str("module a\nmodule b")
+        assert False, "expected ParseError"
+    except Exception as e:
+        assert "already declared module 'a'" in str(e)
+
+
+def test_qualified_names():
+    prog = parse_str("""
+    fn g(inst: lib::Instance) -> lib::Score { lib::Score { v: 1.0 } }
+    fn f(inst: lib::Instance) -> reads(lib::EncIn), writes(lib::EncOut) {
+        let w = load(lib::EncIn, from: lib::encdir(inst) / "x.bin")
+        let s = lib::Score { v: 1.0 }
+        match inst.size { lib::Toy => s, _ => s }
+    }
+    """)
+    g, fn = prog.items
+    assert g.params[0].type_ann.name == "lib::Instance"
+    assert g.return_type.name == "lib::Score"
+    assert [t.type_name for s in fn.io_specs for t in s.types] == ["lib::EncIn", "lib::EncOut"]
+    let_w, let_s, m = fn.body.stmts
+    assert let_w.value.args[0].value.name == "lib::EncIn"
+    assert let_w.value.args[1].value.left.func.name == "lib::encdir"
+    assert isinstance(let_s.value, ast.StructLiteral) and let_s.value.type_name == "lib::Score"
+    assert m.arms[0].pattern.name == "lib::Toy"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_")]
     passed = 0

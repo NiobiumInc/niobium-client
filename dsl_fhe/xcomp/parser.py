@@ -84,11 +84,21 @@ class Parser:
     def parse_program(self) -> ast.Program:
         prog = ast.Program(loc=self.loc())
         while not self.at(TT.EOF):
-            prog.items.append(self.parse_top_level_item())
+            item = self.parse_top_level_item()
+            if isinstance(item, ast.ModuleDecl):
+                if prog.module_name and prog.module_name != item.name:
+                    raise ParseError(
+                        f"file declares module {item.name!r} but already "
+                        f"declared module {prog.module_name!r}", item.loc)
+                prog.module_name = item.name
+                continue
+            prog.items.append(item)
         return prog
 
     def parse_top_level_item(self) -> ast.Node:
         tt = self.peek_type()
+        if tt == TT.MODULE:
+            return self.parse_module_decl()
         if tt == TT.USE:
             return self.parse_use_decl()
         if tt == TT.CONST:
@@ -115,22 +125,59 @@ class Parser:
             self.loc(),
         )
 
-    # ----- Use -----
+    # ----- Module / Use -----
+
+    def parse_module_decl(self) -> ast.ModuleDecl:
+        loc = self.loc()
+        self.expect(TT.MODULE)
+        name = self.expect(TT.IDENT, "module name").value
+        return ast.ModuleDecl(loc=loc, name=name)
 
     def parse_use_decl(self) -> ast.UseDecl:
         loc = self.loc()
         self.expect(TT.USE)
         path = [self.expect(TT.IDENT).value]
+        explicit = False
         while self.match(TT.COLONCOLON):
+            explicit = True
             if self.at(TT.STAR):
                 self.advance()
-                return ast.UseDecl(loc=loc, module_path=path, imported="*")
+                return ast.UseDecl(loc=loc, module_path=path, imported="*",
+                                   explicit_path=True)
             path.append(self.expect(TT.IDENT).value)
         # If no ::*, the last element is the imported name
         if len(path) > 1:
             imported = path.pop()
-            return ast.UseDecl(loc=loc, module_path=path, imported=imported)
-        return ast.UseDecl(loc=loc, module_path=path, imported="*")
+            return ast.UseDecl(loc=loc, module_path=path, imported=imported,
+                               explicit_path=True)
+        return ast.UseDecl(loc=loc, module_path=path, imported="*",
+                           explicit_path=explicit)
+
+    # ----- Qualified names -----
+
+    def parse_qualified_name(self) -> str:
+        """IDENT ( '::' IDENT )*  ->  "a::b::c".
+
+        A qualified name refers to a declaration of an imported module
+        (`fraud_flag::encdir`); a bare one to this module's own or a builtin."""
+        parts = [self.expect(TT.IDENT).value]
+        while self.at(TT.COLONCOLON) and self.peek_at(1).type == TT.IDENT:
+            self.advance()
+            parts.append(self.advance().value)
+        return "::".join(parts)
+
+    def _peek_qualified_name(self) -> tuple[str, int]:
+        """The qualified name starting at the current token, without consuming
+        it, and the number of tokens it spans (0 when not at an IDENT)."""
+        if not self.at(TT.IDENT):
+            return "", 0
+        parts = [self.peek().value]
+        n = 1
+        while (self.peek_at(n).type == TT.COLONCOLON
+               and self.peek_at(n + 1).type == TT.IDENT):
+            parts.append(self.peek_at(n + 1).value)
+            n += 2
+        return "::".join(parts), n
 
     # ----- Extern -----
 
@@ -427,11 +474,13 @@ class Parser:
     def parse_io_type(self) -> ast.IoType:
         loc = self.loc()
         # Could be a type name or a path expression
-        # Type name: uppercase IDENT not followed by (
-        if (self.at(TT.IDENT)
-            and self.peek().value[0].isupper()
-            and self.peek_at(1).type != TT.LPAREN):
-            name = self.advance().value
+        # Type name: uppercase IDENT (its last component, when qualified
+        # with a module) not followed by (
+        qname, span = self._peek_qualified_name()
+        if (span
+            and qname.rsplit("::", 1)[-1][0].isupper()
+            and self.peek_at(span).type != TT.LPAREN):
+            name = self.parse_qualified_name()
             index = None
             # Check for [index]
             if self.match(TT.LBRACKET):
@@ -516,7 +565,7 @@ class Parser:
             return ast.TupleType(loc=loc, elements=elems)
 
         if tt == TT.IDENT:
-            name = self.advance().value
+            name = self.parse_qualified_name()
             sub = None
             if self.match(TT.DOT):
                 sub = self.expect(TT.IDENT).value
@@ -672,7 +721,7 @@ class Parser:
                 loc=loc, value=ast.StringLiteral(loc=loc, value=self.advance().value)
             )
         if self.at(TT.IDENT):
-            name = self.advance().value
+            name = self.parse_qualified_name()
             if name == "_":
                 return ast.WildcardPattern(loc=loc)
             if self.at(TT.LBRACE):
@@ -947,12 +996,12 @@ class Parser:
             return self.parse_match_expr()
 
         if tt == TT.IDENT:
-            name = self.advance().value
-            # Check for struct literal: Name { ... }
+            name = self.parse_qualified_name()
+            # Check for struct literal: Name { ... } (or module::Name { ... })
             # Either name is a known type or we see Name { ident: ... } pattern
             if self.at(TT.LBRACE) and (
                 name in self.known_types
-                or (name[0].isupper()
+                or (name.rsplit("::", 1)[-1][0].isupper()
                     and self.peek_at(1).type == TT.IDENT
                     and self.peek_at(2).type in (TT.COLON, TT.COMMA, TT.RBRACE))
             ):

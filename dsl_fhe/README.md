@@ -180,7 +180,14 @@ dsl_fhe/
       client.niob                        # Encrypt two scalars, decrypt+verify
       server.niob                        # Operation dispatch via match
       nb_out/                          # Generated C++ + build
+    composed-ops/                      # Modules: `use simple`, one stage over simple's ops
+      shared.niob, client.niob, server.niob
+      nb_out/                          # Generated C++ + build (simple_* stages + compute_pair)
 ```
+
+Every example declares its module (`module simple`, `module fraud_flag`,
+...); `composed-ops` imports one with `use simple` and refers to it as
+`simple::name`. See "Modules" in [NB_LANGUAGE.md](NB_LANGUAGE.md).
 
 ## Build and Run
 
@@ -254,6 +261,9 @@ NBROOT=/path/to/niobium-client          # a *built* checkout
 PYTHONPATH="$NBROOT/dsl_fhe" python3 -m xcomp.nbc compile \
     shared.niob client.niob server.niob --outdir nb_out
 
+#    A program that `use`s another module finds it through the module search
+#    path: the parent of its own directory by default, plus any
+#    --module-path DIR given here.
 # 2. Configure + build. -DNIOBIUM_CLIENT_ROOT is required outside the repo tree
 #    (nbc's auto-detect only locates the root when nb_out sits inside it).
 cmake -S nb_out -B nb_out/build -DNIOBIUM_CLIENT_ROOT="$NBROOT"
@@ -493,6 +503,26 @@ fn dispatch(op: Operation, ct1: enc<f64>, ct2: enc<f64>, imm: f64) -> enc<f64> {
     }
 }
 ```
+
+### `composed-ops/` — Modules
+
+A module that composes another. `use simple` imports the simple cipher-ops
+module through the module search path (`examples/simple/*.niob` declare
+`module simple`); every simple declaration is referenced as `simple::name`
+and lands in `namespace simple` of the generated program, so the two modules'
+same-named path helpers (`keydir`, `encdir`, ...) never collide. simple's own
+stages come along as `simple_key_generation`, `simple_encrypt`,
+`simple_compute` and `simple_decrypt_verify` binaries; `composed-ops` adds
+only `compute_pair`, which applies two of simple's operations through
+`simple::dispatch` and sums them.
+
+```bash
+cd examples/composed-ops/nb_out/build
+./simple_key_generation 0 3 && ./simple_encrypt 0 3.0 5.0
+./compute_pair 0 0 1 && ./simple_decrypt_verify 0 23.0   # ADD + MUL = 8 + 15
+```
+
+`make test-composed` runs this (part of `make examples`).
 
 ### `password-retrieval/` — FHE Password Retrieval
 

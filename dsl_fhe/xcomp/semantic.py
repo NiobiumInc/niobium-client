@@ -10,6 +10,7 @@ Performs:
 
 from __future__ import annotations
 from . import ast_nodes as ast
+from .modules import fqn
 from .nb_types import (
     NbType, TypeKind, Domain, SymbolTable, Symbol,
     PRIMITIVE_MAP, VOID, BOOL, U32, I64, F64, STRING, PATH, UNKNOWN,
@@ -316,35 +317,43 @@ class SemanticAnalyzer:
     # ===== Pass 1: Collect types =====
 
     def _pass_collect_types(self, program: ast.Program):
+        # Every table is keyed by the declaration's canonical name
+        # (`<module>::name`, bare in the root module); the module loader
+        # rewrote every reference to that form, so lookups need no module
+        # context and two modules may declare the same name.
         for item in program.items:
             if isinstance(item, ast.EnumDecl):
-                self.enum_types[item.name] = item.variants
-                ty = NbType(TypeKind.ENUM, name=item.name, variants=item.variants)
-                self.type_registry[item.name] = ty
+                q = fqn(item.module, item.name)
+                self.enum_types[q] = item.variants
+                ty = NbType(TypeKind.ENUM, name=q, variants=item.variants)
+                self.type_registry[q] = ty
                 # Register each variant as a constant
                 for v in item.variants:
-                    self.global_scope.define(Symbol(v, ty, is_const=True, const_value=v))
+                    self.global_scope.define(Symbol(fqn(item.module, v), ty,
+                                                    is_const=True, const_value=v))
 
             elif isinstance(item, ast.StructDecl):
+                q = fqn(item.module, item.name)
                 fields = {}
                 for f in item.fields:
                     fields[f.name] = self._resolve_type_expr(f.type_ann)
-                ty = NbType(TypeKind.STRUCT, name=item.name, fields=fields)
-                self.type_registry[item.name] = ty
+                ty = NbType(TypeKind.STRUCT, name=q, fields=fields)
+                self.type_registry[q] = ty
 
             elif isinstance(item, ast.WireDecl):
+                q = fqn(item.module, item.name)
                 fields = {}
                 for f in item.fields:
                     fields[f.name] = self._resolve_type_expr(f.type_ann)
-                ty = NbType(TypeKind.WIRE, name=item.name, fields=fields)
-                self.type_registry[item.name] = ty
-                self.wire_types.add(item.name)
+                ty = NbType(TypeKind.WIRE, name=q, fields=fields)
+                self.type_registry[q] = ty
+                self.wire_types.add(q)
 
             elif isinstance(item, ast.ConstDecl):
                 ty = self._resolve_type_expr(item.type_ann)
                 val = self._eval_const(item.value)
                 self.global_scope.define(
-                    Symbol(item.name, ty, is_const=True, const_value=val)
+                    Symbol(fqn(item.module, item.name), ty, is_const=True, const_value=val)
                 )
 
             elif isinstance(item, ast.SchemeDecl):
@@ -367,7 +376,7 @@ class SemanticAnalyzer:
     def _pass_collect_functions(self, program: ast.Program):
         for item in program.items:
             if isinstance(item, ast.FnDecl):
-                self.fn_decls[item.name] = item
+                self.fn_decls[fqn(item.module, item.name)] = item
                 param_types = []
                 for p in item.params:
                     pt = self._resolve_type_expr(p.type_ann) if p.type_ann else UNKNOWN
@@ -375,7 +384,8 @@ class SemanticAnalyzer:
                 ret = self._resolve_type_expr(item.return_type) if item.return_type else VOID
                 fn_type = NbType(TypeKind.FN, param_types=param_types, return_type=ret)
                 domain = self._fn_domain(item)
-                self.global_scope.define(Symbol(item.name, fn_type, domain=domain))
+                self.global_scope.define(Symbol(fqn(item.module, item.name), fn_type,
+                                                domain=domain))
 
     # ===== Pass 3: Check function bodies =====
 

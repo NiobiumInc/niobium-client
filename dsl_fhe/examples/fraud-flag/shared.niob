@@ -22,6 +22,8 @@
 //     what it buys in q_i / depth).
 //============================================================================
 
+module fraud_flag
+
 enum Profile { Toy, Full }
 
 struct Instance {

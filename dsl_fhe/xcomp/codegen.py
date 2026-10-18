@@ -16,6 +16,7 @@ from .builtins_registry import (
 # Backwards-compatible alias (pre-registry name).
 PLAINTEXT_ONLY_FNS = PLAINTEXT_RETURN_FNS
 from .semantic import SemanticAnalyzer
+from .modules import fqn, base_name, module_of
 from .nb_types import Domain
 
 
@@ -156,12 +157,77 @@ class CodeGenerator:
         # {"stem": probe name, "path": C++ path expr, "field": optional
         #  "{field}.bin" suffix for multi-field dir saves}.
         self._hw_stage_saves: list[dict] = []
+        # The module the program being compiled declares ("" = none: the
+        # global namespace). Imported modules' declarations are emitted in
+        # `namespace <module>` and their stages prefixed `<module>_`.
+        self.root_module: str = program.module_name
+        # Modules in emission order: imports (dependencies first) then the
+        # root, which is how the loader merged the items.
+        self.module_order: list[str] = []
+        for item in program.items:
+            if item.module not in self.module_order:
+                self.module_order.append(item.module)
+        if not self.module_order:
+            self.module_order = [self.root_module]
         self._classify_items()
-        # User-function signatures: name -> FnDecl. Lets encrypted-ness (and
-        # vector-ness) of user-fn calls resolve from declared return types
-        # instead of hardcoded name sets.
-        self._fn_sigs: dict[str, ast.FnDecl] = {f.name: f for f in self.shared_fns}
-        self._fn_sigs.update({s.fn.name: s.fn for s in self.stages})
+        # User-function signatures: canonical name -> FnDecl. Lets
+        # encrypted-ness (and vector-ness) of user-fn calls resolve from
+        # declared return types instead of hardcoded name sets. Every
+        # reference in the AST already carries the canonical name (the
+        # module loader rewrote it), so a bare lookup needs no module.
+        self._fn_sigs: dict[str, ast.FnDecl] = {
+            self._decl_name(f): f for f in self.shared_fns}
+        self._fn_sigs.update({self._decl_name(s.fn): s.fn for s in self.stages})
+
+    # ----- Modules -----
+
+    @staticmethod
+    def _decl_name(decl) -> str:
+        """Canonical (module-qualified) name of a declaration."""
+        return fqn(decl.module, decl.name)
+
+    def _wire_by_name(self, name: str):
+        """The wire declaration a canonical name refers to, or None."""
+        return next((w for w in self.wires if self._decl_name(w) == name), None)
+
+    def _module_fn_names(self, module: str) -> set[str]:
+        return {f.name for f in self.shared_fns if f.module == module}
+
+    @staticmethod
+    def _instance_module(stage: StageInfo) -> str | None:
+        """The module declaring the Instance type a stage takes, when its
+        `inst` parameter names one (`simple::Instance` -> "simple")."""
+        for p in stage.fn.params:
+            if isinstance(p.type_ann, ast.NamedType) and (
+                    p.name == "inst" or base_name(p.type_ann.name) == "Instance"):
+                return module_of(p.type_ann.name)
+        return None
+
+    def _helper_module(self, stage: StageInfo, *names: str) -> tuple[str, set[str]]:
+        """The module whose shared functions main() calls for a stage's
+        directory helpers: the stage's own module when it declares any of
+        `names`, else the module of the stage's Instance type (a module that
+        composes another may lean on its layout), else the stage's module."""
+        own = stage.fn.module
+        own_fns = self._module_fn_names(own)
+        if own_fns & set(names):
+            return own, own_fns
+        inst_mod = self._instance_module(stage)
+        if inst_mod is not None and inst_mod != own:
+            inst_fns = self._module_fn_names(inst_mod)
+            if inst_fns & set(names):
+                return inst_mod, inst_fns
+        return own, own_fns
+
+    def _open_namespace(self, module: str):
+        if module:
+            self.wl(f"namespace {module} {{")
+            self.blank()
+
+    def _close_namespace(self, module: str):
+        if module:
+            self.wl(f"}}  // namespace {module}")
+            self.blank()
 
     def _classify_items(self):
         for item in self.program.items:
@@ -219,8 +285,13 @@ class CodeGenerator:
                 hardware = ann.args
         if stage_name is None:
             return None
+        stage_name = stage_name if isinstance(stage_name, str) else fn.name
+        # An imported module's stage keeps its own binary, named after the
+        # module so two modules' `compute` stages cannot collide.
+        if fn.module and fn.module != self.root_module:
+            stage_name = f"{fn.module}_{stage_name}"
         return StageInfo(
-            name=stage_name if isinstance(stage_name, str) else fn.name,
+            name=stage_name,
             fn=fn,
             domain=domain,
             hardware=hardware,
@@ -576,16 +647,34 @@ endforeach()
         self._gen_utility_templates()
         self.blank()
 
+        for module in self.module_order:
+            self._open_namespace(module)
+            self._gen_module_decls(module)
+            self._close_namespace(module)
+
+        self.wl(f"#endif  // {guard}")
+        return self.out.getvalue()
+
+    def _gen_module_decls(self, module: str):
+        """One module's constants, enums, structs, wires, wire twins and
+        function prototypes, in that order; emitted inside the module's
+        namespace by the caller (bare for the root module)."""
+        consts = [c for c in self.consts if c.module == module]
+        enums = [e for e in self.enums if e.module == module]
+        structs = [s for s in self.structs if s.module == module]
+        wires = [w for w in self.wires if w.module == module]
+        shared_fns = [f for f in self.shared_fns if f.module == module]
+
         # Constants
-        for c in self.consts:
+        for c in consts:
             cpp_type = self._type_to_cpp(c.type_ann)
             cpp_val = self._expr_to_cpp(c.value)
             self.wl(f"constexpr {cpp_type} {c.name} = {cpp_val};")
-        if self.consts:
+        if consts:
             self.blank()
 
         # Enums
-        for e in self.enums:
+        for e in enums:
             self.wl(f"enum {e.name} {{")
             self.indent()
             for i, v in enumerate(e.variants):
@@ -601,7 +690,7 @@ endforeach()
         SKIP_WIRE_FIELDS = {
             "CryptoParams": {"eval_mult_key", "eval_rot_keys"},
         }
-        for s in self.structs + self.wires:
+        for s in structs + wires:
             skip_fields = SKIP_WIRE_FIELDS.get(s.name, set())
             self.wl(f"struct {s.name} {{")
             self.indent()
@@ -619,7 +708,7 @@ endforeach()
         # key/context fields are dropped (no crypto in the reference).
         KEY_TYPES = {"CryptoContext", "PublicKey", "SecretKey",
                      "EvalMultKey", "EvalAutomorphismKeys"}
-        for s in self.wires:
+        for s in wires:
             self.wl(f"struct {s.name}Ref {{")
             self.indent()
             for f in s.fields:
@@ -641,7 +730,7 @@ endforeach()
 
         # Forward declarations for shared functions (with default parameter values)
         # Skip extern wrappers — they delegate to external C++ functions
-        for fn in self.shared_fns:
+        for fn in shared_fns:
             if self._is_extern_wrapper(fn):
                 continue
             self._gen_fn_decl(fn, with_cc=self._fn_uses_fhe(fn),
@@ -649,12 +738,9 @@ endforeach()
             self.w(";\n")
 
         # Forward declare load_kitnet_model if KitNETModel struct exists
-        if any(s.name == "KitNETModel" for s in self.structs):
+        if any(s.name == "KitNETModel" for s in structs):
             self.wl("KitNETModel load_kitnet_model(std::filesystem::path path);")
         self.blank()
-
-        self.wl(f"#endif  // {guard}")
-        return self.out.getvalue()
 
     def _gen_utility_templates(self):
         """Generate utility template functions in the shared header."""
@@ -912,24 +998,30 @@ endforeach()
         self.wl('#include "nb_shared.h"')
         self.blank()
 
-        for fn in self.shared_fns:
-            # Skip extern wrapper functions — their body is a single extern_call
-            if self._is_extern_wrapper(fn):
-                continue
-            self._current_fn = fn
-            self._local_var_cpp_types.clear()
-            self._declared_vars.clear()
-            self._enc_vars.clear()
-            self._plain_vars.clear()
-            self._wire_vars.clear()
-            self._gen_fn_impl(fn, with_cc=self._fn_uses_fhe(fn))
-            self._current_fn = None
-            self.blank()
+        for module in self.module_order:
+            self._open_namespace(module)
+            for fn in self.shared_fns:
+                if fn.module != module:
+                    continue
+                # Skip extern wrapper functions — their body is a single extern_call
+                if self._is_extern_wrapper(fn):
+                    continue
+                self._current_fn = fn
+                self._local_var_cpp_types.clear()
+                self._declared_vars.clear()
+                self._enc_vars.clear()
+                self._plain_vars.clear()
+                self._wire_vars.clear()
+                self._gen_fn_impl(fn, with_cc=self._fn_uses_fhe(fn))
+                self._current_fn = None
+                self.blank()
 
-        # Generate load_kitnet_model if KitNETModel struct exists
-        if any(s.name == "KitNETModel" for s in self.structs):
-            self._gen_load_kitnet_model()
-            self.blank()
+            # Generate load_kitnet_model if KitNETModel struct exists
+            if any(s.name == "KitNETModel" and s.module == module
+                   for s in self.structs):
+                self._gen_load_kitnet_model()
+                self.blank()
+            self._close_namespace(module)
 
         return self.out.getvalue()
 
@@ -1059,10 +1151,12 @@ endforeach()
         self._enc_vars.clear()
         self._plain_vars.clear()
         self._wire_vars.clear()
+        self._open_namespace(stage.fn.module)
         self._gen_fn_impl(stage.fn, with_cc=(stage.domain == Domain.SERVER))
         self._current_stage_hardware = False
         self._current_fn = None
         self.blank()
+        self._close_namespace(stage.fn.module)
 
         # Generate main()
         self._gen_main(stage)
@@ -1121,42 +1215,57 @@ endforeach()
             self.blank()
             self.wl("namespace nbref {")
             self.blank()
-            # Wire names refer to their plaintext twins inside this namespace.
-            for w in self.wires:
-                self.wl(f"using {w.name} = ::{w.name}Ref;")
-            self.blank()
-
             # Plain twins of every FHE-using user function the stage calls.
             called = {}
             self._collect_called_fns(stage.fn, called)
             twin_fns = [f for f in called.values()
                         if self._fn_uses_fhe(f) and not self._is_extern_wrapper(f)]
-            for fn in twin_fns:
-                self._gen_fn_decl(fn, with_cc=False)
-                self.w(";\n")
-            self.blank()
-            for fn in twin_fns:
-                self._current_fn = fn
-                self._local_var_cpp_types.clear()
-                self._declared_vars.clear()
-                self._enc_vars.clear()
-                self._plain_vars.clear()
-                self._wire_vars.clear()
-                self._gen_fn_impl(fn, with_cc=False)
-                self._current_fn = None
+            # Each module is mirrored as nbref::<module>: the wire aliases
+            # and the twins of that module's functions live there, and a
+            # using-directive makes the module's untwinned declarations
+            # (path helpers, enums, structs) reachable through the same
+            # `<module>::name` the canonical references carry. The root
+            # module without a name is mirrored by nbref itself, as before.
+            for module in self.module_order:
+                self._open_namespace(module)
+                if module:
+                    self.wl(f"using namespace ::{module};")
+                    self.blank()
+                # Wire names refer to their plaintext twins inside this namespace.
+                for w in self.wires:
+                    if w.module == module:
+                        self.wl(f"using {w.name} = ::{self._decl_name(w)}Ref;")
                 self.blank()
 
-            # The stage function itself.
-            self._current_fn = stage.fn
-            self._current_stage_hardware = False
-            self._local_var_cpp_types.clear()
-            self._declared_vars.clear()
-            self._enc_vars.clear()
-            self._plain_vars.clear()
-            self._wire_vars.clear()
-            self._gen_fn_impl(stage.fn, with_cc=False)
-            self._current_fn = None
-            self.blank()
+                mod_twins = [f for f in twin_fns if f.module == module]
+                for fn in mod_twins:
+                    self._gen_fn_decl(fn, with_cc=False)
+                    self.w(";\n")
+                self.blank()
+                for fn in mod_twins:
+                    self._current_fn = fn
+                    self._local_var_cpp_types.clear()
+                    self._declared_vars.clear()
+                    self._enc_vars.clear()
+                    self._plain_vars.clear()
+                    self._wire_vars.clear()
+                    self._gen_fn_impl(fn, with_cc=False)
+                    self._current_fn = None
+                    self.blank()
+
+                if stage.fn.module == module:
+                    # The stage function itself.
+                    self._current_fn = stage.fn
+                    self._current_stage_hardware = False
+                    self._local_var_cpp_types.clear()
+                    self._declared_vars.clear()
+                    self._enc_vars.clear()
+                    self._plain_vars.clear()
+                    self._wire_vars.clear()
+                    self._gen_fn_impl(stage.fn, with_cc=False)
+                    self._current_fn = None
+                    self.blank()
+                self._close_namespace(module)
             self.wl("}  // namespace nbref")
             self.blank()
 
@@ -1170,11 +1279,12 @@ endforeach()
                 call_args.append(p.name if p.name != "batch_id" else "batch_id")
             has_return = self._fn_has_return(stage.fn)
             args_str = ", ".join(call_args)
+            twin = f"nbref::{self._decl_name(stage.fn)}"
             if has_return:
-                self.wl(f"auto result = nbref::{stage.fn.name}({args_str});")
+                self.wl(f"auto result = {twin}({args_str});")
                 self._gen_result_serialization(stage)
             else:
-                self.wl(f"nbref::{stage.fn.name}({args_str});")
+                self.wl(f"{twin}({args_str});")
             self.blank()
             self.wl("return 0;")
             self.dedent()
@@ -1212,20 +1322,26 @@ endforeach()
 
         has_instance_param = any(
             p.name == "inst" or (p.type_ann and isinstance(p.type_ann, ast.NamedType)
-                                  and p.type_ann.name == "Instance")
+                                  and base_name(p.type_ann.name) == "Instance")
             for p in stage.fn.params
         )
 
         if has_instance_param:
-            # Find the enum type used by instance() function
-            size_enum = "InstanceSize"  # default
-            inst_fn = next((f for f in self.shared_fns if f.name == "instance"), None)
+            # Find the enum type used by instance() function, in the module
+            # that declares the stage's Instance type (main() sits outside
+            # the namespace, so the helpers it calls are qualified).
+            module = self._instance_module(stage)
+            if module is None:
+                module = stage.fn.module
+            size_enum = fqn(module, "InstanceSize")  # default
+            inst_fn = next((f for f in self.shared_fns
+                            if f.name == "instance" and f.module == module), None)
             if inst_fn and inst_fn.params:
                 p0_type = inst_fn.params[0].type_ann
                 if isinstance(p0_type, ast.NamedType):
                     size_enum = p0_type.name
             self.wl(f"auto size = static_cast<{size_enum}>(std::stoi(argv[1]));")
-            self.wl("auto inst = instance(size);")
+            self.wl(f"auto inst = {fqn(module, 'instance')}(size);")
             self.blank()
 
         # Parse bool flags
@@ -1261,7 +1377,7 @@ endforeach()
             if p.type_ann and isinstance(p.type_ann, ast.NamedType):
                 # Enum parameter — parse as int and cast
                 enum_name = p.type_ann.name
-                if any(e.name == enum_name for e in self.enums):
+                if any(self._decl_name(e) == enum_name for e in self.enums):
                     if p.default is not None:
                         self.wl(f"{enum_name} {p.name} = static_cast<{enum_name}>((argc > {pos_idx}) ? std::stoi(argv[{pos_idx}]) : {self._expr_to_cpp(p.default)});")
                     else:
@@ -1325,7 +1441,7 @@ endforeach()
         if stage.domain == Domain.SERVER:
             call_args = ["cc"] + call_args
 
-        fn_name = stage.fn.name
+        fn_name = self._decl_name(stage.fn)
         args_str = ", ".join(call_args)
 
         has_return = self._fn_has_return(stage.fn)
@@ -1338,7 +1454,7 @@ endforeach()
             self.wl("const bool _nb_replaying = niobium::compiler().is_cache_valid();")
             if has_return:
                 wire = self._stage_result_wire(stage)
-                result_type = wire.name if wire else "Ciphertext<DCRTPoly>"
+                result_type = self._decl_name(wire) if wire else "Ciphertext<DCRTPoly>"
                 self.wl(f"{result_type} result;")
             self.wl("if (!_nb_replaying) {")
             self.indent()
@@ -1516,8 +1632,8 @@ endforeach()
             for io_type in spec.types:
                 type_name = io_type.type_name
                 # Find the wire type definition
-                wire = next((w for w in self.wires if w.name == type_name), None)
-                if self._is_crypto_params_wire(wire) or type_name == "CryptoParams":
+                wire = self._wire_by_name(type_name)
+                if self._is_crypto_params_wire(wire) or base_name(type_name) == "CryptoParams":
                     self._gen_serialize_crypto_params(stage)
                 elif io_type.index is not None and wire:
                     # Indexed wire type: IntermediateResult[batch_id]
@@ -1528,7 +1644,7 @@ endforeach()
                     # Simple type — serialize directly
                     path_expr = (self._expr_to_cpp(io_type.path_expr)
                                  if io_type.path_expr else self._find_output_dir(stage))
-                    fname = type_name.lower() + ".bin"
+                    fname = base_name(type_name).lower() + ".bin"
                     self.wl(f"Serial::SerializeToFile({path_expr} / \"{fname}\", result, SerType::BINARY);")
 
     def _gen_serialize_crypto_params(self, stage: StageInfo):
@@ -1660,15 +1776,16 @@ endforeach()
         are unaffected: the `ctxtupdir` branch is gated on that helper
         existing.
         """
-        fn_names = {f.name for f in self.shared_fns}
+        module, fn_names = self._helper_module(
+            stage, "ctxtupdir", "ctxtdowndir", "encdir", "iodir")
         # Client uploads flow "up" to the server; server results flow "down".
         if stage.domain == Domain.CLIENT and "ctxtupdir" in fn_names:
-            return "ctxtupdir(inst)"
+            return f"{fqn(module, 'ctxtupdir')}(inst)"
         if "ctxtdowndir" in fn_names:
-            return "ctxtdowndir(inst)"
+            return f"{fqn(module, 'ctxtdowndir')}(inst)"
         if "encdir" in fn_names:
-            return "encdir(inst)"
-        return "iodir(inst)"
+            return f"{fqn(module, 'encdir')}(inst)"
+        return f"{fqn(module, 'iodir')}(inst)"
 
     def _gen_serialize_indexed_wire(self, stage: StageInfo, type_name: str,
                                      wire: ast.WireDecl, index_expr):
@@ -1685,7 +1802,7 @@ endforeach()
         else:
             self.wl(f"// Serialize {type_name}[{idx_cpp}]")
             self.wl(f"auto _idir = {out_dir};")
-            prefix = type_name.lower().replace("encrypted", "cipher_") + "_"
+            prefix = base_name(type_name).lower().replace("encrypted", "cipher_") + "_"
             file_pattern = f'"{prefix}" + std::to_string({idx_cpp}) + ".bin"'
         self.wl("fs::create_directories(_idir);")
         # For single-field wire types, serialize the field directly
@@ -1730,15 +1847,15 @@ endforeach()
                     positional = [a for a in call.args if not a.name]
                     named = {a.name: a.value for a in call.args if a.name}
                     if positional and isinstance(positional[0].value, ast.Ident):
-                        loaded = next((w for w in self.wires
-                                       if w.name == positional[0].value.name), None)
+                        loaded = self._wire_by_name(positional[0].value.name)
                         if self._is_crypto_params_wire(loaded) and "from" in named:
                             return self._expr_to_cpp(named["from"])
-        # Fallback: check which key directory function exists
-        fn_names = {f.name for f in self.shared_fns}
+        # Fallback: check which key directory function exists (main() is
+        # outside the namespace, so the helper is qualified).
+        module, fn_names = self._helper_module(stage, "pubkeydir", "keydir")
         if "pubkeydir" in fn_names:
-            return "pubkeydir(inst)"
-        return "keydir(inst)"
+            return f"{fqn(module, 'pubkeydir')}(inst)"
+        return f"{fqn(module, 'keydir')}(inst)"
 
     def _gen_key_loading(self, stage: StageInfo):
         key_dir = self._find_key_dir(stage)
@@ -1795,8 +1912,7 @@ endforeach()
         for spec in stage.io_specs:
             if spec.kind == "writes":
                 for io_type in spec.types:
-                    wire = next((w for w in self.wires
-                                 if w.name == io_type.type_name), None)
+                    wire = self._wire_by_name(io_type.type_name)
                     if wire:
                         return wire
         return None
@@ -2579,9 +2695,9 @@ endforeach()
             SKIP_WIRE_FIELDS = {
                 "CryptoParams": {"eval_mult_key", "eval_rot_keys"},
             }
-            skip = SKIP_WIRE_FIELDS.get(expr.type_name, set())
+            skip = SKIP_WIRE_FIELDS.get(base_name(expr.type_name), set())
             # Find wire definition for enc field detection
-            wire_def = next((w for w in self.wires if w.name == expr.type_name), None)
+            wire_def = self._wire_by_name(expr.type_name)
             enc_fields = set()
             if wire_def:
                 for wf in wire_def.fields:
@@ -3028,15 +3144,20 @@ endforeach()
             # FHE shared functions need cc as first arg (not in the
             # cleartext reference, which has no crypto context).
             if not self._plain_mode:
-                if fname in FHE_SHARED_FNS:
+                if base_name(fname) in FHE_SHARED_FNS:
                     return f"{fname}(cc, {', '.join(args)})"
-                fhe_fn = next((f for f in self.shared_fns if f.name == fname), None)
+                # An extern wrapper is handled below: the C++ function it
+                # delegates to is global and keeps the extern's own name,
+                # whatever module the wrapper lives in.
+                fhe_fn = next((f for f in self.shared_fns
+                               if self._decl_name(f) == fname
+                               and not self._is_extern_wrapper(f)), None)
                 if fhe_fn and self._fn_uses_fhe(fhe_fn):
                     return f"{fname}(cc, {', '.join(args)})"
 
             # Extern wrapper functions: call the external C++ function with cc
             ext_fn = next((f for f in self.shared_fns
-                           if f.name == fname and self._is_extern_wrapper(f)), None)
+                           if self._decl_name(f) == fname and self._is_extern_wrapper(f)), None)
             if ext_fn:
                 ext_name = self._get_extern_call_name(ext_fn) or fname
                 return f"{ext_name}(cc, {', '.join(args)})"
@@ -3414,7 +3535,7 @@ endforeach()
 
         # Wire lookup — layout is driven by FIELD TYPES, mirroring
         # _gen_serialize_wire (no name-based special cases).
-        wire_def = next((w for w in self.wires if w.name == type_name), None)
+        wire_def = self._wire_by_name(type_name)
 
         # Crypto-parameter wires (any wire carrying a CryptoContext) use the
         # canonical cc/pk/mk/rk key-file layout.
@@ -3598,7 +3719,7 @@ endforeach()
 
         # Look up wire definition for single-ciphertext wire types
         if type_name:
-            wire_def = next((w for w in self.wires if w.name == type_name), None)
+            wire_def = self._wire_by_name(type_name)
             if wire_def:
                 ct_fields = [f for f in wire_def.fields
                              if self._field_kind(f) == "enc"]
@@ -3753,7 +3874,10 @@ endforeach()
             lines.append(f"    parameters.SetFirstModSize({first_mod});")
         ring_dim = scheme_cfg.get("ring_dim", None)
         # Does the Instance struct carry a ring_dim field (dynamic ring size)?
-        inst_struct = next((s for s in self.structs if s.name == "Instance"), None)
+        # The Instance struct of the function being generated's module.
+        _mod = self._current_fn.module if self._current_fn else self.root_module
+        inst_struct = next((s for s in self.structs
+                            if s.name == "Instance" and s.module == _mod), None)
         has_ring_dim_field = bool(inst_struct and any(
             f.name == "ring_dim" for f in inst_struct.fields))
         if ring_dim is not None:
@@ -3880,7 +4004,7 @@ endforeach()
             wire_name = self._load_wire_name(expr.obj)
         if wire_name is None:
             return None
-        wire = next((w for w in self.wires if w.name == wire_name), None)
+        wire = self._wire_by_name(wire_name)
         if wire is None:
             return None
         for f in wire.fields:

@@ -31,6 +31,7 @@ SUBMISSION_REPO ?=
 
 .PHONY: test-compiler examples fetch-by-similarity simple fhe-network-monitor ml-inference \
        set-membership test-set-membership fraud-flag test-fraud \
+       composed-ops test-composed \
        password-retrieval test-simple test-fetch test-nid test-ml test-password test-examples \
        clean help
 
@@ -50,6 +51,9 @@ test-compiler:
 	@echo ""
 	@echo "=== Codegen ==="
 	@python3 $(XCOMP)/tests/test_codegen.py
+	@echo ""
+	@echo "=== Modules ==="
+	@python3 $(XCOMP)/tests/test_modules.py
 	@echo ""
 	@echo "=== End-to-end: parse examples ==="
 	@cd $(XCOMP) && PYTHONPATH=.. python3 -m xcomp.nbc parse ../$(EXAMPLES)/fetch-by-similarity/shared.niob  > /dev/null
@@ -80,6 +84,10 @@ test-compiler:
 	@cd $(XCOMP) && PYTHONPATH=.. python3 -m xcomp.nbc parse ../$(EXAMPLES)/fraud-flag/client.niob  > /dev/null
 	@cd $(XCOMP) && PYTHONPATH=.. python3 -m xcomp.nbc parse ../$(EXAMPLES)/fraud-flag/server.niob  > /dev/null
 	@echo "  PASS  parse fraud-flag/*.niob"
+	@cd $(XCOMP) && PYTHONPATH=.. python3 -m xcomp.nbc parse ../$(EXAMPLES)/composed-ops/shared.niob  > /dev/null
+	@cd $(XCOMP) && PYTHONPATH=.. python3 -m xcomp.nbc parse ../$(EXAMPLES)/composed-ops/client.niob  > /dev/null
+	@cd $(XCOMP) && PYTHONPATH=.. python3 -m xcomp.nbc parse ../$(EXAMPLES)/composed-ops/server.niob  > /dev/null
+	@echo "  PASS  parse composed-ops/*.niob"
 	@echo ""
 	@echo "=== End-to-end: semantic check ==="
 	@cd $(XCOMP) && PYTHONPATH=.. python3 -m xcomp.nbc check \
@@ -110,6 +118,10 @@ test-compiler:
 		../$(EXAMPLES)/fraud-flag/shared.niob \
 		../$(EXAMPLES)/fraud-flag/client.niob \
 		../$(EXAMPLES)/fraud-flag/server.niob
+	@cd $(XCOMP) && PYTHONPATH=.. python3 -m xcomp.nbc check \
+		../$(EXAMPLES)/composed-ops/shared.niob \
+		../$(EXAMPLES)/composed-ops/client.niob \
+		../$(EXAMPLES)/composed-ops/server.niob
 	@echo ""
 	@echo "All tests passed."
 
@@ -122,7 +134,7 @@ test-compiler:
 # but don't produce real results (real model/weights need the submission; see
 # each example's data/README.md). test-examples runs only the examples that
 # produce meaningful, verifiable output.
-examples: simple fetch-by-similarity ml-inference fhe-network-monitor password-retrieval set-membership fraud-flag test-examples
+examples: simple fetch-by-similarity ml-inference fhe-network-monitor password-retrieval set-membership fraud-flag composed-ops test-examples
 
 # --- fetch-by-similarity ---
 
@@ -295,6 +307,30 @@ fraud-flag:
 		$(MAKE) -j$(NPROC) 2>&1
 	@echo ""
 	@echo "Built binaries in $(FRAUD_NB_OUT)/build/"
+
+# --- composed-ops (modules: composes the simple module) ---
+# `use simple` in its sources is resolved through the module search path;
+# nbc searches the inputs' parent directory (examples/) by default, which is
+# where examples/simple/*.niob declare `module simple`.
+
+COMPOSED_NB_OUT := $(EXAMPLES)/composed-ops/nb_out
+
+composed-ops:
+	@echo "=== Compiling composed-ops (DSL → C++, imports module simple) ==="
+	@mkdir -p $(COMPOSED_NB_OUT)
+	@cd $(XCOMP) && PYTHONPATH=.. python3 -m xcomp.nbc compile \
+		../$(EXAMPLES)/composed-ops/shared.niob \
+		../$(EXAMPLES)/composed-ops/client.niob \
+		../$(EXAMPLES)/composed-ops/server.niob \
+		--outdir ../$(COMPOSED_NB_OUT)
+	@echo ""
+	@echo "=== Building composed-ops (C++ → binaries) ==="
+	@mkdir -p $(COMPOSED_NB_OUT)/build
+	@cd $(COMPOSED_NB_OUT)/build && \
+		cmake .. $(NB_CMAKE_FLAGS) && \
+		$(MAKE) -j$(NPROC) 2>&1
+	@echo ""
+	@echo "Built binaries in $(COMPOSED_NB_OUT)/build/"
 
 password-retrieval:
 	@echo "=== Compiling password-retrieval (DSL → C++) ==="
@@ -493,7 +529,30 @@ test-fraud: fraud-flag
 		rm -rf io *_workload_* fhetch_driver_source_* && \
 		echo "" && echo "All fraud-flag tests passed."
 
-test-examples: test-simple test-fetch test-password test-set-membership test-fraud
+# simple's stages were imported into this program (simple_* binaries), so
+# the keys, inputs and the verification come from them; only compute_pair is
+# composed_ops' own. a=3, b=5: ADD+MUL = 8+15 = 23, MUL+MUL = 30.
+test-composed: composed-ops
+	@echo ""
+	@echo "=== Testing composed-ops (modules: simple's stages + compute_pair) ==="
+	@cd $(COMPOSED_NB_OUT)/build && \
+		export LD_LIBRARY_PATH=$(LD_LIB_PATH) && \
+		rm -rf io *_workload_* fhetch_driver_source_* && \
+		echo "  simple_key_generation..." && ./simple_key_generation 0 3 && \
+		echo "  simple_encrypt (a=3, b=5)..." && ./simple_encrypt 0 3.0 5.0 && \
+		echo "  compute_pair ADD+MUL (8+15=23)..." && ./compute_pair 0 0 1 --no-ring-dim-check && \
+		./simple_decrypt_verify 0 23.0 && \
+		echo "  PASS  ADD+MUL across modules" && \
+		echo "  compute_pair MUL+MUL (15+15=30)..." && ./compute_pair 0 1 1 --no-ring-dim-check && \
+		./simple_decrypt_verify 0 30.0 && \
+		echo "  PASS  MUL+MUL across modules" && \
+		echo "  simple_compute ADD (imported stage, 3+5=8)..." && ./simple_compute 0 0 0.0 --no-ring-dim-check && \
+		./simple_decrypt_verify 0 8.0 && \
+		echo "  PASS  imported stage runs under its own name" && \
+		rm -rf io *_workload_* fhetch_driver_source_* && \
+		echo "" && echo "All composed-ops tests passed."
+
+test-examples: test-simple test-fetch test-password test-set-membership test-fraud test-composed
 	@echo ""
 	@echo "All example tests passed."
 
@@ -507,6 +566,7 @@ clean:
 	cd $(FETCH_NB_OUT) && \
 		find . -maxdepth 1 -type f ! -name utils.h ! -name .gitignore -delete 2>/dev/null; true
 	rm -rf $(SIMPLE_NB_OUT)
+	rm -rf $(COMPOSED_NB_OUT)
 	rm -rf $(SETM_NB_OUT) $(EXAMPLES)/set-membership/io
 	rm -rf $(FRAUD_NB_OUT) $(EXAMPLES)/fraud-flag/io
 	rm -rf $(NID_NB_OUT)/build

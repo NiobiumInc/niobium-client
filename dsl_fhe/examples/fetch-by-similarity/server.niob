@@ -8,6 +8,8 @@
 // SecretKey or call decrypt(). Attempting to do so is a compile error.
 //============================================================================
 
+module fetch_by_similarity
+
 use shared::*
 
 // ============================================================================

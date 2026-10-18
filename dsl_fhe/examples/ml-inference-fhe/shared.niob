@@ -9,6 +9,8 @@
 // Constants
 // ============================================================================
 
+module ml_inference_fhe
+
 const INPUT_DIM: u32 = 784           // MNIST 28x28 pixels
 const NORMALIZED_DIM: u32 = 1024     // padded to ring_dim/2
 const NUM_CLASSES: u32 = 10          // digits 0-9

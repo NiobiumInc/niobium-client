@@ -9,6 +9,8 @@
 // Instance sizes
 // ============================================================================
 
+module simple
+
 enum InstanceSize { Toy, Small, Medium, Large }
 
 struct Instance {

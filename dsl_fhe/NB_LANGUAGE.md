@@ -21,6 +21,78 @@ Files reference each other with `use shared::*` at the top.
 use shared::*
 ```
 
+### Modules
+
+A program is a **module**. Each of its files names the module it belongs to;
+a file without the declaration belongs to the unnamed *root* module, which
+keeps the global namespace, so programs written before modules existed
+compile exactly as before.
+
+```nb
+module fraud_flag
+```
+
+All files compiled together must declare the same module (or none). The
+examples under `examples/` each declare one, named after the directory
+(`simple`, `fraud_flag`, `set_membership`, ...).
+
+`use <name>` imports another module. The compiler finds it through the
+**module search path**: every `.niob` file directly in a search directory,
+or one level below it, whose declaration is `module <name>`. By default the
+parent of the program's own directory is searched (so sibling modules such
+as `examples/*` see each other), then the program's directory;
+`--module-path DIR` on `nbc compile` / `nbc check` adds directories, searched
+first. A missing module is a compile error naming the directories searched.
+
+Every declaration of an imported module is referenced **qualified**,
+`<module>::name`, which is what makes the import collision-free: two modules
+may both declare `Instance`, `encdir` or `CryptoParams`.
+
+```nb
+module composed_ops
+
+use shared::*
+use simple
+
+fn keydir(inst: simple::Instance) -> path { simple::keydir(inst) }
+
+@server @stage("compute_pair")
+fn compute_pair(inst: simple::Instance, op_a: simple::Operation = 0)
+    -> reads(simple::CryptoParams, simple::EncryptedInput),
+       writes(simple::EncryptedResult)
+{
+    let params = load(simple::CryptoParams, from: keydir(inst))
+    let ct = load(simple::EncryptedInput, from: simple::iodir(inst) / "input_a.bin").ciphertext
+    match inst.size { simple::Toy => ..., _ => ... }
+    return simple::EncryptedResult { ciphertext: simple::dispatch(op_a, ct, ct, 0.0) }
+}
+```
+
+Functions, constants, enums and their variants, structs and wires can all be
+qualified; builtins never are. A module may qualify its own names too
+(`fraud_flag::Instance` inside `fraud_flag`). Local bindings shadow
+module-level names, as in any scope.
+
+What an imported module contributes to the program:
+
+- its declarations, generated inside a C++ `namespace <module>` (the root
+  module's stay global), so the generated code reads like the source;
+- its `@stage` functions, built as binaries named `<module>_<stage>`
+  (`simple_key_generation`, `simple_compute`, ...), so a composing module can
+  reuse another's key generation, encryption or decryption stages as they
+  are;
+- its `requires` capabilities, unioned into the program's, so key generation
+  makes every key the imported code needs.
+
+One program has one `scheme`: the root's. An imported module's `scheme` is
+dropped (a warning is printed when it differs), and its `domain` declarations
+are ignored. Imports are transitive; a cycle is a compile error. `use
+<name>::*` and `use <name>::item` are the file-glob form and name a file of
+the module (`shared`, `client`, `server`), never another module.
+
+The `composed-ops` example composes `simple` this way; see
+[`examples/composed-ops/`](examples/composed-ops/).
+
 ### External Module Declarations
 
 Declare external C++ modules that should be included and linked:

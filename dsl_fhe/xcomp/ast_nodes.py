@@ -15,6 +15,11 @@ from .errors import SourceLocation
 class Node:
     """Base class for all AST nodes."""
     loc: SourceLocation = field(default_factory=SourceLocation, repr=False)
+    # Name of the module that declared this node ("" for the root module,
+    # which keeps the global namespace). Set by the module loader on every
+    # top-level declaration; read where a declaration's qualified name or its
+    # C++ namespace is needed.
+    module: str = field(default="", repr=False)
 
 
 # ---------------------------------------------------------------------------
@@ -24,6 +29,8 @@ class Node:
 @dataclass
 class Program(Node):
     items: list[Node] = field(default_factory=list)
+    # The `module <name>` this file declares, "" when it declares none.
+    module_name: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -31,10 +38,24 @@ class Program(Node):
 # ---------------------------------------------------------------------------
 
 @dataclass
+class ModuleDecl(Node):
+    """module fraud_flag"""
+    name: str = ""
+
+
+@dataclass
 class UseDecl(Node):
-    """use shared::*"""
+    """use shared::*  (a file of this module, no effect)
+    use fraud_flag   (import module fraud_flag; refer to fraud_flag::name)"""
     module_path: list[str] = field(default_factory=list)
     imported: str = "*"  # identifier or "*"
+    # True when `::*` or `::item` was written (the file-glob form); False for
+    # the bare `use <module>` import.
+    explicit_path: bool = False
+
+    @property
+    def is_module_import(self) -> bool:
+        return not self.explicit_path and len(self.module_path) == 1
 
 
 @dataclass
