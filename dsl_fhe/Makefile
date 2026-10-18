@@ -8,6 +8,17 @@ NPROC     := $(NB_NUM_CPUS)
 # libnbfhetch). dsl_fhe lives directly under it.
 NIOBIUM_CLIENT_ROOT ?= $(realpath $(CURDIR)/..)
 
+# Where the instrumented OpenFHE is installed and where the niobium-fhetch
+# checkout is. A parent build that vendors this client (niobium-compiler)
+# points both at its own trees -- the same knobs the client's root Makefile
+# takes -- and the generated CMake honours them. The client's own build leaves
+# them at the vendored defaults.
+OPENFHE_INSTALL_DIR       ?= $(NIOBIUM_CLIENT_ROOT)/vendor/lib/openfhe
+NIOBIUM_CLIENT_FHETCH_DIR ?= $(NIOBIUM_CLIENT_ROOT)/vendor/niobium-fhetch
+NB_CMAKE_FLAGS := -DNIOBIUM_CLIENT_ROOT=$(NIOBIUM_CLIENT_ROOT) \
+                  -DOPENFHE_INSTALL_DIR=$(OPENFHE_INSTALL_DIR) \
+                  -DNIOBIUM_CLIENT_FHETCH_DIR=$(NIOBIUM_CLIENT_FHETCH_DIR)
+
 # Self-contained examples (simple, fetch-by-similarity, password-retrieval) have
 # no external dependencies — they build and run from this repo alone.
 #
@@ -139,7 +150,7 @@ fetch-by-similarity:
 	@echo "=== Building fetch-by-similarity (C++ → binaries) ==="
 	@mkdir -p $(FETCH_NB_OUT)/build
 	@cd $(FETCH_NB_OUT)/build && \
-		cmake .. -DNIOBIUM_CLIENT_ROOT=$(NIOBIUM_CLIENT_ROOT) && \
+		cmake .. $(NB_CMAKE_FLAGS) && \
 		$(MAKE) -j$(NPROC) 2>&1
 	@echo ""
 	@echo "Built binaries in $(FETCH_NB_OUT)/build/"
@@ -160,7 +171,7 @@ simple:
 	@echo "=== Building simple (C++ → binaries) ==="
 	@mkdir -p $(SIMPLE_NB_OUT)/build
 	@cd $(SIMPLE_NB_OUT)/build && \
-		cmake .. -DNIOBIUM_CLIENT_ROOT=$(NIOBIUM_CLIENT_ROOT) && \
+		cmake .. $(NB_CMAKE_FLAGS) && \
 		$(MAKE) -j$(NPROC) 2>&1
 	@echo ""
 	@echo "Built binaries in $(SIMPLE_NB_OUT)/build/"
@@ -198,7 +209,7 @@ endif
 	@echo "=== Building fhe-NetworkMonitor (C++ → binaries) ==="
 	@mkdir -p $(NID_NB_OUT)/build
 	@cd $(NID_NB_OUT)/build && \
-		cmake .. -DNIOBIUM_CLIENT_ROOT=$(NIOBIUM_CLIENT_ROOT) && \
+		cmake .. $(NB_CMAKE_FLAGS) && \
 		$(MAKE) -j$(NPROC) 2>&1
 	@echo ""
 	@echo "Built binaries in $(NID_NB_OUT)/build/"
@@ -232,7 +243,7 @@ endif
 	@echo "=== Building ml-inference-fhe (C++ → binaries) ==="
 	@mkdir -p $(ML_NB_OUT)/build
 	@cd $(ML_NB_OUT)/build && \
-		cmake .. -DNIOBIUM_CLIENT_ROOT=$(NIOBIUM_CLIENT_ROOT) \
+		cmake .. $(NB_CMAKE_FLAGS) \
 		         -DLOCAL_SRC_DIR=$(ML_LOCAL_SRCS) \
 		         $(if $(SUBMISSION_REPO),-DSUBMISSION_DIR=$(ML_SUBMISSION),) && \
 		$(MAKE) -j$(NPROC) 2>&1
@@ -259,7 +270,7 @@ set-membership:
 	@echo "=== Building set-membership (C++ → binaries) ==="
 	@mkdir -p $(SETM_NB_OUT)/build
 	@cd $(SETM_NB_OUT)/build && \
-		cmake .. -DNIOBIUM_CLIENT_ROOT=$(NIOBIUM_CLIENT_ROOT) && \
+		cmake .. $(NB_CMAKE_FLAGS) && \
 		$(MAKE) -j$(NPROC) 2>&1
 	@echo ""
 	@echo "Built binaries in $(SETM_NB_OUT)/build/"
@@ -280,7 +291,7 @@ fraud-flag:
 	@echo "=== Building fraud-flag (C++ → binaries) ==="
 	@mkdir -p $(FRAUD_NB_OUT)/build
 	@cd $(FRAUD_NB_OUT)/build && \
-		cmake .. -DNIOBIUM_CLIENT_ROOT=$(NIOBIUM_CLIENT_ROOT) && \
+		cmake .. $(NB_CMAKE_FLAGS) && \
 		$(MAKE) -j$(NPROC) 2>&1
 	@echo ""
 	@echo "Built binaries in $(FRAUD_NB_OUT)/build/"
@@ -297,7 +308,7 @@ password-retrieval:
 	@echo "=== Building password-retrieval (C++ → binaries) ==="
 	@mkdir -p $(PWD_NB_OUT)/build
 	@cd $(PWD_NB_OUT)/build && \
-		cmake .. -DNIOBIUM_CLIENT_ROOT=$(NIOBIUM_CLIENT_ROOT) && \
+		cmake .. $(NB_CMAKE_FLAGS) && \
 		$(MAKE) -j$(NPROC) 2>&1
 	@echo ""
 	@echo "Built binaries in $(PWD_NB_OUT)/build/"
@@ -306,12 +317,12 @@ password-retrieval:
 # End-to-end tests (run the built binaries)
 # ---------------------------------------------------------------------------
 
-LD_LIB_PATH := $(NIOBIUM_CLIENT_ROOT)/vendor/lib/openfhe/lib:$(NIOBIUM_CLIENT_ROOT)/build/vendor/niobium-fhetch:$(NIOBIUM_CLIENT_ROOT)/build/_deps/niobium-fhetch-build:$(NIOBIUM_CLIENT_ROOT)/vendor/niobium-fhetch/build:$(NIOBIUM_CLIENT_ROOT)/build/_deps/yaml_cpp-build
+LD_LIB_PATH := $(OPENFHE_INSTALL_DIR)/lib:$(NIOBIUM_CLIENT_ROOT)/build/vendor/niobium-fhetch:$(NIOBIUM_CLIENT_ROOT)/build/_deps/niobium-fhetch-build:$(NIOBIUM_CLIENT_FHETCH_DIR)/build:$(NIOBIUM_CLIENT_ROOT)/build/_deps/yaml_cpp-build
 
 # @hardware server stages replay via the cooperative path, which spawns the
 # fhetch_driver helper. It's built alongside niobium-fhetch's tests. Export
 # NBCC_FHETCH_DRIVER so the client library finds it without relying on PATH.
-NBCC_FHETCH_DRIVER ?= $(NIOBIUM_CLIENT_ROOT)/vendor/niobium-fhetch/build/tests/fhetch_driver/fhetch_driver
+NBCC_FHETCH_DRIVER ?= $(NIOBIUM_CLIENT_FHETCH_DIR)/build/tests/fhetch_driver/fhetch_driver
 export NBCC_FHETCH_DRIVER
 
 test-simple: simple
@@ -319,7 +330,7 @@ test-simple: simple
 	@echo "=== Testing simple (end-to-end) ==="
 	@cd $(SIMPLE_NB_OUT)/build && \
 		export LD_LIBRARY_PATH=$(LD_LIB_PATH) && \
-		rm -rf io && \
+		rm -rf io *_workload_* fhetch_driver_source_* && \
 		echo "  key_generation..." && ./key_generation 0 3 && \
 		echo "  encrypt (a=3, b=5)..." && ./encrypt 0 3.0 5.0 && \
 		echo "  ADD (3+5=8)..." && ./compute 0 0 0.0 --no-ring-dim-check && ./decrypt_verify 0 8.0 && \
@@ -378,6 +389,7 @@ test-nid: fhe-network-monitor
 	@cd $(NID_NB_OUT)/build && \
 		export LD_LIBRARY_PATH=$(LD_LIB_PATH) && \
 		test -L assets || ln -sf ../../assets assets && \
+		rm -rf *_workload_* fhetch_driver_source_* && \
 		echo "  keygen..." && ./keygen 0 && \
 		echo "  encrypt..." && ./encrypt 0 && \
 		echo "  inference..." && ./inference 0 --no-ring-dim-check && \
@@ -391,6 +403,7 @@ test-ml: ml-inference
 	@cd $(ML_NB_OUT)/build && \
 		export LD_LIBRARY_PATH=$(LD_LIB_PATH) && \
 		export ML_WEIGHT_DIR=$(if $(SUBMISSION_REPO),$(ML_SUBMISSION)/data,$(ML_DATA_DIR)) && \
+		rm -rf *_workload_* fhetch_driver_source_* && \
 		mkdir -p datasets/single/intermediate && \
 		test -s datasets/single/intermediate/test_pixels.txt || \
 			python3 -c "print(' '.join(['0.000000']*784))" > datasets/single/intermediate/test_pixels.txt && \
@@ -406,7 +419,7 @@ test-password: password-retrieval
 	@echo "=== Testing password-retrieval (end-to-end) ==="
 	@cd $(PWD_NB_OUT)/build && \
 		export LD_LIBRARY_PATH=$(LD_LIB_PATH) && \
-		rm -rf io && \
+		rm -rf io *_workload_* fhetch_driver_source_* && \
 		echo "  keygen..." && ./key_generation 0 && \
 		echo "  setup record (answers: 7,3,9,1,5 pw: 42)..." && ./setup_record 0 && \
 		echo "  submit correct answers (7,3,9,1,5)..." && ./submit_query 0 && \

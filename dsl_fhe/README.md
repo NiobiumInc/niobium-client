@@ -437,7 +437,10 @@ at build time — the example has no dependency on any external/private repo.
 `NIOBIUM_CLIENT_ROOT` by walking up the directory tree looking for
 `vendor/niobium-fhetch/include/niobium/compiler.h`, then links the instrumented
 OpenFHE, `libnbfhetch`, and (for `@hardware` server stages)
-`libniobium_client_autofacade` + `yaml-cpp`.
+`libniobium_client_autofacade` + `yaml-cpp`. A build that supplies its own
+OpenFHE install or niobium-fhetch checkout (niobium-compiler vendors this
+client that way) passes `-DOPENFHE_INSTALL_DIR` / `-DNIOBIUM_CLIENT_FHETCH_DIR`;
+`make` forwards the same-named variables.
 
 ## Verification
 
