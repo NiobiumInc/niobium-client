@@ -2,7 +2,7 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-10-16
+Generated: 2026-10-19
 Tool: SCANOSS (snippet detection with License dataset)
 Components: 68
 
@@ -456,7 +456,7 @@ COMPONENT ATTRIBUTIONS
   License: BSD-3-Clause
 
   gperftools
-  Version: gperftools-2.16.90
+  Version: a81b2eb
   Source: https://github.com/gperftools/gperftools
   PURL: pkg:github/gperftools/gperftools
   Copyright:
@@ -819,18 +819,18 @@ COMPONENT ATTRIBUTIONS
   License: EPL-2.0
 
   nurikit
-  Version: 0.1.0a14.post0
-  Source: https://pypi.org/project/nurikit
-  PURL: pkg:pypi/nurikit
+  Version: v0.1.0a14.post0
+  Source: https://github.com/seoklab/nurikit
+  PURL: pkg:github/seoklab/nurikit
   Copyright:
     Copyright 2017 Google Inc
     Copyright 2007; Google Inc.
   License: Apache-2.0
 
   nurikit
-  Version: v0.1.0a14.post0
-  Source: https://github.com/seoklab/nurikit
-  PURL: pkg:github/seoklab/nurikit
+  Version: 0.1.0a14.post0
+  Source: https://pypi.org/project/nurikit
+  PURL: pkg:pypi/nurikit
   Copyright:
     Copyright 2017 Google Inc
     Copyright 2007; Google Inc.
