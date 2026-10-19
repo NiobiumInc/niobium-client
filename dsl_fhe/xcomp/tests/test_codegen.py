@@ -271,9 +271,9 @@ def test_ct_minus_column_slice():
     }
     """)
     impl = files["nb_shared.cpp"]
-    assert "MakeCKKSPackedPlaintext(column)" in impl
-    assert "auto _pt = " in impl          # lvalue materialization for EvalSub
-    assert "EvalSub(eqry[0], _pt)" in impl
+    # ... and encoded at the ciphertext's level, with the ciphertext bound once.
+    assert ("auto _ct = eqry[0]; auto _pt = cc->MakeCKKSPackedPlaintext(column, 1, "
+            "_ct->GetLevel(), nullptr, _ct->GetSlots()); return cc->EvalSub(_ct, _pt);") in impl
 
 
 def test_enc_flow_beats_name_heuristic():
@@ -832,11 +832,13 @@ def test_ct_plus_user_vector_materializes_plaintext():
     }
     """)
     body = files["nb_shared.cpp"]
-    assert ("auto a = [&]() { auto _pt = cc->MakeCKKSPackedPlaintext(mask(inst)); "
-            "return cc->EvalAdd(g(cc, ct), _pt); }();") in body
-    assert ("auto b = [&]() { auto _pt = cc->MakeCKKSPackedPlaintext(mask(inst)); "
-            "return cc->EvalAdd(g(cc, ct), _pt); }();") in body
-    assert "cc->EvalMult(b, cc->MakeCKKSPackedPlaintext(m))" in body
+    pt = "cc->MakeCKKSPackedPlaintext(mask(inst), 1, _ct->GetLevel(), nullptr, _ct->GetSlots())"
+    assert (f"auto a = [&]() {{ auto _ct = g(cc, ct); auto _pt = {pt}; "
+            "return cc->EvalAdd(_ct, _pt); }();") in body
+    assert (f"auto b = [&]() {{ auto _ct = g(cc, ct); auto _pt = {pt}; "
+            "return cc->EvalAdd(_ct, _pt); }();") in body
+    assert ("[&]() { auto _ct = b; auto _pt = cc->MakeCKKSPackedPlaintext(m, 1, _ct->GetLevel(), "
+            "nullptr, _ct->GetSlots()); return cc->EvalMult(_ct, _pt); }()") in body
 
 
 

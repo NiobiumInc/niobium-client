@@ -2763,6 +2763,29 @@ endforeach()
                     return f"nb_plain::sub({left}, {right})"
                 if expr.op in ("*", "*_norelin"):
                     return f"nb_plain::mul({left}, {right})"
+            # A plaintext vector operand is encoded AT THE CIPHERTEXT'S LEVEL,
+            # with the ciphertext bound once. OpenFHE would otherwise encode
+            # it at level 0 (every tower) and drop the towers the product does
+            # not use; the recorded FHETCH trace tags the plaintext as made,
+            # so a full-depth encoding costs the trace one plaintext of
+            # (total towers) x (ring) per product. A transformer block is
+            # thousands of such products, which made the trace of the
+            # encrypted-gpt2 toy profile 2.5 MB per weight diagonal.
+            if left_enc != right_enc and expr.op in ("+", "-", "*"):
+                vec_left = not left_enc and self._is_vector_expr(expr.left)
+                vec_right = not right_enc and self._is_vector_expr(expr.right)
+                if vec_left or vec_right:
+                    ct, vec = (right, left) if vec_left else (left, right)
+                    pt = (f"cc->MakeCKKSPackedPlaintext({vec}, 1, _ct->GetLevel(), "
+                          f"nullptr, _ct->GetSlots())")
+                    if expr.op == "+":
+                        call = f"cc->{FHE_ADD}(_ct, _pt)"
+                    elif expr.op == "-":
+                        call = (f"cc->{FHE_SUB}(_pt, _ct)" if vec_left
+                                else f"cc->{FHE_SUB}(_ct, _pt)")
+                    else:
+                        call = f"cc->{FHE_MUL}(_ct, _pt)"
+                    return f"[&]() {{ auto _ct = {ct}; auto _pt = {pt}; return {call}; }}()"
             l = _maybe_wrap_plaintext(left, left_enc, expr.left)
             r = _maybe_wrap_plaintext(right, right_enc, expr.right)
             # OpenFHE's EvalAdd/EvalSub(ct, Plaintext&) take a NON-const
