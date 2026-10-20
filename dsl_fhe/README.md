@@ -199,7 +199,7 @@ Every example declares its module (`module simple`, `module fraud_flag`,
   `fhetch_driver` helper, and the `fhetch_sim` simulator.
 - Python 3 with numpy (for dataset generation and verification)
 
-The generated binaries record an unoptimized `.fhetch` instruction trace and
+The generated binaries record an unoptimized `.fhex` instruction trace and
 replay it locally through the FHETCH simulator. The whole flow runs against the
 open-source niobium-client (`libnbfhetch`) — no proprietary components needed.
 

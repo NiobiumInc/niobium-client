@@ -84,7 +84,7 @@ def submit(project_dir, target, *, endpoint=None, opt_level=None, token=None,
     is the control plane, owned by niobium_sdk.fog, which calls this with the
     worker URL + per-job ticket it obtained.
 
-    project_dir : the recorded project directory (contains the .fhetch + inputs).
+    project_dir : the recorded project directory (contains the .fhex/.fhetch trace + inputs).
     target      : device id forwarded as X-Target (e.g. "FUNC_SIM", "fpga5.2").
     endpoint    : server URL (else configure()/NBCC_FHETCH_SERVER/default). A bare
                   origin gets /replay; a Fog worker URL (/jobs/<id>/run) is used as-is.

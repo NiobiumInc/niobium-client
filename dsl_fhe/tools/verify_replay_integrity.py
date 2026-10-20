@@ -21,7 +21,7 @@ re-record anything. This tool proves it at the filesystem level:
               RECORD run: per file, size, sha256, mtime_ns, and inode.
   verify    — after the REPLAY run, compare against the manifest:
 
-    * The .fhetch instruction trace — and every other recording artifact —
+    * The instruction trace (.fhex, or .fhetch) — and every other recording artifact —
       must be byte-identical AND must not have been rewritten: same content,
       same mtime_ns, same inode. A rewrite with identical bytes (new mtime
       or new inode) FAILS: the trace must not be re-generated at all.
@@ -95,18 +95,23 @@ def scan(workload_dir: Path) -> dict[str, dict]:
     return entries
 
 
+def is_trace(rel: str) -> bool:
+    """The instruction trace: binary .fhex (the recorder's default) or text .fhetch."""
+    return rel.endswith(".fhex") or rel.endswith(".fhetch")
+
+
 def cmd_snapshot(workload_dir: Path, manifest: Path) -> int:
     if not workload_dir.is_dir():
         print(f"[replay-integrity] FAIL: no workload dir {workload_dir}")
         return 1
     entries = scan(workload_dir)
-    if not any(rel.endswith(".fhetch") for rel in entries):
-        print(f"[replay-integrity] FAIL: no .fhetch trace in {workload_dir}")
+    if not any(is_trace(rel) for rel in entries):
+        print(f"[replay-integrity] FAIL: no .fhex/.fhetch trace in {workload_dir}")
         return 1
     manifest.write_text(json.dumps(
         {"workload_dir": str(workload_dir), "files": entries}, indent=1))
     print(f"[replay-integrity] snapshot: {len(entries)} files "
-          f"({sum(1 for r in entries if r.endswith('.fhetch'))} trace) "
+          f"({sum(1 for r in entries if is_trace(r))} trace) "
           f"-> {manifest}")
     return 0
 
@@ -133,7 +138,7 @@ def cmd_verify(workload_dir: Path, manifest: Path) -> int:
             continue  # in-place refresh is the feature
         if is_probe_output(rel):
             continue  # reconstructed outputs may be rewritten
-        # Recording artifact (.fhetch trace, .ids maps, metadata): must be
+        # Recording artifact (.fhex/.fhetch trace, .ids maps, metadata): must be
         # untouched — identical bytes are NOT enough, it must be the same
         # file, never re-generated.
         if now["sha256"] != old["sha256"]:
@@ -158,8 +163,8 @@ def cmd_verify(workload_dir: Path, manifest: Path) -> int:
         for f in failures:
             print(f"  {f}")
         return 1
-    n_trace = sum(1 for r in before if r.endswith(".fhetch"))
-    print(f"[replay-integrity] PASS: {n_trace} .fhetch trace untouched "
+    n_trace = sum(1 for r in before if is_trace(r))
+    print(f"[replay-integrity] PASS: {n_trace} trace file(s) untouched "
           f"(content+mtime+inode), {refreshed} inputs refreshed in place, "
           f"{rewritten_same} input/key captures re-serialized identical "
           f"(waste, tolerated), {new_outputs} probe outputs written, "

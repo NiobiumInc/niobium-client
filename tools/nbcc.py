@@ -131,9 +131,9 @@ def parse_args():
                              "non-local values dispatch to nbcc_fhetch_replay)")
     parser.add_argument("--trace-format", default=None,
                         choices=["text", "binary", "both"],
-                        help="Trace serialization: text (.fhetch, default), "
-                             "binary (.fhex, ~4x smaller and faster to read), "
-                             "or both")
+                        help="Trace serialization: binary (.fhex, the default; "
+                             "~4x smaller and faster to read), text (.fhetch, "
+                             "human-readable), or both")
     parser.add_argument("-O", "--optimization", default=None,
                         help="Optimization level")
     parser.add_argument("--registers", default=None, help="Number of registers")
@@ -211,8 +211,12 @@ def main():
     # replay.
     if args.fhetch_driver:
         program_dir = os.path.join(".", args.name)
-        trace_file = os.path.join(program_dir, f"{args.name}.fhetch")
-        if os.path.exists(trace_file):
+        # The recorder writes a binary .fhex by default, a text .fhetch with
+        # --trace-format=text; the driver reads either.
+        trace_file = next((f for f in (os.path.join(program_dir, f"{args.name}.{ext}")
+                                       for ext in ("fhex", "fhetch"))
+                           if os.path.exists(f)), None)
+        if trace_file is not None:
             if not args.driver_cc:
                 sys.stderr.write("nbcc.py: --fhetch-driver requires --driver-cc\n")
                 sys.exit(2)
