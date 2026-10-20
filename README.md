@@ -3,7 +3,8 @@
 Open-source client stack for the **Niobium Mistic** FHE accelerator. Whatever
 front-end you enter through, the path is the same: your fully-homomorphic
 computation is recorded as an unoptimized **FHETCH Polynomial IR** trace
-(`.fhetch`), which you can replay through the bundled local simulator for
+(`.fhex`, binary by default; `.fhetch` is its text form), which you can replay
+through the bundled local simulator for
 validation, or submit to the Niobium compilation service for optimization and
 deployment to hardware. All optimization logic lives server-side — this client
 stays thin, open (Apache 2.0), and self-contained.
@@ -72,7 +73,7 @@ All four converge on the same recorder and the same trace:
                     |  cooperative auto-tagging  ·  cache  ·  replay  ·  result      |
                     +----------------------------------------------------------------+
                                  |
-                                 |  unoptimized .fhetch trace
+                                 |  unoptimized .fhex trace
                                  |  + fhetch_replay.json manifest
                                  v
                  +---------------+--------------------+
@@ -154,12 +155,14 @@ directly.
    (`openfhe_cprobe_add`, `openfhe_cprobe_ntt`, …) which records one or more
    FHETCH instructions in the trace.
 
-3. **Capture** — On `compiler().stop()`, the trace is finalized as a `.fhetch`
-   text file plus a `fhetch_replay.json` manifest (crypto context, modulus
+3. **Capture** — On `compiler().stop()`, the trace is finalized as a `.fhex`
+   binary file plus a `fhetch_replay.json` manifest (crypto context, modulus
    chain, key ID ranges, input/output layout). Pass
-   `--trace-format=binary` to write a `.fhex` instead — the same program in a
-   binary form roughly 4x smaller and faster to read — or
-   `--trace-format=both` for both. The default is text.
+   `--trace-format=text` to write the human-readable `.fhetch` instead — the
+   same program in a text form roughly 4x larger — or `--trace-format=both`
+   for both. The default is binary, and every reader (the simulator, the
+   driver, `replay()`, the cache check) detects the form from the file's
+   content rather than its name.
 
 4. **Replay (local)** — `compiler().replay()` executes the recorded trace
    through the bundled FHETCH simulator; `compiler().result(cc, name, ct)`
@@ -302,7 +305,8 @@ If you are building an FHE compiler, transpiler, or code generator, target the
   per IR operation (`sr_addp`, `sr_mulp`, `sr_ntt`, `mr_mulp`, …), wrapped by
   the `niobium::compiler()` session (init / start / probe / stop / replay /
   result / cache).
-- **Trace format** — `.fhetch` is a text format; you can also emit it
+- **Trace format** — `.fhex` (binary, the default) or `.fhetch` (text), the
+  same program either way; a code generator can also emit the text form
   directly. The `fhetch_replay.json` manifest carries crypto context, modulus
   chain, and I/O layout.
 - **Validation** — the bundled `fhetch_sim` replays any trace with
@@ -710,7 +714,7 @@ niobium-client/
   refreshed automatically), and the recorded trace itself is never
   regenerated (test-gated, including timestamps).
 
-- **Local simulator for validation** — `fhetch_sim` replays a `.fhetch` file
+- **Local simulator for validation** — `fhetch_sim` replays a `.fhex` or `.fhetch` file
   with deterministic OpenFHE native math, giving a reference for what the
   hardware computes, reachable from user code via `replay()` + `result()`
   without leaving the OpenFHE object model.

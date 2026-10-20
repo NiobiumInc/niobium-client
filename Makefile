@@ -593,19 +593,19 @@ test-sim-mult: test-mult ## Record mult trace then simulate it (Debug)
 	$(call set-build-config,Debug,dbuild)
 	@echo ""
 	@echo "=== Running FHETCH simulator on mult trace ==="
-	$(BUILD_DIR)/vendor/niobium-fhetch/fhetch_sim mult_server_workload_ckks_mult/mult_server_workload_ckks_mult.fhetch --ring-dim $(TEST_RING_DIM)
+	$(BUILD_DIR)/vendor/niobium-fhetch/fhetch_sim mult_server_workload_ckks_mult/mult_server_workload_ckks_mult.fhex --ring-dim $(TEST_RING_DIM)
 
 test-sim-mult-release: test-mult-release ## Record mult trace then simulate it (Release)
 	$(call set-build-config,Release,build)
 	@echo ""
 	@echo "=== Running FHETCH simulator on mult trace ==="
-	$(BUILD_DIR)/vendor/niobium-fhetch/fhetch_sim mult_server_workload_ckks_mult/mult_server_workload_ckks_mult.fhetch --ring-dim $(TEST_RING_DIM)
+	$(BUILD_DIR)/vendor/niobium-fhetch/fhetch_sim mult_server_workload_ckks_mult/mult_server_workload_ckks_mult.fhex --ring-dim $(TEST_RING_DIM)
 
 test-sim-bootstrap-release: test-bootstrap-release ## Record bootstrap trace then simulate it (Release)
 	$(call set-build-config,Release,build)
 	@echo ""
 	@echo "=== Running FHETCH simulator on bootstrap trace ==="
-	$(BUILD_DIR)/vendor/niobium-fhetch/fhetch_sim bootstrap_server_workload_ckks_bootstrap/bootstrap_server_workload_ckks_bootstrap.fhetch --ring-dim $(TEST_RING_DIM)
+	$(BUILD_DIR)/vendor/niobium-fhetch/fhetch_sim bootstrap_server_workload_ckks_bootstrap/bootstrap_server_workload_ckks_bootstrap.fhex --ring-dim $(TEST_RING_DIM)
 
 # Helper: run a single simple_ops test
 define run-simple-op
@@ -701,7 +701,7 @@ test-fhetch-release: $(OPENFHE_BUILD_DEP_RELEASE) ## Run the fhetch submodule's 
 # test-release — full suite (client + fhetch submodule); run on internal server only.
 #   Adds via test-fhetch-release:
 #   - simple_fhetch                (FHETCH-only example, no OpenFHE)
-#   - fhetch_driver                (re-drive a .fhetch through the API)
+#   - fhetch_driver                (re-drive a trace through the API)
 #   - roundtrip-simple-ops         (13 ops × primary + secondary decrypt)
 #   - roundtrip-bootstrap          (CKKS bootstrap × primary + secondary decrypt)
 #
