@@ -107,6 +107,40 @@ by name. To run it on another machine, pass `--server http://HOST:8765` to the
 client (the service binds to 127.0.0.1 by default; change the bind address in
 `risk_server.py` for a remote host).
 
+## Run it in a web browser
+
+The same patient side, compiled to WebAssembly, so a visitor only opens a URL.
+Keys are generated, answers are encrypted and the score is decrypted **inside
+the browser**; the page sends only public keys and ciphertext.
+
+```bash
+brew install emscripten          # once
+./web/build.sh                   # once: OpenFHE for WebAssembly (several minutes), then the module
+python3 demo/risk_server.py      # serves the page and the scoring API
+# open http://127.0.0.1:8765/
+```
+
+On load the page generates the visitor's keys (about 1.3 s) and sends 198 MB of
+public keys once. Each question then takes about 2 s with `--mode sim`: about
+65 ms encrypting in the browser, the service's work, and about 25 ms
+decrypting. Change any answer and press **Calculate my risk** again. Each page
+load is a new random session with its own keys and its own folder on the service
+(`run_demo/server_home/sessions/<id>/`). The terminal client keeps working
+alongside it.
+
+`make test-web` checks the WebAssembly side against the native server: keys and
+ciphertexts made in WebAssembly, scored by the unchanged `health_risk_server`
+(plain and record/replay), decrypted in WebAssembly, for five test patients
+including two input-box corners.
+
+| File | Role |
+|---|---|
+| `web/wasm/risk_client_wasm.cpp` | keygen / encrypt / decrypt on byte buffers, reusing `common.hpp` |
+| `web/wasm/probe_stubs.cpp` | no-op stand-ins for the trace-recording hooks the fork compiles in |
+| `web/static/index.html`, `app.js`, `worker.js`, `style.css` | the page; the WebAssembly runs in a worker |
+| `web/build.sh` | builds OpenFHE for WebAssembly with the native build's flags, then the module |
+| `web/test_roundtrip.mjs` | the WebAssembly-vs-native compatibility check (Node.js) |
+
 ## Run the tests
 
 ```bash

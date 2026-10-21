@@ -3,7 +3,8 @@
 # Convenience targets for the health-risk example. The C++ programs build with
 # the rest of the repo (`make build-release` at the repo root).
 
-.PHONY: help build design test-cpu test-sim test-sim-full test-fog demo-server demo-client clean
+.PHONY: help build design test-cpu test-sim test-sim-full test-fog demo-server demo-client \
+        web test-web clean clean-web
 
 help:
 	@echo "build          build the four programs (repo-wide Release build)"
@@ -14,7 +15,10 @@ help:
 	@echo "test-fog       ./run_test.sh             (Niobium Fog; needs fog login)"
 	@echo "demo-server    start the risk service   (terminal 1)"
 	@echo "demo-client    start the patient prompt (terminal 2)"
+	@echo "web            build the browser client (needs Emscripten)"
+	@echo "test-web       WebAssembly client vs the native server, 5 patients"
 	@echo "clean          remove run homes and trace caches"
+	@echo "clean-web      also remove the WebAssembly build"
 
 build:
 	$(MAKE) -C ../.. build-release
@@ -42,6 +46,16 @@ demo-server:
 demo-client:
 	python3 demo/risk_client.py
 
+web:
+	./web/build.sh
+
+test-web:
+	node web/test_roundtrip.mjs --cpu
+	node web/test_roundtrip.mjs --sim
+
 # Run homes are directories: match run_*/ so run_test.sh itself is never removed.
 clean:
 	rm -rf run_*/ health_risk_server_workload_*/ design/__pycache__/
+
+clean-web:
+	rm -rf web/build/ web/static/risk_client.js web/static/risk_client.wasm

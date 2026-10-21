@@ -35,20 +35,7 @@ int main(int argc, char* argv[]) {
     std::cout << "=== Health risk — Key Generation ===" << std::endl;
     std::filesystem::create_directories(home);
 
-    CCParams<CryptoContextCKKSRNS> parameters;
-    // 128-bit security at the Fog's ring; a smaller test ring cannot meet it.
-    parameters.SetSecurityLevel(ring_dim >= kRingDim ? HEStd_128_classic : HEStd_NotSet);
-    parameters.SetRingDim(ring_dim);
-    parameters.SetMultiplicativeDepth(kDepth);
-    parameters.SetScalingModSize(kScalingModSize);
-    parameters.SetFirstModSize(kFirstModSize);
-    parameters.SetScalingTechnique(FLEXIBLEAUTO);
-
-    CryptoContext<DCRTPoly> cc = GenCryptoContext(parameters);
-    cc->Enable(PKE);
-    cc->Enable(KEYSWITCH);
-    cc->Enable(LEVELEDSHE);
-    cc->Enable(ADVANCEDSHE);  // Chebyshev evaluation
+    CryptoContext<DCRTPoly> cc = make_context(ring_dim);
 
     std::cout << "Ring dimension: " << cc->GetRingDimension()
               << ", depth " << kDepth << ", scale " << kScalingModSize << " bits" << std::endl;

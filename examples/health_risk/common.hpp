@@ -86,6 +86,26 @@ inline std::vector<double> pack(const Patient& p) {
     return x;
 }
 
+// The crypto context. Shared by the native keygen and the browser build, so
+// both sides generate identical parameters.
+inline CryptoContext<DCRTPoly> make_context(uint32_t ring_dim = kRingDim) {
+    CCParams<CryptoContextCKKSRNS> parameters;
+    // 128-bit security at the Fog's ring; a smaller test ring cannot meet it.
+    parameters.SetSecurityLevel(ring_dim >= kRingDim ? HEStd_128_classic : HEStd_NotSet);
+    parameters.SetRingDim(ring_dim);
+    parameters.SetMultiplicativeDepth(kDepth);
+    parameters.SetScalingModSize(kScalingModSize);
+    parameters.SetFirstModSize(kFirstModSize);
+    parameters.SetScalingTechnique(FLEXIBLEAUTO);
+
+    CryptoContext<DCRTPoly> cc = GenCryptoContext(parameters);
+    cc->Enable(PKE);
+    cc->Enable(KEYSWITCH);
+    cc->Enable(LEVELEDSHE);
+    cc->Enable(ADVANCEDSHE);  // Chebyshev evaluation
+    return cc;
+}
+
 // The risk curve the server approximates.
 inline double risk_curve(double u) { return 1.0 - std::exp(-std::exp(u)); }
 

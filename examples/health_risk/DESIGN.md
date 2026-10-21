@@ -167,6 +167,44 @@ of the last digit CVrisk reports.
   load `libnbfhetch`, so `run_test.sh` and the demo point `NBCC_FHETCH_SIM`
   at the build-tree simulator.
 
+### Browser client (WebAssembly addendum)
+
+The patient's side also runs in a web browser (`web/`). Nothing about the
+circuit, the parameters or the server changed.
+
+- **Same library, same bytes.** OpenFHE is compiled to WebAssembly from the
+  same fork and commit as the native build, with the native flags
+  (`WITH_CPROBES=ON`, `WITH_REDUCED_NOISE=ON`, MATHBACKEND 4, 64-bit native
+  integers, no OpenMP). Keys and ciphertexts produced in the browser have the
+  native sizes, and the unchanged native server scores them within the same
+  noise tolerance (`web/test_roundtrip.mjs`).
+- **Probes.** The fork refuses to compile key switching without
+  `OPENFHE_CPROBES`, so the browser build links no-op stand-ins
+  (`web/wasm/probe_stubs.cpp`). They return what libnbfhetch returns when it is
+  not recording (`openfhe_cprobe_address()` → nullptr, so `CopyValues` does
+  nothing), so behaviour matches a native keygen or encrypt.
+- **Randomness.** OpenFHE seeds its generator from `std::random_device`.
+  Under Emscripten that is `getentropy()`, which calls the browser's
+  `crypto.getRandomValues`.
+- **Secret key.** It lives only in the worker's WebAssembly memory. The module
+  has no function that returns it, and a page reload discards it, along with
+  the session.
+- **Sessions.** Each page load picks 32 random hex characters as its session.
+  The service keeps a separate folder, key set and trace cache per session, so
+  visitors never share keys. Within a session, the first question records and
+  later ones replay.
+
+**What the visitor still has to trust: the page itself.** The same party serves
+the page and scores the data, and a modified page could send the plain answers
+anywhere. Measures already in place: the page loads nothing from other
+origins; a Content Security Policy limits scripts, workers and network
+requests to the page's own origin (`'wasm-unsafe-eval'` allows only compiling
+the module); the module is built without `eval` (`-sDYNAMIC_EXECUTION=0`); the
+service writes no access log. Not yet in place, and needed before real users:
+HTTPS; serving the static page from somewhere the scoring service cannot
+change it; publishing reproducible builds and Subresource Integrity hashes so
+anyone can check the served code; cleanup of old session folders.
+
 ## Protocol
 
 **Setup (once per patient key set).**

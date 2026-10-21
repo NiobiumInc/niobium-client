@@ -2,16 +2,20 @@
 #
 # The risk service: an HTTP front end around health_risk_server.
 #
-# It holds the model and the patient's public/evaluation keys, scores
+# It holds the model and each patient's public/evaluation keys, scores
 # encrypted patients, and never sees a secret key, an input, or a score: it
 # logs byte counts only. The server home is safe to copy to an untrusted host.
 #
-#   PUT  /setup/<cc.bin|pk.bin|mk.bin|rk.bin>   one-time key upload (anything else is refused)
-#   POST /score                                  body: encrypted patient -> encrypted risk
+#   GET  /                                      the web app (web/static/), if built
+#   PUT  /s/<session>/setup/<cc|pk|mk|rk>.bin   one-time key upload for a browser session
+#   POST /s/<session>/score                     body: encrypted patient -> encrypted risk
+#   PUT  /setup/<name>, POST /score             the same for the terminal client (one session)
 #
-# The first /score records the circuit as a FHETCH trace; every later one
-# replays that trace on the new ciphertext (--mode sim|fog), or reruns plain
-# OpenFHE (--mode cpu).
+# <session> is 32 random hex characters chosen by the browser. Each session
+# gets its own folder, keys and trace cache, so patients never share a key set.
+# Within a session the first /score records the circuit as a FHETCH trace and
+# every later one replays it on the new ciphertext (--mode sim|fog), or reruns
+# plain OpenFHE (--mode cpu).
 #
 # Usage: python3 risk_server.py [--home DIR] [--port 8765] [--mode sim|cpu|fog]
 #                               [--fog-target FOG|FUNC_SIM]
@@ -19,16 +23,34 @@
 import argparse
 import http.server
 import os
+import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 APP = os.path.dirname(HERE)
 REPO = os.path.dirname(os.path.dirname(APP))
 BUILD = os.path.join(REPO, "build", "examples")
+STATIC = os.path.join(APP, "web", "static")
 SETUP_FILES = {"cc.bin", "pk.bin", "mk.bin", "rk.bin"}
+SESSION = re.compile(r"^[0-9a-f]{32}$")
+STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript",
+                ".css": "text/css", ".wasm": "application/wasm", ".svg": "image/svg+xml"}
+# The page may load and talk to this origin only: no third-party scripts, no
+# other destinations for anything the page holds. 'wasm-unsafe-eval' allows
+# compiling the WebAssembly module and nothing else.
+SECURITY_HEADERS = {
+    "Content-Security-Policy": "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; "
+                               "worker-src 'self'; connect-src 'self'; style-src 'self'; "
+                               "img-src 'self'; base-uri 'none'; form-action 'none'; "
+                               "frame-ancestors 'none'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "Cross-Origin-Opener-Policy": "same-origin",
+}
 
 
 def log(msg):
@@ -36,42 +58,68 @@ def log(msg):
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
-    def log_message(self, *a):  # quiet the default access log
+    def log_message(self, *a):  # quiet the default access log (no IPs, no paths)
         pass
 
     def _body(self):
         return self.rfile.read(int(self.headers.get("Content-Length", 0)))
 
-    def _reply(self, code, data=b"", ctype="application/octet-stream"):
+    def _reply(self, code, data=b"", ctype="application/octet-stream", extra=None):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        for k, v in (extra or {}).items():
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(data)
 
+    def _route(self):
+        """-> (session label, session home, rest of path) or None."""
+        parts = self.path.split("?", 1)[0].strip("/").split("/")
+        if parts and parts[0] == "s":
+            if len(parts) < 3 or not SESSION.match(parts[1]):
+                return None
+            sid = parts[1]
+            return sid[:8], self.server.session_home(sid), parts[2:]
+        return "cli", self.server.home, parts
+
+    def do_GET(self):
+        name = self.path.split("?", 1)[0].lstrip("/") or "index.html"
+        path = os.path.join(STATIC, name)
+        ext = os.path.splitext(name)[1]
+        if "/" in name or ext not in STATIC_TYPES or not os.path.isfile(path):
+            return self._reply(404, b"not found\n", "text/plain")
+        with open(path, "rb") as f:
+            self._reply(200, f.read(), STATIC_TYPES[ext], SECURITY_HEADERS)
+
     def do_PUT(self):
-        name = self.path.rsplit("/", 1)[-1]
-        if not self.path.startswith("/setup/") or name not in SETUP_FILES:
-            log(f"refused upload of '{name}' (only {sorted(SETUP_FILES)} are accepted)")
+        r = self._route()
+        if r is None or len(r[2]) != 2 or r[2][0] != "setup" or r[2][1] not in SETUP_FILES:
+            log(f"refused upload to {self.path.split('?')[0][:60]!r} "
+                f"(only {sorted(SETUP_FILES)} are accepted)")
             return self._reply(403, b"refused\n", "text/plain")
+        label, home, (_, name) = r
         data = self._body()
-        with open(os.path.join(self.server.home, name), "wb") as f:
-            f.write(data)
-        # New keys mean a new patient: any recorded trace belongs to the old keys.
-        for d in os.listdir(self.server.home):
-            if d.startswith("health_risk_server_workload_"):
-                shutil.rmtree(os.path.join(self.server.home, d))
-        log(f"setup: received {name}, {len(data):,} bytes")
+        with self.server.lock_for(home):
+            with open(os.path.join(home, name), "wb") as f:
+                f.write(data)
+            # New keys mean a new patient: any recorded trace belongs to the old keys.
+            for d in os.listdir(home):
+                if d.startswith("health_risk_server_workload_"):
+                    shutil.rmtree(os.path.join(home, d))
+        log(f"[{label}] setup: received {name}, {len(data):,} bytes")
         self._reply(200, b"ok\n", "text/plain")
 
     def do_POST(self):
-        if self.path != "/score":
-            return self._reply(404)
-        home = self.server.home
+        r = self._route()
+        if r is None or r[2] != ["score"]:
+            return self._reply(404, b"not found\n", "text/plain")
+        label, home, _ = r
+        if not all(os.path.exists(os.path.join(home, f)) for f in SETUP_FILES):
+            return self._reply(409, b"upload the setup files first\n", "text/plain")
         data = self._body()
-        log(f"received {len(data):,} bytes of ciphertext")
-        with open(os.path.join(home, "ct_x.bin"), "wb") as f:
-            f.write(data)
+        log(f"[{label}] received {len(data):,} bytes of ciphertext")
         cmd = [os.path.join(BUILD, "health_risk_server"), "."]
         if self.server.mode == "cpu":
             cmd.append("--cpu")
@@ -79,19 +127,49 @@ class Handler(http.server.BaseHTTPRequestHandler):
             cmd.append("--hollow")
             if self.server.mode == "fog":
                 cmd = ["fog", "submit", cmd[0], ".", "--hollow", f"--target={self.server.fog_target}"]
-        t0 = time.monotonic()
-        p = subprocess.run(cmd, cwd=home, capture_output=True, text=True)
-        dt = time.monotonic() - t0
-        if p.returncode != 0:
-            log(f"server failed (exit {p.returncode}):\n{p.stderr[-2000:]}")
-            return self._reply(500, b"scoring failed\n", "text/plain")
+        with self.server.lock_for(home):  # one question at a time per session
+            with open(os.path.join(home, "ct_x.bin"), "wb") as f:
+                f.write(data)
+            t0 = time.monotonic()
+            p = subprocess.run(cmd, cwd=home, capture_output=True, text=True)
+            dt = time.monotonic() - t0
+            if p.returncode != 0:
+                log(f"[{label}] server failed (exit {p.returncode}):\n{p.stderr[-2000:]}")
+                return self._reply(500, b"scoring failed\n", "text/plain")
+            with open(os.path.join(home, "ct_result.bin"), "rb") as f:
+                out = f.read()
         how = "plain OpenFHE" if self.server.mode == "cpu" else (
             "replayed the recorded trace" if "cached trace found" in p.stdout
             else "recorded the trace, then replayed it")
-        with open(os.path.join(home, "ct_result.bin"), "rb") as f:
-            out = f.read()
-        log(f"{how} in {dt:.2f}s; returned {len(out):,} bytes, still encrypted")
+        log(f"[{label}] {how} in {dt:.2f}s; returned {len(out):,} bytes, still encrypted")
         self._reply(200, out)
+
+
+class RiskService(http.server.ThreadingHTTPServer):
+    daemon_threads = True
+
+    def __init__(self, addr, home, mode, fog_target):
+        super().__init__(addr, Handler)
+        self.home, self.mode, self.fog_target = home, mode, fog_target
+        self._locks, self._guard = {}, threading.Lock()
+        self.prepare(home)
+
+    def prepare(self, home):
+        os.makedirs(home, exist_ok=True)
+        if os.path.exists(os.path.join(home, "sk.bin")):
+            sys.exit(f"[REFUSED] a secret key is present in {home}; the service must never hold it")
+        shutil.copy(os.path.join(APP, "data", "model.txt"), home)
+
+    def session_home(self, sid):
+        home = os.path.join(self.home, "sessions", sid)
+        if not os.path.isdir(home):
+            with self._guard:
+                self.prepare(home)
+        return home
+
+    def lock_for(self, home):
+        with self._guard:
+            return self._locks.setdefault(home, threading.Lock())
 
 
 def main():
@@ -102,16 +180,12 @@ def main():
     ap.add_argument("--fog-target", default="FOG")
     a = ap.parse_args()
 
-    os.makedirs(a.home, exist_ok=True)
-    if os.path.exists(os.path.join(a.home, "sk.bin")):
-        sys.exit(f"[REFUSED] a secret key is present in {a.home}; the service must never hold it")
-    shutil.copy(os.path.join(APP, "data", "model.txt"), a.home)
     os.environ.setdefault("NBCC_FHETCH_SIM",
                           os.path.join(REPO, "build", "vendor", "niobium-fhetch", "fhetch_sim"))
-
-    srv = http.server.HTTPServer(("127.0.0.1", a.port), Handler)
-    srv.home, srv.mode, srv.fog_target = os.path.abspath(a.home), a.mode, a.fog_target
-    log(f"listening on http://127.0.0.1:{a.port}  mode={a.mode}  home={srv.home}")
+    srv = RiskService(("127.0.0.1", a.port), os.path.abspath(a.home), a.mode, a.fog_target)
+    web = os.path.isfile(os.path.join(STATIC, "risk_client.wasm"))
+    log(f"listening on http://127.0.0.1:{a.port}  mode={a.mode}  home={srv.home}"
+        + ("" if web else "  (web app not built: run web/build.sh)"))
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

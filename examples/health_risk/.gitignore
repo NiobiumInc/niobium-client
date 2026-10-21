@@ -6,3 +6,7 @@ run_*/
 health_risk_server_workload_*/
 nbcc_fhetch_replay_source_*/
 __pycache__/
+# WebAssembly build: OpenFHE for the browser, and the compiled module (web/build.sh)
+web/build/
+web/static/risk_client.js
+web/static/risk_client.wasm
