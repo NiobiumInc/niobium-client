@@ -111,3 +111,34 @@ if(TARGET niobium_client_autofacade)
     endif()
     set_openfhe_rpath(ciphers_ops_server_auto)
 endif()
+
+# ==============================================================================
+# Health-risk example — keygen / encrypt / server / decrypt (interactive demo)
+# ==============================================================================
+# The server uses cooperative auto-tagging (record once, replay per patient),
+# so it links the auto-facade, force-loaded like ciphers_ops_server_auto.
+
+if(TARGET niobium_client_autofacade)
+    add_executable(health_risk_keygen  health_risk/keygen.cpp)
+    add_executable(health_risk_encrypt health_risk/encrypt.cpp)
+    add_executable(health_risk_server  health_risk/server.cpp)
+    add_executable(health_risk_decrypt health_risk/decrypt.cpp)
+
+    target_link_libraries(health_risk_keygen  PRIVATE niobium_fhetch)
+    target_link_libraries(health_risk_encrypt PRIVATE niobium_fhetch)
+    target_link_libraries(health_risk_decrypt PRIVATE niobium_fhetch)
+    target_link_libraries(health_risk_server
+        PRIVATE niobium_fhetch niobium_client_autofacade)
+    if(UNIX AND NOT APPLE)
+        target_link_options(health_risk_server PRIVATE
+            "LINKER:--whole-archive,$<TARGET_FILE:niobium_client_autofacade>,--no-whole-archive")
+    elseif(APPLE)
+        target_link_options(health_risk_server PRIVATE
+            "LINKER:-force_load,$<TARGET_FILE:niobium_client_autofacade>")
+    endif()
+
+    set_openfhe_rpath(health_risk_keygen)
+    set_openfhe_rpath(health_risk_encrypt)
+    set_openfhe_rpath(health_risk_server)
+    set_openfhe_rpath(health_risk_decrypt)
+endif()
