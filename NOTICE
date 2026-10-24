@@ -2,9 +2,9 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-10-19
+Generated: 2026-10-24
 Tool: SCANOSS (snippet detection with License dataset)
-Components: 68
+Components: 70
 
 This file lists all third-party software components detected
 in this repository, along with their licenses and copyright
@@ -15,27 +15,30 @@ notices as required by those licenses.
 WARNING: The following component(s) have no license information.
 These require manual review to determine licensing terms.
 
+  - goog-coredumper/google-perftools (https://sourceforge.net/projects/goog-coredumper/google-perftools)
   - startle (https://github.com/raphael-group/startle)
 
 ------------------------------------------------------------
 
 LICENSE SUMMARY
 
-  Apache-2.0: 15 component(s)
+  Apache-2.0: 16 component(s)
   Apache-2.0 WITH LLVM-exception: 2 component(s)
   Apache-2.0 WITH LLVM-exception AND NCSA: 1 component(s)
   Apache-2.0 WITH LLVM-exception AND NCSA AND NCSA OR MIT AND NCSA AND MIT: 1 component(s)
   BSD-2-Clause: 6 component(s)
-  BSD-3-Clause: 28 component(s)
+  BSD-3-Clause: 29 component(s)
   BSD-3-Clause-LBNL: 1 component(s)
   BSL-1.0: 1 component(s)
+  CC-BY-4.0: 1 component(s)
   CC0-1.0: 1 component(s)
   EPL-2.0 [COPYLEFT]: 1 component(s)
   GPL-2.0-only [COPYLEFT]: 4 component(s)
   GPL-2.0-or-later [COPYLEFT]: 2 component(s)
-  GPL-3.0-only [COPYLEFT]: 2 component(s)
+  GPL-3.0-only [COPYLEFT]: 3 component(s)
   ISC: 1 component(s)
   LGPL-2.1-only [COPYLEFT]: 2 component(s)
+  LGPL-3.0-only [COPYLEFT]: 1 component(s)
   MIT: 18 component(s)
   MPL-2.0 [COPYLEFT]: 1 component(s)
   NCSA: 3 component(s)
@@ -269,14 +272,84 @@ COMPONENT ATTRIBUTIONS
   Source: https://github.com/kirya23/fall_semester_programing
   PURL: pkg:github/kirya23/fall_semester_programing
   Copyright:
+    Copyright 1963-1965 Jane Doe Joe Blow John Coe
+    Copyright 1995-2003 Jean-loup Gailly and Mark Adler
+    Copyright 1995-2003 by Jean-loup Gailly
+    Copyright 1995-2010 Geodan Amsterdam  the Netherlands
+    Copyright 1995-2017 Jean-loup Gailly and Mark Adler
+    Copyright 1995-2022 Jean-loup Gailly and Mark Adler
+    Copyright 1996-2019 Julian R Seward. All
+    Copyright 1996-2019 Julian Seward  jseward@acm.org
+    Copyright 1998 by Bob Dellaca
+    Copyright 1998 by Jacques Nomssi Nzali
     Copyright 2000-2001 ; University of Notre Dame.
+    Copyright 2000-2011 Joerg Walter Mathias Koch David Bellot
+    Copyright 2001-2006 CrystalClear Software Inc
+    Copyright 2001-2014 Gennadiy Rozental. br
+    Copyright 2002 Vladimir Prus
     Copyright 2002-2003 ; Trustees of Indiana University.
+    Copyright 2002-2006 CrystalClear Software Inc
+    Copyright 2002-2006 Marcin Kalicinski br
+    Copyright 2003 Jeremy B. Maitin-Shepard
+    Copyright 2003 Vladimir Prus
+    Copyright 2003 by Cosmin Truta
+    Copyright 2003-2017 Beman Dawes
+    Copyright 2003-2024 Christopher M. Kohlhoff  chris at kohlhoff dot com
+    Copyright 2004 Vladimir Prus
+    Copyright 2005 Vladimir Prus
+    Copyright 2005-2008 Daniel James
+    Copyright 2006 Andy Tompkins
+    Copyright 2006 Marcin Kalicinski
+    Copyright 2006 Vladimir Prus
+    Copyright 2006-2010 John Maddock and Paul A. Bristow
+    Copyright 2006-2021 Emil Dotchevski. Distributed under the [Boost Software License Version 1.0] http:  www.boost.org LICENSE_1_0.txt
+    Copyright 2007 Vladimir Prus
+    Copyright 2007-2011 Barend Gehrels Amsterdam  the Netherlands
+    Copyright 2007-2013 Barend Gehrels Amsterdam  the Netherlands
     Copyright 2008 Google Inc
+    Copyright 2008 Jurko Gospodnetic
+    Copyright 2008 Paul A. Bristow John Maddock
+    Copyright 2008-2011 Bruno Lalande Paris  France
+    Copyright 2008-2013 Bruno Lalande Paris  France
+    Copyright 2008-2023 Emil Dotchevski and Reverge Studios Inc. Distributed under the [Boost Software License Version 1.0] http:  www.boost.
+    Copyright 2009 Sebastian Redl
+    Copyright 2009-2011 Mateusz Loskot London  UK
+    Copyright 2009-2013 Mateusz Loskot London  UK
+    Copyright 2010-2001 Timequake man
+    Copyright 2013 Christian Henning
+    Copyright 2013-2020 Boost.Test team
+    Copyright 2013-2022 Niels Lohmann
     Copyright 2014 Grav
     Copyright 2014 fqiang
+    Copyright 2015 John Maddock and Paul A. Bristow
     Copyright 2015-2016 Barrett Adair
+    Copyright 2016 John Maddock. Distributed under the Boost
     Copyright 2016 MATHIEU CORNIC
+    Copyright 2016 Nicolas Seriot
+    Copyright 2017 James E. King III
+    Copyright 2017 Rene Rivera
     Copyright 2017 Valere JEANTET
+    Copyright 2018 Joe Blow John Coe
+    Copyright 2018 John Maddock. Distributed under the Boost
+    Copyright 2018 Paul Fultz II
+    Copyright 2018 Peter Dimov
+    Copyright 2018-2021 Peter Dimov
+    Copyright 2018-2022 Peter Dimov
+    Copyright 2018-2023 Emil Dotchevski and Reverge Studios Inc. Distributed under the http:  www.boost.org LICENSE_1_0.txt[Boost Software Li
+    Copyright 2019 Damian Jarek
+    Copyright 2020 Peter Dimov
+    Copyright 2022 Christian Mazakas
+    Copyright 2022 Peter Dimov
+    Copyright 2022-2023 Christian Mazakas
+    Copyright 2022-2023 Peter Dimov
+    Copyright 2022-2023 Peter Dimov and Matt Borland and is distributed under
+    Copyright 2022-2024 Joaqu iacute;n M L oacute;pez Mu ntilde;oz
+    Copyright 2023 Alan de Freitas  alandefreitas@gmail.com)
+    Copyright 2023 Peter Dimov
+    Copyright 2023 Ren   Ferdinand Rivera Morell; Copyright Vladimir Prus; Copyright Jurko Gospodnetic
+    Copyright 2024 Braden Ganetsky
+    Copyright 2024 Christian Mazakas
+    Copyright 2024 Peter Dimov
     Copyright 2007; Google Inc.
   License: Apache-2.0, BSD-3-Clause
 
@@ -401,6 +474,12 @@ COMPONENT ATTRIBUTIONS
   Copyright:
     Copyright (c) 2014; Randolph Voorhies; Shane Grant
   License: BSD-3-Clause, BSL-1.0, MIT
+
+  goog-coredumper/google-perftools
+  Version: 0.1
+  Source: https://sourceforge.net/projects/goog-coredumper/google-perftools
+  PURL: pkg:sourceforge/goog-coredumper/google-perftools
+  License: UNKNOWN — requires manual review
 
   google-testmock
   Version: 1.14.0
@@ -627,9 +706,12 @@ COMPONENT ATTRIBUTIONS
     Copyright 1995-2024 Jean-loup Gailly and Mark Adler
     Copyright 1995-2026 Jean-loup Gailly and Mark Adler
     Copyright 1996-1997 Andreas Dilger
+    Copyright 1996-1997 Andreas Dilger are derived from libpng-0.88
     Copyright 1996-2010 the NASM Authors - All rights reserved
     Copyright 1998 Todd C. Miller  lt;Todd.Miller@courtesan.com gt;
+    Copyright 1998-2000 Glenn Randers-Pehrson are derived from
     Copyright 1998-2011 The OpenSSL Project.  All rights reserved.
+    Copyright 1999 Pai-Hsiang Hsiao
     Copyright 1999-2000 Ross Bencina and Phil Burk
     Copyright 2000 Dug Song  lt;dugsong@monkey.org gt;
     Copyright 2000-2007 Niels Provos  lt;provos@citi.umich.edu gt;
@@ -641,6 +723,7 @@ COMPONENT ATTRIBUTIONS
     Copyright 2003 Michael A. Davis  lt;mike@datanerds.net gt;
     Copyright 2003-2004 ; Mark Borgerding
     Copyright 2004 the University Corporation for Atmospheric
+    Copyright 2005 David Turner
     Copyright 2005 Steve Underwood
     Copyright 2005-2008 ; The Android Open Source Project
     Copyright 2005-2017 ; Xiph.Org Foundation
@@ -677,12 +760,14 @@ COMPONENT ATTRIBUTIONS
     Copyright 2017 ; The Android Open Source Project
     Copyright 2017 ; The CRC32C Authors.
     Copyright 2017 Roman Lebedev. All rights reserved
+    Copyright 2018-2019 Cosmin Truta
     Copyright 2019 Yibo Cai
     Copyright 2019 Zenichi Amano
     Copyright 2022 ; Google Inc.
     Copyright 2022 Google LLC
     Copyright 2023 The Chromium Authors
     Copyright 2024 The Bazel Authors
+    Copyright 2025 The syntaqlite Authors. All rights reserved
     Copyright 2016 Ismael Jimenez Martinez
     Copyright copyright owner or entity authorized by
   License: Apache-2.0
@@ -856,7 +941,7 @@ COMPONENT ATTRIBUTIONS
   License: MIT
 
   openfhe-development
-  Version: old-dev-v1.1.0
+  Version: v1.6.0
   Source: https://github.com/openfheorg/openfhe-development
   PURL: pkg:github/openfheorg/openfhe-development
   Copyright:
@@ -865,6 +950,7 @@ COMPONENT ATTRIBUTIONS
     Copyright  c) 2014-2023  NJIT  Duality Technologies Inc. and other contributors
     Copyright  c) 2014-2024  NJIT  Duality Technologies Inc. and other contributors
     Copyright  c) 2014-2025  NJIT  Duality Technologies Inc. and other contributors
+    Copyright  c) 2014-2026  NJIT  Duality Technologies Inc. and other contributors
     Copyright (c) 2014-2022; NJIT; Duality Technologies Inc. and other contributors
     Copyright (c) 2014-2023; NJIT; Duality Technologies Inc. and other contributors
     Copyright (c) 2014-2024; NJIT; Duality Technologies Inc. and other contributors
@@ -1012,6 +1098,14 @@ COMPONENT ATTRIBUTIONS
     Copyright 2018; Google Inc.
     Copyright 2019; Google LLC.
   License: Apache-2.0
+
+  yunpin-ime
+  Version: v0.1.0-preview.3
+  Source: https://github.com/kukuyan/yunpin-ime
+  PURL: pkg:github/kukuyan/yunpin-ime
+  Copyright:
+    Copyright 2020; Google Inc.
+  License: Apache-2.0, BSD-3-Clause, CC-BY-4.0, GPL-3.0-only, LGPL-3.0-only
 
 ------------------------------------------------------------
 
@@ -1492,4 +1586,39 @@ If it is not possible or desirable to put the notice in a particular file, then 
 
 You may add additional accurate notices of copyright ownership.
 
+
+
+--- LGPL-3.0-only ---
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the Free
+Software Foundation, version 3 of the License.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program. If not, see <https://www.gnu.org/licenses/>.
+
+Full license text: https://www.gnu.org/licenses/gpl-3.0.html
+
+
+--- CC-BY-4.0 ---
+
+This work is licensed under the Creative Commons Attribution 4.0
+International License. To view a copy of this license, visit
+http://creativecommons.org/licenses/by/4.0/ or send a letter to Creative
+Commons, PO Box 1866, Mountain View, CA 94042, USA.
+
+You are free to:
+- Share: copy and redistribute the material in any medium or format
+- Adapt: remix, transform, and build upon the material for any purpose,
+  even commercially
+
+Under the following terms:
+- Attribution: You must give appropriate credit, provide a link to the
+  license, and indicate if changes were made.
+
+Full license text: https://creativecommons.org/licenses/by/4.0/legalcode
 
