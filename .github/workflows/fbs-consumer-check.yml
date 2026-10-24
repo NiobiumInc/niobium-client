@@ -330,13 +330,12 @@ jobs:
           set +x
           export NBCC_FHETCH_SERVER="http://127.0.0.1:$PORT"
           rc=0
-          # Output captured to a file (kept out of the public log); shipped to a
-          # PRIVATE bucket only on failure (see upload step below).
-          python3 harness/run_submission.py 0 --seed 54321 --target FHE_SIM --opt-level O1 >"$RUNNER_TEMP/fbs-replay.log" 2>&1 || rc=1
+          # Output suppressed (kept out of the public log).
+          python3 harness/run_submission.py 0 --seed 54321 --target FHE_SIM --opt-level O1 >/dev/null 2>&1 || rc=1
           if [ $rc -eq 0 ]; then
             echo "fbs consumer check (compiler E2E): PASS"
           else
-            echo "::error::fbs consumer check FAILED (output suppressed by policy; see private debug logs — reproduce locally)"
+            echo "::error::fbs consumer check FAILED (output suppressed by policy — reproduce locally)"
           fi
           exit $rc
 
@@ -357,38 +356,3 @@ jobs:
             for i in 1 2 3 4 5; do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
             kill -0 "$pid" 2>/dev/null && kill -KILL "$pid" 2>/dev/null || true
           fi
-
-      # DEBUG (temporary): on failure, ship the suppressed logs to a PRIVATE,
-      # access-controlled bucket in the runner project — never to the public log.
-      # Bucket github-runner-499901-ci-debug has public-access-prevention enforced
-      # + a 14-day auto-delete lifecycle; the runner SA has write-only access. The
-      # public log shows only the gs:// pointer, not the contents. Remove this step
-      # (and restore /dev/null above) once the FHE_SIM/O1 failure is diagnosed.
-      - name: Upload suppressed logs to private bucket (on failure)
-        if: failure()
-        run: |
-          set +x
-          BUCKET="github-runner-499901-ci-debug"
-          PREFIX="${{ github.repository }}/${{ github.run_id }}-${{ github.run_attempt }}"
-          # Upload via the GCS JSON API (objects.insert) using the VM's metadata
-          # token — needs ONLY storage.objects.create, so the runner SA stays
-          # write-only (gcloud storage cp would also do an objects.get and 403).
-          TOKEN="$(curl -sf -H 'Metadata-Flavor: Google' \
-            'http://metadata/computeMetadata/v1/instance/service-accounts/default/token' \
-            | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])')"
-          for f in fbs-replay.log fhetch_server.log memlog.txt; do
-            [ -f "$RUNNER_TEMP/$f" ] || continue
-            obj="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$PREFIX/$f")"
-            if curl -sf -X POST \
-                 -H "Authorization: Bearer $TOKEN" -H 'Content-Type: text/plain' \
-                 --data-binary @"$RUNNER_TEMP/$f" \
-                 "https://storage.googleapis.com/upload/storage/v1/b/$BUCKET/o?uploadType=media&name=$obj" \
-                 >/dev/null; then
-              echo "uploaded $f"
-            else
-              echo "::warning::failed to upload $f"
-            fi
-          done
-          echo "Suppressed logs uploaded to private bucket (team-only read):"
-          echo "  gs://$BUCKET/$PREFIX/"
-          echo "Retrieve with:  gcloud storage cp -r \"gs://$BUCKET/$PREFIX\" ."
