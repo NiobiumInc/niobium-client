@@ -230,6 +230,20 @@ depth is added on top. The bootstrap keys are generated for full packing
 uses fewer slots still gets the full-slot keys. The bootstrap rotation keys travel to the server in
 `rk.bin` with the other rotation keys.
 
+`bootstrap_iterations: 2` (default 1) selects OpenFHE's iterative bootstrap:
+the first refresh's error, scaled by `2^precision`, is refreshed again and
+subtracted, which gains about `precision` bits for one more bootstrap per
+refresh and one more level, which key generation reserves on top of `depth`.
+`bootstrap_precision: N bits` is the precision of a single bootstrap at the
+scheme's parameters, measured (OpenFHE's `iterative-ckks-bootstrapping`
+example) and passed a few bits lower: too high and the scaled error
+overflows. A call can be cheaper or more precise than the scheme:
+`bootstrap(ct, iterations: 1)` where the precision does not matter,
+`bootstrap(ct, precision: 12)` for its own precision. A call cannot ask for
+more iterations than the scheme reserved. Both fields are static like the
+budget (`scheme.override` rejects them). The cleartext twin is the identity
+whatever the iterations.
+
 ---
 
 ## Type System

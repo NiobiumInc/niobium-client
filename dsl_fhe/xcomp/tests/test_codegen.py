@@ -762,6 +762,80 @@ def test_bootstrap_call_requires_capability():
         assert "requires" in str(e)
 
 
+ITER_STAGES = """
+    @client @stage("key_generation")
+    fn generate_keys(inst: Instance) -> writes(CryptoParams) {
+        let keys = keygen()
+        return CryptoParams {
+            context: keys.context, public_key: keys.public,
+            eval_mult_key: keys.eval_mult, eval_rot_keys: keys.eval_rot,
+        }
+    }
+    @server @stage("compute")
+    fn compute(inst: Instance) -> reads(CryptoParams, EncryptedInputs), writes(EncryptedResult) {
+        let params = load(CryptoParams, from: keydir(inst))
+        let inputs = load(EncryptedInputs, from: encdir(inst))
+        let ct = bootstrap(inputs.pages[0] * inputs.pages[0])
+        let cheap = bootstrap(ct, iterations: 1)
+        let fine = bootstrap(cheap, precision: 12)
+        return EncryptedResult { ciphertext: fine }
+    }
+"""
+
+
+def test_bootstrap_iterations_scheme_and_call():
+    """`bootstrap_iterations: 2` emits OpenFHE's iterative bootstrap with the
+    scheme's precision and reserves one more level in keygen; a call may
+    lower the iterations or name its own precision; the twin stays the
+    identity."""
+    files = compile_str(BOOTSTRAP_PRELUDE + """
+    scheme CKKS {
+        security: not_set
+        depth: 14
+        bootstrap_budget: 3 levels
+        bootstrap_iterations: 2
+        bootstrap_precision: 17 bits
+    }
+    requires { add, mul, bootstrap }
+    """ + ITER_STAGES)
+    kg = files["key_generation.cpp"]
+    assert ("parameters.SetMultiplicativeDepth(14 + "
+            "FHECKKSRNS::GetBootstrapDepth(_level_budget, UNIFORM_TERNARY) + 1);") in kg
+    srv = files["compute.cpp"]
+    assert "cc->EvalBootstrap(ct, 2, 17)" not in srv  # the first call refreshes the product
+    assert ", 2, 17)" in srv
+    assert "cheap = cc->EvalBootstrap(ct);" in srv
+    assert "fine = cc->EvalBootstrap(cheap, 2, 12);" in srv
+    ref = files["compute_ref.cpp"]
+    assert "EvalBootstrap" not in ref
+    # without the field: the plain call, the plain depth
+    files = compile_str(BOOTSTRAP_PRELUDE + """
+    scheme CKKS { security: not_set depth: 14 }
+    requires { add, mul, bootstrap }
+    """ + ITER_STAGES.replace("bootstrap(cheap, precision: 12)", "bootstrap(cheap)"))
+    assert "GetBootstrapDepth(_level_budget, UNIFORM_TERNARY));" in files["key_generation.cpp"]
+    assert "cc->EvalBootstrap(ct, 2" not in files["compute.cpp"]
+
+
+def test_bootstrap_iterations_rejected():
+    from xcomp.codegen import CodegenError
+    import pytest
+    base = BOOTSTRAP_PRELUDE + """
+    scheme CKKS { security: not_set depth: 14 %s }
+    requires { add, mul, bootstrap }
+    """
+    with pytest.raises(CodegenError, match="1 or 2"):
+        compile_str(base % "bootstrap_iterations: 3" + ITER_STAGES)
+    # 2 iterations without a precision anywhere
+    with pytest.raises(CodegenError, match="precision"):
+        compile_str(base % "bootstrap_iterations: 2" + ITER_STAGES)
+    # a call asking for more iterations than keygen reserved
+    with pytest.raises(CodegenError, match="bootstrap_iterations: 2"):
+        compile_str(base % "" + ITER_STAGES.replace("iterations: 1", "iterations: 2, precision: 10"))
+    with pytest.raises(CodegenError, match="unknown argument"):
+        compile_str(base % "" + ITER_STAGES.replace("iterations: 1", "iters: 1"))
+
+
 def test_enumerate_index_advances_inside_loop():
     files = compile_str(BOOTSTRAP_PRELUDE + """
     fn f(pages: vec<enc<vec<f64>>>) -> enc<vec<f64>> {
