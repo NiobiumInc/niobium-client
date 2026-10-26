@@ -262,13 +262,17 @@ class CodeGenerator:
         # The bootstrap budget is static: keygen sizes the keys with it and
         # every server stage re-runs EvalBootstrapSetup with it, so a
         # per-stage override would make the two diverge silently.
+        # The same for the iterations (keygen reserves their level) and the
+        # precision (a call overrides it with precision: P instead).
         for fn in self.shared_fns + [s.fn for s in self.stages]:
             for ov in self._scheme_overrides(fn):
-                if "bootstrap_budget" in ov:
-                    raise CodegenError(
-                        f"scheme.override(bootstrap_budget: ...) in {fn.name!r}: "
-                        "the bootstrap budget cannot be overridden per stage "
-                        "(set it once in the scheme block)")
+                for key in ("bootstrap_budget", "bootstrap_iterations",
+                            "bootstrap_precision"):
+                    if key in ov:
+                        raise CodegenError(
+                            f"scheme.override({key}: ...) in {fn.name!r}: "
+                            f"the {key.replace('_', ' ')} cannot be overridden "
+                            "per stage (set it once in the scheme block)")
 
     def _get_stage(self, fn: ast.FnDecl) -> StageInfo | None:
         stage_name = None
@@ -1575,6 +1579,79 @@ endforeach()
                 if f.key == "bootstrap_budget":
                     return int(str(f.value).split()[0])
         return 3
+
+    def _scheme_field(self, key: str):
+        if self.scheme:
+            for f in self.scheme.fields:
+                if f.key == key:
+                    return f.value
+        return None
+
+    def _bootstrap_iterations(self) -> int:
+        """Iterations of a bootstrap (scheme `bootstrap_iterations`, default 1).
+        2 is OpenFHE's iterative bootstrap: the first refresh's error, scaled
+        by 2^precision, is refreshed again and subtracted, which gains about
+        `precision` bits for one more bootstrap and one more level. Static
+        like the budget: keygen reserves the level."""
+        v = self._scheme_field("bootstrap_iterations")
+        if v is None:
+            return 1
+        n = int(str(v).split()[0])
+        if n not in (1, 2):
+            raise CodegenError(
+                f"scheme bootstrap_iterations: {n}: OpenFHE's CKKS bootstrap "
+                "runs 1 or 2 iterations")
+        return n
+
+    def _bootstrap_precision(self) -> int | None:
+        """Bits of precision of a single bootstrap, the scale of the error
+        the second iteration refreshes (scheme `bootstrap_precision: N bits`).
+        Measure it (OpenFHE's iterative-ckks-bootstrapping example) and pass
+        a few bits less: too high and the scaled error overflows."""
+        v = self._scheme_field("bootstrap_precision")
+        if v is None:
+            return None
+        n = int(str(v).split()[0])
+        if n <= 0:
+            raise CodegenError("scheme bootstrap_precision must be positive")
+        return n
+
+    def _gen_bootstrap_call(self, expr: ast.CallExpr, ct: str) -> str:
+        """bootstrap(ct [, iterations: N] [, precision: P]): the scheme's
+        iterations and precision unless the call names its own. A call may
+        use fewer iterations than the scheme (a cheap refresh where the
+        precision does not matter), never more: keygen sized the depth."""
+        named = {a.name: a.value for a in expr.args if a.name}
+        unknown = sorted(set(named) - {"iterations", "precision"})
+        if unknown:
+            raise CodegenError(
+                f"bootstrap(): unknown argument {unknown[0]!r} "
+                "(iterations: N, precision: P)")
+        iters = self._bootstrap_iterations()
+        prec = self._bootstrap_precision()
+        if "iterations" in named:
+            v = named["iterations"]
+            if not isinstance(v, ast.IntLiteral) or v.value not in (1, 2):
+                raise CodegenError("bootstrap(iterations: N): N is the literal 1 or 2")
+            if v.value > iters:
+                raise CodegenError(
+                    f"bootstrap(iterations: {v.value}) needs bootstrap_iterations: "
+                    f"{v.value} in the scheme block: key generation reserves "
+                    "the extra level")
+            iters = v.value
+        if "precision" in named:
+            v = named["precision"]
+            if not isinstance(v, ast.IntLiteral) or v.value <= 0:
+                raise CodegenError("bootstrap(precision: P): P is a positive integer literal")
+            prec = v.value
+        if iters == 1:
+            return f"cc->EvalBootstrap({ct})"
+        if prec is None:
+            raise CodegenError(
+                "a 2-iteration bootstrap needs the precision of a single one: "
+                "bootstrap_precision: N bits in the scheme block, or "
+                "precision: N on the call")
+        return f"cc->EvalBootstrap({ct}, {iters}, {prec})"
 
     SEC_MAP = {
         "not_set": "HEStd_NotSet",
@@ -2911,7 +2988,7 @@ endforeach()
                         "declaration (it drives key generation and setup)")
                 if self._plain_mode:
                     return f"({args[0]})"  # a refresh is the identity on values
-                return f"cc->EvalBootstrap({args[0]})"
+                return self._gen_bootstrap_call(expr, args[0])
             if fname == "relin":
                 if self._plain_mode:
                     return f"({args[0]})"
@@ -3885,10 +3962,13 @@ endforeach()
             # comes on top so the refreshed ciphertext really has `depth`
             # levels. The budget is the scheme's bootstrap_budget (default 3).
             budget = self._bootstrap_budget()
+            # One more level per extra iteration (OpenFHE's own example).
+            extra = self._bootstrap_iterations() - 1
             lines += [
                 f"    std::vector<uint32_t> _level_budget = {{{budget}, {budget}}};",
                 f"    parameters.SetMultiplicativeDepth({depth} + "
-                f"FHECKKSRNS::GetBootstrapDepth(_level_budget, {key_dist}));",
+                f"FHECKKSRNS::GetBootstrapDepth(_level_budget, {key_dist})"
+                + (f" + {extra}" if extra else "") + ");",
             ]
         else:
             lines.append(f"    parameters.SetMultiplicativeDepth({depth});")
