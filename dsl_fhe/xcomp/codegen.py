@@ -2768,9 +2768,9 @@ endforeach()
             # it at level 0 (every tower) and drop the towers the product does
             # not use; the recorded FHETCH trace tags the plaintext as made,
             # so a full-depth encoding costs the trace one plaintext of
-            # (total towers) x (ring) per product. A transformer block is
-            # thousands of such products, which made the trace of the
-            # encrypted-gpt2 toy profile 2.5 MB per weight diagonal.
+            # (total towers) x (ring) per product. A matrix-vector circuit
+            # is thousands of such products: megabytes of trace per
+            # diagonal at full depth, kilobytes at the ciphertext's level.
             if left_enc != right_enc and expr.op in ("+", "-", "*"):
                 vec_left = not left_enc and self._is_vector_expr(expr.left)
                 vec_right = not right_enc and self._is_vector_expr(expr.right)
