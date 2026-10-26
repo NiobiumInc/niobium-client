@@ -276,6 +276,9 @@ requires { add, mul, rotate }  // generates appropriate key types
   generates keys only for the indices the expression yields (a `vec<i32>`)
 - `bootstrap` enables `bootstrap(ct)`; `depth` then counts the levels left after a refresh
   and `bootstrap_budget: N levels` sets the per-half level budget (see NB_LANGUAGE.md)
+- `bootstrap_iterations: 2` with `bootstrap_precision: N bits` makes every refresh OpenFHE's
+  iterative bootstrap (one more bootstrap and one more level per refresh, about N bits gained);
+  `bootstrap(ct, iterations: 1)` and `bootstrap(ct, precision: P)` override per call (see NB_LANGUAGE.md)
 - `replicate` uses `DFSSlotReplicator::get_rotation_amounts(inst.degrees)`
 - `running_sums` uses `RunningSums::get_shift_amounts(n_slots, n_cols, ...)`
 

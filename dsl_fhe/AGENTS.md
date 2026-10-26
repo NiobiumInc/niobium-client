@@ -568,8 +568,15 @@ precomputations are not serialized. `bootstrap(ct)` compiles to
 without the capability is a `CodegenError`. `rotate(<expr>)` stores the
 expression in `RequiresDecl.args` and keygen generates keys for exactly the
 indices it yields (`std::vector<int>` from the expression's `vec<i32>`),
-replacing the 1..N/2-1 range. Pinned by `test_bootstrap_keygen_setup_and_call`,
-`test_bootstrap_budget_defaults_to_three`, `test_bootstrap_call_requires_capability`.
+replacing the 1..N/2-1 range. With `bootstrap_iterations: 2` and
+`bootstrap_precision: N bits` in the scheme block, `bootstrap(ct)` compiles to
+`cc->EvalBootstrap(ct, 2, N)` (OpenFHE's iterative bootstrap) and keygen adds
+one level to the depth; `bootstrap(ct, iterations: 1)` and
+`bootstrap(ct, precision: P)` override per call, never above the scheme's
+iterations, and `scheme.override` rejects both fields like the budget
+(`_gen_bootstrap_call`). Pinned by `test_bootstrap_keygen_setup_and_call`,
+`test_bootstrap_budget_defaults_to_three`, `test_bootstrap_call_requires_capability`,
+`test_bootstrap_iterations_scheme_and_call`, `test_bootstrap_iterations_rejected`.
 
 ## File Structure
 
