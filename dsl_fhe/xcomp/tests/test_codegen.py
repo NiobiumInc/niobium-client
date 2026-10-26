@@ -819,21 +819,25 @@ def test_bootstrap_iterations_scheme_and_call():
 
 def test_bootstrap_iterations_rejected():
     from xcomp.codegen import CodegenError
-    import pytest
     base = BOOTSTRAP_PRELUDE + """
     scheme CKKS { security: not_set depth: 14 %s }
     requires { add, mul, bootstrap }
     """
-    with pytest.raises(CodegenError, match="1 or 2"):
-        compile_str(base % "bootstrap_iterations: 3" + ITER_STAGES)
+
+    def rejected(source: str, needle: str):
+        try:
+            compile_str(source)
+            assert False, f"expected CodegenError mentioning {needle!r}"
+        except CodegenError as e:
+            assert needle in str(e), str(e)
+
+    rejected(base % "bootstrap_iterations: 3" + ITER_STAGES, "1 or 2")
     # 2 iterations without a precision anywhere
-    with pytest.raises(CodegenError, match="precision"):
-        compile_str(base % "bootstrap_iterations: 2" + ITER_STAGES)
+    rejected(base % "bootstrap_iterations: 2" + ITER_STAGES, "precision")
     # a call asking for more iterations than keygen reserved
-    with pytest.raises(CodegenError, match="bootstrap_iterations: 2"):
-        compile_str(base % "" + ITER_STAGES.replace("iterations: 1", "iterations: 2, precision: 10"))
-    with pytest.raises(CodegenError, match="unknown argument"):
-        compile_str(base % "" + ITER_STAGES.replace("iterations: 1", "iters: 1"))
+    rejected(base % "" + ITER_STAGES.replace("iterations: 1", "iterations: 2, precision: 10"),
+             "bootstrap_iterations: 2")
+    rejected(base % "" + ITER_STAGES.replace("iterations: 1", "iters: 1"), "unknown argument")
 
 
 def test_enumerate_index_advances_inside_loop():
