@@ -81,6 +81,26 @@ OPENFHE_INCLUDES = [
 
 NIOBIUM_INCLUDE = "niobium/compiler.h"
 
+# The CKKS libraries the stages can be generated against. "openfhe" is the
+# client's instrumented OpenFHE with the Niobium record/replay instrumentation
+# on @hardware stages. "fideslib" is the FIDESlib facade (the same CryptoContext
+# method names in namespace fideslib): the client stages run on the host and
+# the server stages on the engine FIDESLIB_BACKEND names at run time (cpu,
+# cuda, haze); the haze engine records the FHETCH trace itself, so the
+# Niobium instrumentation is not generated. The wire files keep OpenFHE's
+# serialization in both: the facade exports and imports lbcrypto objects.
+BACKENDS = ("openfhe", "fideslib")
+
+# The facade's umbrella header plus the three it leaves out that a split
+# program needs: the file serialization of the context and keys, the import
+# and export of lbcrypto objects, the backend chosen from the environment.
+FIDESLIB_INCLUDES = [
+    "fideslib.hpp",
+    "Serialize.hpp",
+    "Interop.hpp",
+    "BackendEnv.hpp",
+]
+
 
 # Functions whose return value is always a ciphertext
 
@@ -112,9 +132,14 @@ class CodegenError(Exception):
 class CodeGenerator:
     """Generates OpenFHE C++ from a checked nb AST."""
 
-    def __init__(self, program: ast.Program, analyzer: SemanticAnalyzer):
+    def __init__(self, program: ast.Program, analyzer: SemanticAnalyzer,
+                 backend: str = "openfhe"):
+        if backend not in BACKENDS:
+            raise CodegenError(
+                f"unknown backend {backend!r} (expected one of {', '.join(BACKENDS)})")
         self.program = program
         self.sa = analyzer
+        self.backend = backend
         self.indent_level = 0
         self.out: TextIO = io.StringIO()
         self.stages: list[StageInfo] = []
@@ -273,6 +298,31 @@ class CodeGenerator:
                             f"scheme.override({key}: ...) in {fn.name!r}: "
                             f"the {key.replace('_', ' ')} cannot be overridden "
                             "per stage (set it once in the scheme block)")
+        if self._fideslib:
+            # The haze engine records the FHETCH trace of a server stage by
+            # itself (and the cuda/cpu engines have no trace), so the
+            # Niobium record/replay instrumentation of @hardware stages is
+            # not generated: the stage is an ordinary server stage.
+            for stage in self.stages:
+                stage.hardware = None
+            for cap in ("replicate", "running_sums"):
+                if cap in self.requires:
+                    self._fideslib_unsupported(
+                        f"the `{cap}` capability (its support library calls "
+                        "OpenFHE directly)")
+            if self.externs:
+                self._fideslib_unsupported(
+                    "extern declarations (external OpenFHE C++ sources)")
+
+    @property
+    def _fideslib(self) -> bool:
+        return self.backend == "fideslib"
+
+    def _fideslib_unsupported(self, what: str):
+        raise CodegenError(
+            f"the fideslib backend does not support {what} yet; "
+            "compile without --backend fideslib, or rewrite the program "
+            "without it")
 
     def _get_stage(self, fn: ast.FnDecl) -> StageInfo | None:
         stage_name = None
@@ -368,6 +418,12 @@ class CodeGenerator:
     def generate_all(self) -> dict[str, str]:
         """Generate all output files. Returns {filename: content}."""
         files = {}
+        if self._fideslib:
+            for fn in self.shared_fns:
+                if self._get_extern_call_name(fn):
+                    self._fideslib_unsupported(
+                        f"extern_call (in {fn.name!r}: external OpenFHE C++ sources)")
+            files["nb_fideslib.h"] = self._gen_fideslib_glue()
         files["nb_shared.h"] = self._gen_shared_header()
         self.ref_stage_names = []
         for stage in self.stages:
@@ -384,6 +440,8 @@ class CodeGenerator:
 
     def _gen_cmake(self) -> str:
         """Generate CMakeLists.txt for the compiled stages."""
+        if self._fideslib:
+            return self._gen_cmake_fideslib()
         # Determine extra shared sources from requires capabilities
         extra_src = []
         if "replicate" in self.requires:
@@ -601,6 +659,226 @@ endforeach()
 {autofacade_link_block}
 """
 
+    # ===== FIDESlib backend: the glue header and the CMake template =====
+
+    def _gen_fideslib_glue(self) -> str:
+        """nb_fideslib.h: what the generated code needs from the facade that
+        its OpenFHE-shaped surface does not carry by itself.
+
+        - the process's one context (the facade's keys carry no context
+          pointer, so encrypt/decrypt and the ciphertext loads reach it here);
+        - the server's import of the context the client serialized, re-engined
+          for the backend FIDESLIB_BACKEND names (cpu, cuda, haze);
+        - ciphertext file I/O in OpenFHE's BINARY format: the facade has no
+          ciphertext serializer, so the overloads below export and import the
+          lbcrypto object. Writes are queued and flushed at the end of main():
+          the haze engine reads every marked output back in a single flush,
+          after which nothing may be computed, so a save() in the middle of a
+          stage must not read back on the spot."""
+        return """\
+// Auto-generated by nbc — the FIDESlib backend's glue
+// DO NOT EDIT — changes will be overwritten
+#ifndef NB_FIDESLIB_H_
+#define NB_FIDESLIB_H_
+
+#include <any>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace nb_fideslib {
+
+using Context = fideslib::CryptoContext<fideslib::DCRTPoly>;
+using Cipher = fideslib::Ciphertext<fideslib::DCRTPoly>;
+
+inline Context& context_slot() {
+    static Context cc;
+    return cc;
+}
+
+// The context every encrypt/decrypt and ciphertext load goes through: set by
+// keygen, by the key load of a client stage and by main() of a server stage.
+inline void set_context(const Context& cc) { context_slot() = cc; }
+
+inline Context context() {
+    auto& cc = context_slot();
+    if (!cc) {
+        throw std::runtime_error(
+            "nb_fideslib: no context is set (keygen or the key load comes first)");
+    }
+    return cc;
+}
+
+// The context a client serialized (cc.bin and its .dev sidecar: rotation
+// indices, bootstrap slots, key distribution), re-engined for the backend
+// FIDESLIB_BACKEND names. The sidecar's own engine is the client's (cpu).
+inline Context import_context(const Context& stored) {
+    const auto& host = std::any_cast<const lbcrypto::CryptoContext<lbcrypto::DCRTPoly>&>(stored->host);
+    auto cc = fideslib::ImportCryptoContext(host, fideslib::BackendFromEnv(),
+                                            stored->multiplicative_depth,
+                                            fideslib::LinkedOpenFheReducedNoise());
+    cc->rotation_indexes = stored->rotation_indexes;
+    cc->slots_bootstrap = stored->slots_bootstrap;
+    cc->keyDist = stored->keyDist;
+    return cc;
+}
+
+struct PendingOutput {
+    std::string path;
+    Cipher ct;
+};
+
+inline std::vector<PendingOutput>& pending_outputs() {
+    static std::vector<PendingOutput> v;
+    return v;
+}
+
+// A ciphertext write: marked as an output now, written at flush_outputs().
+inline void queue_output(const std::string& path, const Cipher& ct) {
+    if (!ct) {
+        throw std::runtime_error("nb_fideslib: writing a null ciphertext to " + path);
+    }
+    Cipher c = ct;
+    context()->MarkOutput(c);
+    pending_outputs().push_back({path, c});
+}
+
+inline void flush_outputs() {
+    auto& cc = context_slot();
+    for (auto& p : pending_outputs()) {
+        if (cc) {
+            cc->RecoverHostCiphertext(p.ct);
+        }
+        if (!lbcrypto::Serial::SerializeToFile(p.path, fideslib::ExportCiphertext(p.ct),
+                                               lbcrypto::SerType::BINARY)) {
+            throw std::runtime_error("nb_fideslib: failed to write " + p.path);
+        }
+    }
+    pending_outputs().clear();
+}
+
+}  // namespace nb_fideslib
+
+// The ciphertext overloads of the facade's file serialization, in OpenFHE's
+// BINARY format (the facade serializes contexts and keys only), plus the
+// plain wire fields, which go through lbcrypto's cereal serialization.
+namespace fideslib::Serial {
+
+inline bool SerializeToFile(const std::string& filename, const nb_fideslib::Cipher& ct,
+                            const SerType&) {
+    nb_fideslib::queue_output(filename, ct);
+    return true;
+}
+
+inline bool DeserializeFromFile(const std::string& filename, nb_fideslib::Cipher& ct,
+                                const SerType& sertype) {
+    lbcrypto::Ciphertext<lbcrypto::DCRTPoly> host;
+    bool ok = sertype == BINARY
+        ? lbcrypto::Serial::DeserializeFromFile(filename, host, lbcrypto::SerType::BINARY)
+        : lbcrypto::Serial::DeserializeFromFile(filename, host, lbcrypto::SerType::JSON);
+    if (!ok) {
+        return false;
+    }
+    ct = fideslib::ImportCiphertext(nb_fideslib::context(), host);
+    return true;
+}
+
+template <typename T>
+bool SerializeToFile(const std::string& filename, const T& obj, const SerType& sertype) {
+    return sertype == BINARY
+        ? lbcrypto::Serial::SerializeToFile(filename, obj, lbcrypto::SerType::BINARY)
+        : lbcrypto::Serial::SerializeToFile(filename, obj, lbcrypto::SerType::JSON);
+}
+
+template <typename T>
+bool DeserializeFromFile(const std::string& filename, T& obj, const SerType& sertype) {
+    return sertype == BINARY
+        ? lbcrypto::Serial::DeserializeFromFile(filename, obj, lbcrypto::SerType::BINARY)
+        : lbcrypto::Serial::DeserializeFromFile(filename, obj, lbcrypto::SerType::JSON);
+}
+
+}  // namespace fideslib::Serial
+
+#endif  // NB_FIDESLIB_H_
+"""
+
+    def _gen_cmake_fideslib(self) -> str:
+        """CMakeLists.txt for the fideslib backend: the stages link the
+        FIDESlib package and the OpenFHE it was built against; no
+        libnbfhetch, no auto-facade, no OPENFHE_CPROBES."""
+        stage_names = [s.name for s in self.stages] + list(
+            getattr(self, "ref_stage_names", []))
+        stages_list = "\n  ".join(stage_names)
+        return f"""\
+# Auto-generated by nbc — do not edit
+cmake_minimum_required(VERSION 3.23)
+project(nb_generated LANGUAGES CXX)
+# The facade's headers are C++20.
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# The FIDESlib install (its CMake package under lib64/cmake/fideslib or
+# lib/cmake/fideslib) and the OpenFHE install it was built against: the
+# patched OpenFHE of FIDESlib's deps/, not the client's instrumented one.
+if(NOT FIDESLIB_INSTALL_DIR)
+  message(FATAL_ERROR "Set -DFIDESLIB_INSTALL_DIR=<prefix of the FIDESlib install>")
+endif()
+if(NOT OPENFHE_INSTALL_DIR)
+  message(FATAL_ERROR "Set -DOPENFHE_INSTALL_DIR=<prefix of the OpenFHE install FIDESlib was built against>")
+endif()
+
+find_package(fideslib CONFIG REQUIRED
+  PATHS "${{FIDESLIB_INSTALL_DIR}}/lib64/cmake/fideslib" "${{FIDESLIB_INSTALL_DIR}}/lib/cmake/fideslib"
+  NO_DEFAULT_PATH)
+
+set(OPENFHE_LIBRARY_PATH "${{OPENFHE_INSTALL_DIR}}/lib")
+set(OPENFHE_INCLUDE_PATH "${{OPENFHE_INSTALL_DIR}}/include/openfhe")
+set(OPENFHE_LIBRARIES OPENFHEpke OPENFHEcore OPENFHEbinfhe)
+
+include_directories(${{CMAKE_CURRENT_SOURCE_DIR}})
+include_directories(${{FIDESLIB_INSTALL_DIR}}/include/fideslib)
+include_directories(${{OPENFHE_INCLUDE_PATH}})
+include_directories(${{OPENFHE_INCLUDE_PATH}}/core)
+include_directories(${{OPENFHE_INCLUDE_PATH}}/pke)
+include_directories(${{OPENFHE_INCLUDE_PATH}}/binfhe)
+include_directories(${{OPENFHE_INCLUDE_PATH}}/third-party/include)
+
+if(DEFINED SUBMISSION_DIR)
+  include_directories(${{SUBMISSION_DIR}}/include)
+endif()
+if(DEFINED LOCAL_SRC_DIR)
+  include_directories(${{LOCAL_SRC_DIR}})
+endif()
+
+find_package(OpenMP COMPONENTS CXX)
+link_directories(${{OPENFHE_LIBRARY_PATH}})
+link_libraries(fideslib::fideslib ${{OPENFHE_LIBRARIES}})
+if(OpenMP_CXX_FOUND)
+  link_libraries(OpenMP::OpenMP_CXX)
+endif()
+
+# Where the shared libraries are at run time: OpenFHE's, FIDESlib's (libhaze
+# ships beside libfideslib in a package build), and any extra directory the
+# build passes (-DNB_EXTRA_RPATH=...; a libhaze built in its own tree).
+set(_NB_RPATH "${{OPENFHE_LIBRARY_PATH}};${{FIDESLIB_INSTALL_DIR}}/lib64;${{FIDESLIB_INSTALL_DIR}}/lib")
+if(NB_EXTRA_RPATH)
+  set(_NB_RPATH "${{_NB_RPATH}};${{NB_EXTRA_RPATH}}")
+endif()
+set(CMAKE_BUILD_RPATH "${{_NB_RPATH}}")
+set(CMAKE_INSTALL_RPATH "${{_NB_RPATH}}")
+
+set(SHARED_SRC nb_shared.cpp)
+
+set(STAGES
+  {stages_list}
+)
+
+foreach(stage ${{STAGES}})
+  add_executable(${{stage}} ${{stage}}.cpp ${{SHARED_SRC}})
+endforeach()
+"""
+
     # ===== Shared header =====
 
     def _gen_shared_header(self) -> str:
@@ -624,6 +902,11 @@ endforeach()
         self.wl("#include <algorithm>")
         self.wl("#include <functional>")
         self.blank()
+        if self._fideslib:
+            for inc in FIDESLIB_INCLUDES:
+                self.wl(f'#include <{inc}>')
+        # The OpenFHE serialization headers: the wire files are OpenFHE's
+        # BINARY serialization under both backends.
         for inc in OPENFHE_INCLUDES:
             self.wl(f'#include "{inc}"')
         # Include support libraries based on requires capabilities
@@ -643,8 +926,15 @@ endforeach()
                 self.wl(f'#include "{ext_name}_openfhe.h"')
                 self.wl(f'#include "{ext_name}_bridge.h"')
         self.blank()
-        self.wl("using namespace lbcrypto;")
-        self.wl("namespace fs = std::filesystem;")
+        if self._fideslib:
+            # The facade mirrors the OpenFHE names (CryptoContext, Ciphertext,
+            # EvalAdd, ...) in its own namespace; lbcrypto stays qualified.
+            self.wl("using namespace fideslib;")
+            self.wl("namespace fs = std::filesystem;")
+            self.wl('#include "nb_fideslib.h"')
+        else:
+            self.wl("using namespace lbcrypto;")
+            self.wl("namespace fs = std::filesystem;")
         self.blank()
 
         # Utility template: read2vecs
@@ -1520,6 +1810,12 @@ endforeach()
         if has_return:
             self._gen_result_serialization(stage)
 
+        if self._fideslib:
+            # Every ciphertext written by save() or the result wire was
+            # queued (see nb_fideslib.h): the haze engine reads all marked
+            # outputs back in one flush, after which nothing may be computed.
+            self.blank()
+            self.wl("nb_fideslib::flush_outputs();")
         self.blank()
         self.wl("return 0;")
         self.dedent()
@@ -1937,12 +2233,26 @@ endforeach()
     def _gen_key_loading(self, stage: StageInfo):
         key_dir = self._find_key_dir(stage)
         self.wl("// Load crypto context and keys from disk")
-        self.wl("CryptoContext<DCRTPoly> cc;")
-        self.wl(f'if (!Serial::DeserializeFromFile({key_dir} / "cc.bin", cc, SerType::BINARY)) {{')
-        self.indent()
-        self.wl('throw std::runtime_error("Failed to load CryptoContext");')
-        self.dedent()
-        self.wl("}")
+        if self._fideslib:
+            # The context the client serialized (cc.bin and its .dev sidecar
+            # with the rotation indices and bootstrap slots), re-engined for
+            # the backend FIDESLIB_BACKEND names; its keys are loaded into
+            # OpenFHE's key maps below and uploaded by LoadContext.
+            self.wl("CryptoContext<DCRTPoly> _stored_cc;")
+            self.wl(f'if (!Serial::DeserializeFromFile({key_dir} / "cc.bin", _stored_cc, SerType::BINARY)) {{')
+            self.indent()
+            self.wl('throw std::runtime_error("Failed to load CryptoContext");')
+            self.dedent()
+            self.wl("}")
+            self.wl("auto cc = nb_fideslib::import_context(_stored_cc);")
+            self.wl("nb_fideslib::set_context(cc);")
+        else:
+            self.wl("CryptoContext<DCRTPoly> cc;")
+            self.wl(f'if (!Serial::DeserializeFromFile({key_dir} / "cc.bin", cc, SerType::BINARY)) {{')
+            self.indent()
+            self.wl('throw std::runtime_error("Failed to load CryptoContext");')
+            self.dedent()
+            self.wl("}")
         if "bootstrap" in self.requires:
             # The bootstrap precomputations are not serialized with the
             # context: redo the setup before any EvalBootstrap. The keys
@@ -1983,6 +2293,11 @@ endforeach()
         # hooks capture the context (on cc.bin load above), tag the eval keys,
         # and tag each input ciphertext as it is deserialized — at deterministic
         # points that keep record/replay addresses aligned.
+        if self._fideslib:
+            # The engine takes the context, the eval keys (by the public
+            # key's tag) and the bootstrap precomputation now.
+            self.wl("cc->LoadContext(pk);")
+            self.blank()
 
     def _stage_result_wire(self, stage: StageInfo):
         """Return the wire definition this stage writes (for probe/rehydrate)."""
@@ -2694,7 +3009,8 @@ endforeach()
             # Map keygen result fields (KeyPair<DCRTPoly>)
             if isinstance(expr.obj, ast.Ident) and expr.obj.name in self._keygen_vars:
                 kp_map = {
-                    "context": f"{obj}.publicKey->GetCryptoContext()",
+                    "context": ("nb_fideslib::context()" if self._fideslib
+                                else f"{obj}.publicKey->GetCryptoContext()"),
                     "public": f"{obj}.publicKey",
                     "public_key": f"{obj}.publicKey",
                     "secret": f"{obj}.secretKey",
@@ -2925,6 +3241,8 @@ endforeach()
                 if fname == "slot_sum":
                     if self._plain_mode:
                         return f"nb_plain::slot_sum({left}, {args[1]})"
+                    if self._fideslib:
+                        self._fideslib_unsupported("slot_sum (EvalSum)")
                     return f"cc->EvalSum({left}, {args[1]})"
 
             return f"{func}({', '.join(args)})"
@@ -3000,6 +3318,8 @@ endforeach()
             if fname == "slot_sum":
                 if self._plain_mode:
                     return f"nb_plain::slot_sum({', '.join(args)})"
+                if self._fideslib:
+                    self._fideslib_unsupported("slot_sum (EvalSum)")
                 return f"cc->EvalSum({', '.join(args)})"
             if fname == "encrypt":
                 return self._gen_encrypt(expr.args)
@@ -3093,6 +3413,8 @@ endforeach()
                     return f"nb_plain::negate({args[0]})"
                 return f"cc->EvalNegate({args[0]})"
             if fname == "mul_monomial":
+                if self._fideslib:
+                    self._fideslib_unsupported("mul_monomial (MultByMonomial)")
                 return f"cc->GetScheme()->MultByMonomial({args[0]}, {args[1]})"
 
             # Type-parameterized functions
@@ -3556,6 +3878,13 @@ endforeach()
             # circuit approximates it, so reference comparison bounds the
             # approximation + noise error together.
             return f"nb_plain::apply({ct}, {func})"
+        if self._fideslib:
+            # The facade has the two halves of EvalChebyshevFunction: the
+            # interpolant's coefficients, then the series.
+            return (f"[&]() {{ std::function<double(double)> _f = {func}; "
+                    f"auto _coef = CryptoContextImpl<DCRTPoly>::GetChebyshevCoefficients("
+                    f"_f, {lower}, {upper}, {degree}); "
+                    f"return cc->EvalChebyshevSeries({ct}, _coef, {lower}, {upper}); }}()")
         return f"cc->EvalChebyshevFunction({func}, {ct}, {lower}, {upper}, {degree})"
 
     def _gen_encrypt(self, args: list[ast.Arg]) -> str:
@@ -3581,6 +3910,12 @@ endforeach()
             if data_bind:
                 return f"[&]() {{ {data_bind}return {data_init}; }}()"
             return data_init  # the slot vector IS the "ciphertext"
+        if self._fideslib:
+            # The facade's Encrypt takes the plaintext by non-const reference.
+            return (f"[&]() {{ auto _cc = nb_fideslib::context(); "
+                    f"{data_bind}auto _data = {data_init}; "
+                    f"auto _pt = _cc->MakeCKKSPackedPlaintext(_data, 1, {level}); "
+                    f"return _cc->Encrypt({pk}, _pt); }}()")
         return (f"[&]() {{ auto _cc = {pk}->GetCryptoContext(); "
                 f"{data_bind}auto _data = {data_init}; "
                 f"return _cc->Encrypt({pk}, "
@@ -3592,6 +3927,10 @@ endforeach()
         ct = positional[1] if len(positional) > 1 else "ct"
         if self._plain_mode:
             return f"({ct})"  # already a slot vector
+        if self._fideslib:
+            return (f"[&]() {{ Plaintext pt; auto _ct = {ct}; "
+                    f"nb_fideslib::context()->Decrypt({sk}, _ct, &pt); "
+                    f"return pt->GetRealPackedValue(); }}()")
         return (f"[&]() {{ Plaintext pt; "
                 f"{sk}->GetCryptoContext()->Decrypt({sk}, {ct}, &pt); "
                 f"return pt->GetRealPackedValue(); }}()")
@@ -3724,7 +4063,8 @@ endforeach()
                 f"p.context->DeserializeEvalMultKey(mk, SerType::BINARY); }} "
                 f"{{ std::ifstream rk({path} / \"rk.bin\", std::ios::binary); "
                 f"p.context->DeserializeEvalAutomorphismKey(rk, SerType::BINARY); }} "
-                f"return p; }}()")
+                + ("nb_fideslib::set_context(p.context); " if self._fideslib else "")
+                + f"return p; }}()")
 
     def _gen_load_all(self, args: list[ast.Arg]) -> str:
         """Generate load_all for intermediate results."""
@@ -3894,7 +4234,8 @@ endforeach()
         return (f"[&]() {{ auto _skpath = fs::path({path}); "
                 f"CryptoContext<DCRTPoly> _cc; "
                 f'Serial::DeserializeFromFile({cc_dir} / "cc.bin", _cc, SerType::BINARY); '
-                f"PrivateKey<DCRTPoly> sk; "
+                + ("nb_fideslib::set_context(_cc); " if self._fideslib else "")
+                + f"PrivateKey<DCRTPoly> sk; "
                 f"Serial::DeserializeFromFile(_skpath, sk, SerType::BINARY); "
                 f"return sk; }}()")
 
@@ -3967,7 +4308,9 @@ endforeach()
             lines += [
                 f"    std::vector<uint32_t> _level_budget = {{{budget}, {budget}}};",
                 f"    parameters.SetMultiplicativeDepth({depth} + "
-                f"FHECKKSRNS::GetBootstrapDepth(_level_budget, {key_dist})"
+                + ("lbcrypto::FHECKKSRNS::GetBootstrapDepth(_level_budget, "
+                   f"lbcrypto::{key_dist})" if self._fideslib else
+                   f"FHECKKSRNS::GetBootstrapDepth(_level_budget, {key_dist})")
                 + (f" + {extra}" if extra else "") + ");",
             ]
         else:
@@ -3992,10 +4335,22 @@ endforeach()
         lines += [
             f"    parameters.SetScalingTechnique({scaling});",
             "    parameters.SetKeySwitchTechnique(HYBRID);",
+        ]
+        if self._fideslib:
+            # The keys are generated on the host; the server picks its own
+            # engine when it imports the context. The FBC variant is the one
+            # the linked OpenFHE was built with.
+            lines += [
+                "    parameters.SetBackend(Backend::CPU);",
+                "    parameters.SetReducedNoise(LinkedOpenFheReducedNoise());",
+            ]
+        lines += [
             "    auto cc = GenCryptoContext(parameters);",
             "    cc->Enable(PKE); cc->Enable(KEYSWITCH);",
             "    cc->Enable(LEVELEDSHE); cc->Enable(ADVANCEDSHE);",
         ]
+        if self._fideslib:
+            lines.append("    nb_fideslib::set_context(cc);")
         if has_bootstrap:
             lines += [
                 "    cc->Enable(FHE);",
@@ -4056,13 +4411,16 @@ endforeach()
         if rot_parts:
             # Use EvalRotateKeyGen when 'rotate' capability is present,
             # EvalAtIndexKeyGen for legacy replicate/running_sums
-            keygen_fn = "EvalRotateKeyGen" if has_rotate else "EvalAtIndexKeyGen"
+            keygen_fn = ("EvalRotateKeyGen" if has_rotate or self._fideslib
+                         else "EvalAtIndexKeyGen")
             if len(rot_parts) == 1:
                 lines.append(f"    cc->{keygen_fn}(kp.secretKey, {rot_parts[0]});")
             else:
                 lines.append(f"    std::vector<std::vector<int>> _all_rots = {{{', '.join(rot_parts)}}};")
                 lines.append(f"    cc->{keygen_fn}(kp.secretKey, vector_union(_all_rots));")
-        lines.append("    cc->EvalSumKeyGen(kp.secretKey);")
+        if not self._fideslib:
+            # The facade has no EvalSum (slot_sum is rejected under it).
+            lines.append("    cc->EvalSumKeyGen(kp.secretKey);")
         lines.append("    return kp;")
         lines.append("  }()")
         return "\n".join(lines)
@@ -4366,7 +4724,8 @@ endforeach()
         return "auto"
 
 
-def generate(program: ast.Program, analyzer: SemanticAnalyzer) -> dict[str, str]:
+def generate(program: ast.Program, analyzer: SemanticAnalyzer,
+             backend: str = "openfhe") -> dict[str, str]:
     """Convenience function to generate all C++ files."""
-    gen = CodeGenerator(program, analyzer)
+    gen = CodeGenerator(program, analyzer, backend=backend)
     return gen.generate_all()
