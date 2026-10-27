@@ -338,7 +338,10 @@ What differs from the default backend, and why:
 
 The build links `fideslib::fideslib` and the patched OpenFHE FIDESlib was
 built against (its `deps/openfhe-src`), not the client's vendored one; the
-stages are C++20. The examples that compile under this backend today are
+stages are C++20. `OPENFHE_INSTALL_DIR` is for a development install (a
+static `fideslib.a` beside a separate OpenFHE install); with the fork's
+release package, whose `libfideslib.so` carries OpenFHE inside and exports
+it, leave it unset, or the process holds two OpenFHE copies and crashes. The examples that compile under this backend today are
 `password-retrieval` and `fhe-NetworkMonitor`.
 
 ### Run the Pipeline
