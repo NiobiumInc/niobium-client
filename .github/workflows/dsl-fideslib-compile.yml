@@ -1,0 +1,79 @@
+# .github/workflows/dsl-fideslib-compile.yml
+#
+# The DSL's fideslib backend, as far as a hosted runner can take it: generate
+# an example with `nbc compile --backend fideslib`, then build the generated
+# stages against a prebuilt FIDESlib package. Nothing generated is executed
+# here: the stages run on a GPU node (the cuda engine) or through the haze
+# engine, neither of which this job has, and a run would also need keys and
+# data. The package is a release of the public FIDESlib fork (CPU and haze
+# engines, OpenFHE inside, no CUDA), pinned by tag and checked against the
+# release's SHA256SUMS; FIDESlib is not a submodule of this repository and
+# this job does not make it one.
+#
+# Runs on pull requests and pushes to main that touch the DSL, and on demand.
+name: dsl-fideslib-compile
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'dsl_fhe/**'
+      - '.github/workflows/dsl-fideslib-compile.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'dsl_fhe/**'
+      - '.github/workflows/dsl-fideslib-compile.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dsl-fideslib-compile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile:
+    name: DSL fideslib backend (generate and compile, no run)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      FIDESLIB_TAG: v2026.10.18-4afac17
+      FIDESLIB_ASSET: fideslib-linux-x86-64-2026-10-18.tar.gz
+    steps:
+      - name: Checkout (no submodules: the generator is pure Python and the package brings its own OpenFHE)
+        uses: actions/checkout@v6
+
+      - name: The prebuilt FIDESlib package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$FIDESLIB_TAG" -R NiobiumInc/FIDESlib-fork \
+            --pattern "$FIDESLIB_ASSET" --pattern SHA256SUMS -D fideslib-pkg
+          cd fideslib-pkg
+          grep "$FIDESLIB_ASSET" SHA256SUMS | sha256sum -c -
+          mkdir pkg && tar -xzf "$FIDESLIB_ASSET" -C pkg --strip-components=1
+          ls pkg/lib pkg/lib/cmake/fideslib
+
+      - name: Generate password-retrieval with --backend fideslib
+        run: |
+          cd dsl_fhe/xcomp
+          PYTHONPATH=.. python3 -m xcomp.nbc compile \
+            ../examples/password-retrieval/shared.niob \
+            ../examples/password-retrieval/client.niob \
+            ../examples/password-retrieval/server.niob \
+            --backend fideslib --outdir "$GITHUB_WORKSPACE/nb_out"
+
+      - name: Build the stages against the package (compile and link only)
+        run: |
+          cmake -S nb_out -B nb_out/build -DFIDESLIB_INSTALL_DIR="$GITHUB_WORKSPACE/fideslib-pkg/pkg"
+          cmake --build nb_out/build -j "$(nproc)"
+
+      - name: Every stage and every reference twin linked
+        run: |
+          cd nb_out/build
+          for s in key_generation setup_record submit_query verify decrypt_result \
+                   setup_record_ref submit_query_ref verify_ref decrypt_result_ref; do
+            test -x "$s" || { echo "::error::$s was not built"; exit 1; }
+          done
+          echo "built: $(ls -1 key_generation setup_record submit_query verify decrypt_result *_ref | tr '\n' ' ')"
