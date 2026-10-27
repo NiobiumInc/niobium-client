@@ -380,6 +380,36 @@ switch (op) {
 Multi-statement match arms generate proper `return` on the last expression.
 Let-rebinding within arms uses assignment (not re-declaration) via `_declared_vars` tracking.
 
+## Backends — OpenFHE and FIDESlib
+
+`CodeGenerator(program, sa, backend=...)` (`nbc compile --backend`) picks the
+CKKS library the stages are generated against. `openfhe` (default) is what
+everything above describes. `fideslib` emits the same stages against the
+FIDESlib facade (`namespace fideslib`, the OpenFHE method names), and the
+differences live behind `self._fideslib` at these sites:
+
+| Site | `openfhe` | `fideslib` |
+|---|---|---|
+| `_classify_items` | `@hardware` keeps its instrumentation | `stage.hardware = None` (the haze engine records by itself); `replicate`, `running_sums`, `extern` rejected |
+| `_gen_shared_header` | `using namespace lbcrypto` | `#include <fideslib.hpp>` + Serialize/Interop/BackendEnv, `using namespace fideslib`, `#include "nb_fideslib.h"` |
+| `_gen_fideslib_glue` | — | the generated `nb_fideslib.h`: the process's context, `import_context`, the ciphertext `Serial::` overloads (export/import of the lbcrypto object), the deferred output flush |
+| `_gen_keygen` | OpenFHE params | `SetBackend(Backend::CPU)`, `SetReducedNoise(LinkedOpenFheReducedNoise())`, `lbcrypto::FHECKKSRNS::GetBootstrapDepth`, `EvalRotateKeyGen` always, no `EvalSumKeyGen`, `nb_fideslib::set_context(cc)` |
+| `_gen_key_loading` (server main) | deserialize into `cc` | deserialize into `_stored_cc`, `cc = nb_fideslib::import_context(_stored_cc)`, keys, then `cc->LoadContext(pk)` |
+| `_gen_encrypt` / `_gen_decrypt` / `KeyPair.context` | `pk->GetCryptoContext()` | `nb_fideslib::context()` (the facade's keys carry no context) |
+| `_gen_chebyshev` | `EvalChebyshevFunction` | `GetChebyshevCoefficients` + `EvalChebyshevSeries` |
+| `slot_sum`, `mul_monomial` | `EvalSum`, `MultByMonomial` | `CodegenError` (not in the facade) |
+| end of `main()` | — | `nb_fideslib::flush_outputs()` |
+| `_gen_cmake` | the client's OpenFHE + libnbfhetch + auto-facade | `_gen_cmake_fideslib`: `find_package(fideslib)`, `FIDESLIB_INSTALL_DIR` + `OPENFHE_INSTALL_DIR`, C++20 |
+
+Everything else (types, operators, the wire layout, `_plain_mode`, the
+harness contract) is shared: the facade's `Ciphertext<DCRTPoly>`,
+`EvalAdd`, `EvalRotate`, `EvalBootstrap(ct, iters, precision)`,
+`MakeCKKSPackedPlaintext(v, 1, level, nullptr, slots)` resolve under
+`using namespace fideslib` exactly as the lbcrypto ones did. Keep it that
+way: a new emitter should produce text that is valid for both, and branch on
+`self._fideslib` only where the facade's surface differs. The tests are the
+`test_fideslib_backend_*` cases in `xcomp/tests/test_codegen.py`.
+
 ## Known Pitfalls and Past Bugs
 
 These were discovered during end-to-end testing and are now fixed, but document the

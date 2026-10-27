@@ -987,6 +987,139 @@ def test_cmake_dependency_overrides():
     assert "${NIOBIUM_CLIENT_ROOT}/vendor/niobium-fhetch/" not in cmake
 
 
+FIDESLIB_SRC = """
+struct Instance { size: u32 }
+fn instance(size: u32) -> Instance { Instance { size: size } }
+fn keydir(inst: Instance) -> path { root() / "keys" }
+fn encdir(inst: Instance) -> path { root() / "enc" }
+wire CryptoParams { context: CryptoContext, public_key: PublicKey }
+wire Input { x: enc<f64> }
+wire Output { y: enc<f64> }
+scheme CKKS {
+    security: not_set
+    depth: 8
+    precision: 50 bits
+    first_mod: 60 bits
+    bootstrap_budget: 3 levels
+}
+requires { add, mul, rotate([1, 2]), bootstrap }
+
+@client @stage("key_generation")
+fn generate_keys(inst: Instance) -> writes(CryptoParams) {
+    let keys = keygen()
+    return CryptoParams { context: keys.context, public_key: keys.public }
+}
+
+@client @stage("encrypt")
+fn encrypt_input(inst: Instance, v: f64) -> writes(Input) {
+    let p = load(CryptoParams, from: keydir(inst))
+    return Input { x: encrypt(p.public_key, [v]) }
+}
+
+@server @stage("compute")
+@hardware(cache_key: ["size"])
+fn compute(inst: Instance) -> reads(Input) writes(Output) {
+    let i = load(Input, from: encdir(inst))
+    let a = rotate(i.x, 1) + i.x * i.x
+    let b = chebyshev(|t| t * t, a, domain: [-1.0, 1.0], degree: 13)
+    return Output { y: bootstrap(b) }
+}
+"""
+
+
+def compile_fideslib(source: str) -> dict[str, str]:
+    tokens = lex(source)
+    program = parse(tokens)
+    sa = analyze(program)
+    return generate(program, sa, backend="fideslib")
+
+
+def test_fideslib_backend_header_and_glue():
+    files = compile_fideslib(FIDESLIB_SRC)
+    header = files["nb_shared.h"]
+    assert "#include <fideslib.hpp>" in header
+    assert "#include <Interop.hpp>" in header
+    assert "using namespace fideslib;" in header
+    assert "using namespace lbcrypto;" not in header
+    assert '#include "nb_fideslib.h"' in header
+    glue = files["nb_fideslib.h"]
+    assert "fideslib::ImportCryptoContext(" in glue
+    assert "fideslib::ExportCiphertext(" in glue
+    assert "MarkOutput(" in glue and "RecoverHostCiphertext(" in glue
+
+
+def test_fideslib_backend_keygen_on_the_host():
+    files = compile_fideslib(FIDESLIB_SRC)
+    keygen = files["key_generation.cpp"]
+    assert "parameters.SetBackend(Backend::CPU);" in keygen
+    assert "parameters.SetReducedNoise(LinkedOpenFheReducedNoise());" in keygen
+    assert "lbcrypto::FHECKKSRNS::GetBootstrapDepth(_level_budget, lbcrypto::UNIFORM_TERNARY)" in keygen
+    assert "nb_fideslib::set_context(cc);" in keygen
+    assert "EvalSumKeyGen" not in keygen
+    assert "cc->EvalRotateKeyGen(kp.secretKey," in keygen
+    # The context field of the key pair comes from the glue, not the key.
+    assert "GetCryptoContext()" not in keygen
+
+
+def test_fideslib_backend_server_imports_the_context():
+    files = compile_fideslib(FIDESLIB_SRC)
+    server = files["compute.cpp"]
+    assert "auto cc = nb_fideslib::import_context(_stored_cc);" in server
+    assert "cc->EvalBootstrapSetup(std::vector<uint32_t>{3, 3});" in server
+    assert "cc->LoadContext(pk);" in server
+    assert "nb_fideslib::flush_outputs();" in server
+    # No Niobium instrumentation: the haze engine records by itself.
+    assert "niobium::" not in server
+    assert "_nb_hollow_record" not in server
+    assert "is_cache_valid" not in server
+
+
+def test_fideslib_backend_chebyshev_and_encrypt():
+    files = compile_fideslib(FIDESLIB_SRC)
+    server = files["compute.cpp"]
+    assert "CryptoContextImpl<DCRTPoly>::GetChebyshevCoefficients(_f, (-1.0), 1.0, 13)" in server
+    assert "cc->EvalChebyshevSeries(" in server
+    assert "EvalChebyshevFunction" not in server
+    assert "cc->EvalBootstrap(" in server
+    enc = files["encrypt.cpp"]
+    assert "auto _cc = nb_fideslib::context();" in enc
+    assert "return _cc->Encrypt(p.public_key, _pt);" in enc
+    assert "nb_fideslib::set_context(p.context);" in enc
+
+
+def test_fideslib_backend_cmake():
+    files = compile_fideslib(FIDESLIB_SRC)
+    cmake = files["CMakeLists.txt"]
+    assert "find_package(fideslib CONFIG REQUIRED" in cmake
+    assert "link_libraries(fideslib::fideslib ${OPENFHE_LIBRARIES})" in cmake
+    assert "FIDESLIB_INSTALL_DIR" in cmake and "OPENFHE_INSTALL_DIR" in cmake
+    assert "nbfhetch" not in cmake
+    assert "OPENFHE_CPROBES" not in cmake
+    assert "autofacade" not in cmake
+
+
+def test_fideslib_backend_rejects_what_the_facade_lacks():
+    import xcomp.codegen as cg
+    src = FIDESLIB_SRC.replace("return Output { y: bootstrap(b) }",
+                               "return Output { y: slot_sum(b, 4) }")
+    try:
+        compile_fideslib(src)
+        assert False, "slot_sum must be rejected under the fideslib backend"
+    except cg.CodegenError as e:
+        assert "slot_sum" in str(e)
+    # The default backend still accepts it.
+    files = compile_str(src)
+    assert "cc->EvalSum(" in files["compute.cpp"]
+
+
+def test_fideslib_backend_openfhe_default_unchanged():
+    files = compile_str(FIDESLIB_SRC)
+    assert "nb_fideslib.h" not in files
+    assert "using namespace lbcrypto;" in files["nb_shared.h"]
+    assert "niobium::compiler().init(argc, argv);" in files["compute.cpp"]
+    assert "cc->EvalChebyshevFunction(" in files["compute.cpp"]
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_")]
     passed = 0

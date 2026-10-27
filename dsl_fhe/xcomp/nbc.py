@@ -100,7 +100,7 @@ def cmd_compile(args):
             print(sa.errors.report(), file=sys.stderr)
             return 1
 
-        files = generate(program, sa)
+        files = generate(program, sa, backend=args.backend)
 
         # Warnings from module loading, analysis AND code generation
         # (heuristic fallbacks).
@@ -209,9 +209,17 @@ def main():
                          metavar="DIR", help=module_path_help)
 
     # compile
-    p_compile = subparsers.add_parser("compile", help="Compile to OpenFHE C++")
+    p_compile = subparsers.add_parser(
+        "compile", help="Compile to C++ (OpenFHE, or FIDESlib with --backend fideslib)")
     p_compile.add_argument("files", nargs="+", help="Input .niob files")
     p_compile.add_argument("--outdir", default="nb_out", help="Output directory")
+    p_compile.add_argument(
+        "--backend", choices=["openfhe", "fideslib"], default="openfhe",
+        help="The CKKS library the stages are generated against: openfhe "
+             "(the client's instrumented OpenFHE, with the Niobium record/"
+             "replay instrumentation) or fideslib (the FIDESlib facade: the "
+             "server stages run on the engine FIDESLIB_BACKEND names at run "
+             "time, cpu, cuda or haze; the client stages stay on the host)")
     p_compile.add_argument("--module-path", action="append", default=[],
                            metavar="DIR", help=module_path_help)
 

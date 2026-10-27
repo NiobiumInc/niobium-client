@@ -290,6 +290,57 @@ To **contribute** an example back to this repo instead, add it under
 `dsl_fhe/examples/<name>/` with Makefile build/test targets — see
 [`HOWTO.md`](HOWTO.md).
 
+### The FIDESlib backend
+
+`nbc compile` targets the client's instrumented OpenFHE by default. With
+`--backend fideslib` the same program is generated against
+[FIDESlib](https://github.com/NiobiumInc/FIDESlib-fork)'s facade, which
+mirrors the OpenFHE `CryptoContext` surface in its own namespace: the
+`@client` stages (keygen, encrypt, decrypt) run on the host through the
+facade's CPU engine, and every `@server` stage imports the context the client
+serialized and runs it on the engine `FIDESLIB_BACKEND` names at run time:
+`cpu` (OpenFHE on the host), `cuda` (a GPU) or `haze` (the FHETCH trace of
+the Niobium accelerator, recorded by FIDESlib's haze engine). The wire files
+stay in OpenFHE's BINARY format, so the stage-to-stage contract, the
+harnesses and the `_ref` twins are unchanged.
+
+```bash
+cd xcomp && PYTHONPATH=.. python3 -m xcomp.nbc compile ../examples/password-retrieval/*.niob \
+    --backend fideslib --outdir ../examples/password-retrieval/nb_out
+cd ../examples/password-retrieval/nb_out && mkdir -p build && cd build
+cmake .. -DFIDESLIB_INSTALL_DIR=<fideslib install> -DOPENFHE_INSTALL_DIR=<the OpenFHE it was built against>
+make -j
+FIDESLIB_BACKEND=cuda ./verify 0      # or cpu, or haze
+```
+
+What differs from the default backend, and why:
+
+- `@hardware` stages are generated as plain server stages: the haze engine
+  records the trace by itself, so there is no `niobium::compiler()`
+  bracket, no probe, no replay gate and no auto-facade link.
+- The server's context comes from `cc.bin` and its `.dev` sidecar (the
+  facade writes the rotation indices, bootstrap slots and key distribution
+  there), re-engined for the chosen backend by `nb_fideslib::import_context`
+  in the generated `nb_fideslib.h`; `LoadContext(pk)` then uploads the keys
+  and the bootstrap precomputation.
+- Ciphertext writes (`save()` and the result wire) are marked as outputs and
+  written at the end of `main()`: the haze engine reads every marked output
+  back in one flush, after which nothing may be computed.
+- `chebyshev` is emitted as `GetChebyshevCoefficients` followed by
+  `EvalChebyshevSeries`, the two halves of OpenFHE's
+  `EvalChebyshevFunction`.
+- A two-iteration `bootstrap` is passed through; the haze engine runs a
+  single iteration regardless (the CUDA engine honours it).
+- Not supported yet, rejected at compile time: `slot_sum` (no `EvalSum` in
+  the facade), `mul_monomial`, the `replicate` and `running_sums`
+  capabilities (their support libraries call OpenFHE directly), `extern`
+  sources and `extern_call`.
+
+The build links `fideslib::fideslib` and the patched OpenFHE FIDESlib was
+built against (its `deps/openfhe-src`), not the client's vendored one; the
+stages are C++20. The examples that compile under this backend today are
+`password-retrieval` and `fhe-NetworkMonitor`.
+
 ### Run the Pipeline
 
 ```bash
