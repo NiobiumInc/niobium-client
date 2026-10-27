@@ -41,7 +41,7 @@ jobs:
       FIDESLIB_TAG: v2026.10.18-4afac17
       FIDESLIB_ASSET: fideslib-linux-x86-64-2026-10-18.tar.gz
     steps:
-      - name: Checkout (no submodules: the generator is pure Python and the package brings its own OpenFHE)
+      - name: "Checkout (no submodules: the generator is pure Python and the package brings its own OpenFHE)"
         uses: actions/checkout@v6
 
       - name: The prebuilt FIDESlib package
