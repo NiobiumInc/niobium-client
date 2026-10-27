@@ -819,22 +819,33 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # The FIDESlib install (its CMake package under lib64/cmake/fideslib or
-# lib/cmake/fideslib) and the OpenFHE install it was built against: the
-# patched OpenFHE of FIDESlib's deps/, not the client's instrumented one.
+# lib/cmake/fideslib). The OpenFHE the stages see is the patched one FIDESlib
+# was built against, never the client's instrumented one, and it comes in
+# one of two ways:
+#  - a development install (static fideslib.a next to a separate OpenFHE
+#    install): pass -DOPENFHE_INSTALL_DIR=<that install> and its shared
+#    libraries are linked;
+#  - the fork's release package (shared libfideslib.so with OpenFHE absorbed
+#    and exported, headers under include/openfhe): leave OPENFHE_INSTALL_DIR
+#    unset. Linking a second OpenFHE next to the package's puts two copies of
+#    its global state in the process and crashes at the first key operation.
 if(NOT FIDESLIB_INSTALL_DIR)
   message(FATAL_ERROR "Set -DFIDESLIB_INSTALL_DIR=<prefix of the FIDESlib install>")
-endif()
-if(NOT OPENFHE_INSTALL_DIR)
-  message(FATAL_ERROR "Set -DOPENFHE_INSTALL_DIR=<prefix of the OpenFHE install FIDESlib was built against>")
 endif()
 
 find_package(fideslib CONFIG REQUIRED
   PATHS "${{FIDESLIB_INSTALL_DIR}}/lib64/cmake/fideslib" "${{FIDESLIB_INSTALL_DIR}}/lib/cmake/fideslib"
   NO_DEFAULT_PATH)
 
-set(OPENFHE_LIBRARY_PATH "${{OPENFHE_INSTALL_DIR}}/lib")
-set(OPENFHE_INCLUDE_PATH "${{OPENFHE_INSTALL_DIR}}/include/openfhe")
-set(OPENFHE_LIBRARIES OPENFHEpke OPENFHEcore OPENFHEbinfhe)
+if(OPENFHE_INSTALL_DIR)
+  set(OPENFHE_LIBRARY_PATH "${{OPENFHE_INSTALL_DIR}}/lib")
+  set(OPENFHE_INCLUDE_PATH "${{OPENFHE_INSTALL_DIR}}/include/openfhe")
+  set(OPENFHE_LIBRARIES OPENFHEpke OPENFHEcore OPENFHEbinfhe)
+else()
+  set(OPENFHE_LIBRARY_PATH "")
+  set(OPENFHE_INCLUDE_PATH "${{FIDESLIB_INSTALL_DIR}}/include/openfhe")
+  set(OPENFHE_LIBRARIES "")
+endif()
 
 include_directories(${{CMAKE_CURRENT_SOURCE_DIR}})
 include_directories(${{FIDESLIB_INSTALL_DIR}}/include/fideslib)
@@ -852,7 +863,9 @@ if(DEFINED LOCAL_SRC_DIR)
 endif()
 
 find_package(OpenMP COMPONENTS CXX)
-link_directories(${{OPENFHE_LIBRARY_PATH}})
+if(OPENFHE_LIBRARY_PATH)
+  link_directories(${{OPENFHE_LIBRARY_PATH}})
+endif()
 link_libraries(fideslib::fideslib ${{OPENFHE_LIBRARIES}})
 if(OpenMP_CXX_FOUND)
   link_libraries(OpenMP::OpenMP_CXX)

@@ -1092,7 +1092,7 @@ def test_fideslib_backend_cmake():
     cmake = files["CMakeLists.txt"]
     assert "find_package(fideslib CONFIG REQUIRED" in cmake
     assert "link_libraries(fideslib::fideslib ${OPENFHE_LIBRARIES})" in cmake
-    assert "FIDESLIB_INSTALL_DIR" in cmake and "OPENFHE_INSTALL_DIR" in cmake
+    assert "FIDESLIB_INSTALL_DIR" in cmake and "if(OPENFHE_INSTALL_DIR)" in cmake
     assert "nbfhetch" not in cmake
     assert "OPENFHE_CPROBES" not in cmake
     assert "autofacade" not in cmake
