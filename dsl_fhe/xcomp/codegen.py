@@ -744,6 +744,9 @@ inline void queue_output(const std::string& path, const Cipher& ct) {
     pending_outputs().push_back({path, c});
 }
 
+// Called at the end of main(). It also drops this header's reference to the
+// context: the engine must be torn down while main() still runs, not from a
+// static's destructor at exit, when libhaze's own statics are already gone.
 inline void flush_outputs() {
     auto& cc = context_slot();
     for (auto& p : pending_outputs()) {
@@ -756,6 +759,7 @@ inline void flush_outputs() {
         }
     }
     pending_outputs().clear();
+    cc.reset();
 }
 
 }  // namespace nb_fideslib

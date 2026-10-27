@@ -1046,6 +1046,7 @@ def test_fideslib_backend_header_and_glue():
     assert "fideslib::ImportCryptoContext(" in glue
     assert "fideslib::ExportCiphertext(" in glue
     assert "MarkOutput(" in glue and "RecoverHostCiphertext(" in glue
+    assert "cc.reset();" in glue  # the engine dies inside main(), not at exit
 
 
 def test_fideslib_backend_keygen_on_the_host():
