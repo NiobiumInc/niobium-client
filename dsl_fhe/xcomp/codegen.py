@@ -744,9 +744,12 @@ inline void queue_output(const std::string& path, const Cipher& ct) {
     pending_outputs().push_back({path, c});
 }
 
-// Called at the end of main(). It also drops this header's reference to the
-// context: the engine must be torn down while main() still runs, not from a
-// static's destructor at exit, when libhaze's own statics are already gone.
+// Called at the end of main(), once every output is known. Nothing is
+// written if the stage throws before that point: a partial output set would
+// pass for a complete one downstream, and the haze engine could not resume
+// a program after a readback anyway. It also drops this header's reference
+// to the context: the engine must be torn down while main() still runs, not
+// from a static's destructor at exit, when libhaze's own statics are gone.
 inline void flush_outputs() {
     auto& cc = context_slot();
     for (auto& p : pending_outputs()) {
