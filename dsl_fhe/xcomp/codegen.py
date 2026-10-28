@@ -2281,7 +2281,15 @@ endforeach()
             # _bootstrap_budget(), and scheme.override(bootstrap_budget: ..)
             # is rejected in _classify_items so they cannot diverge.
             budget = self._bootstrap_budget()
-            self.wl(f"cc->EvalBootstrapSetup(std::vector<uint32_t>{{{budget}, {budget}}});")
+            if self._fideslib:
+                # Full-slot bootstrap, the count keygen generated the key for;
+                # the engine installs its precomputation for every count in
+                # slots_bootstrap at LoadContext.
+                self.wl("cc->slots_bootstrap = {cc->GetRingDimension() / 2};")
+                self.wl(f"cc->EvalBootstrapSetup(std::vector<uint32_t>{{{budget}, {budget}}}, "
+                        "std::vector<uint32_t>{0, 0}, cc->GetRingDimension() / 2);")
+            else:
+                self.wl(f"cc->EvalBootstrapSetup(std::vector<uint32_t>{{{budget}, {budget}}});")
         self.blank()
 
         self.wl("PublicKey<DCRTPoly> pk;")
@@ -4385,6 +4393,12 @@ endforeach()
             # they travel to the server inside rk.bin with the other rotations.
             lines.append("    cc->EvalBootstrapKeyGen(kp.secretKey, "
                          "cc->GetRingDimension() / 2);")
+            if self._fideslib:
+                # The facade's device engines record the slot count of a
+                # bootstrap key; the CPU engine keygen runs on does not, and
+                # the server's engine installs a precomputation per recorded
+                # count. Record it so cc.bin's sidecar carries it.
+                lines.append("    cc->slots_bootstrap.push_back(cc->GetRingDimension() / 2);")
         # Generate rotation key indices from capabilities
         rot_parts = []
         has_rotate = "rotate" in self.requires

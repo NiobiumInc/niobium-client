@@ -1056,6 +1056,7 @@ def test_fideslib_backend_keygen_on_the_host():
     assert "parameters.SetReducedNoise(LinkedOpenFheReducedNoise());" in keygen
     assert "lbcrypto::FHECKKSRNS::GetBootstrapDepth(_level_budget, lbcrypto::UNIFORM_TERNARY)" in keygen
     assert "nb_fideslib::set_context(cc);" in keygen
+    assert "cc->slots_bootstrap.push_back(cc->GetRingDimension() / 2);" in keygen
     assert "EvalSumKeyGen" not in keygen
     assert "cc->EvalRotateKeyGen(kp.secretKey," in keygen
     # The context field of the key pair comes from the glue, not the key.
@@ -1066,7 +1067,8 @@ def test_fideslib_backend_server_imports_the_context():
     files = compile_fideslib(FIDESLIB_SRC)
     server = files["compute.cpp"]
     assert "auto cc = nb_fideslib::import_context(_stored_cc);" in server
-    assert "cc->EvalBootstrapSetup(std::vector<uint32_t>{3, 3});" in server
+    assert "cc->slots_bootstrap = {cc->GetRingDimension() / 2};" in server
+    assert "cc->EvalBootstrapSetup(std::vector<uint32_t>{3, 3}, std::vector<uint32_t>{0, 0}, cc->GetRingDimension() / 2);" in server
     assert "cc->LoadContext(pk);" in server
     assert "nb_fideslib::flush_outputs();" in server
     # No Niobium instrumentation: the haze engine records by itself.
