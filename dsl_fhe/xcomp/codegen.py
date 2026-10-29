@@ -921,6 +921,7 @@ endforeach()
         self.wl("#include <iomanip>")
         self.wl("#include <algorithm>")
         self.wl("#include <functional>")
+        self.wl("#include <cstdlib>")
         self.blank()
         if self._fideslib:
             for inc in FIDESLIB_INCLUDES:
@@ -1131,24 +1132,61 @@ endforeach()
         # call. The plaintexts are device-only, which a transform diagonal is.
         self.wl("    return cc->MakeCKKSPackedPlaintextDeviceMany(d, 1, level, ct->GetSlots());")
         self.wl("}")
+        # Device memory bounds a call: its diagonals are all resident at once
+        # (device-encoded ones at twice a loaded plaintext's size), so a product
+        # whose diagonals exceed NB_LT_DIAG_BYTES (6 GB by default) is split
+        # into chunks of whole giant steps. The facade's offset parameter makes
+        # a chunk the transform over rotations [k0, k0 + n): every diagonal
+        # keeps the counter-rotation of its global giant step, which is what
+        # the chunk's contract requires with offset k0, and the chunks' results
+        # add up to the whole product. A chunk's offset is a giant step, whose
+        # rotation key the BSGS circuit already has.
+        self.wl("inline size_t nb_lt_chunk(const CryptoContext<DCRTPoly>& cc, const Ciphertext<DCRTPoly>& ct,")
+        self.wl("                          size_t sets, size_t n, uint32_t bstep) {")
+        self.wl("    double budget = 6e9;")
+        self.wl('    if (const char* e = std::getenv("NB_LT_DIAG_BYTES")) budget = std::atof(e);')
+        self.wl("    const size_t towers = cc->multiplicative_depth + 1 > ct->GetLevel() ? cc->multiplicative_depth + 1 - ct->GetLevel() : 1;")
+        self.wl("    const double per = 2.0 * towers * cc->GetRingDimension() * sizeof(uint64_t) * sets;")
+        self.wl("    size_t giants = static_cast<size_t>(budget / (per * bstep));")
+        self.wl("    size_t chunk = std::max<size_t>(1, giants) * bstep;")
+        self.wl("    return std::min(chunk, n);")
+        self.wl("}")
+        self.wl("inline std::vector<std::vector<double>> nb_lt_slice(const std::vector<std::vector<double>>& d, size_t k0, size_t n) {")
+        self.wl("    return std::vector<std::vector<double>>(d.begin() + k0, d.begin() + std::min(d.size(), k0 + n));")
+        self.wl("}")
+        # NB_LT_LOOP set at run time takes the loop on every engine: one
+        # diagonal encoded and multiplied at a time, the least device memory.
         self.wl("inline Ciphertext<DCRTPoly> nb_linear_transform(const CryptoContext<DCRTPoly>& cc, const Ciphertext<DCRTPoly>& ct,")
         self.wl("                                                const std::vector<std::vector<double>>& d, uint32_t bstep) {")
-        self.wl("    if (fideslib::BackendFromEnv() == fideslib::Backend::HAZE || d.empty())")
+        self.wl("    if (fideslib::BackendFromEnv() == fideslib::Backend::HAZE || std::getenv(\"NB_LT_LOOP\") || d.empty())")
         self.wl("        return nb_linear_transform_loop(cc, ct, d, bstep);")
-        self.wl("    auto pts = nb_lt_encode(cc, ct, d);")
-        self.wl("    auto r = ct->Clone();")
-        self.wl("    cc->LinearTransformInPlace(r, static_cast<int>(d.size()), static_cast<int>(bstep), pts);")
-        self.wl("    return r;")
+        self.wl("    const size_t chunk = nb_lt_chunk(cc, ct, 1, d.size(), bstep);")
+        self.wl("    Ciphertext<DCRTPoly> y;")
+        self.wl("    for (size_t k0 = 0; k0 < d.size(); k0 += chunk) {")
+        self.wl("        auto part = nb_lt_slice(d, k0, chunk);")
+        self.wl("        auto pts = nb_lt_encode(cc, ct, part);")
+        self.wl("        auto r = ct->Clone();")
+        self.wl("        cc->LinearTransformInPlace(r, static_cast<int>(part.size()), static_cast<int>(bstep), pts, 1, static_cast<int>(k0));")
+        self.wl("        y = y ? cc->EvalAdd(y, r) : r;")
+        self.wl("    }")
+        self.wl("    return y;")
         self.wl("}")
         self.wl("inline std::vector<Ciphertext<DCRTPoly>> nb_linear_transforms(const CryptoContext<DCRTPoly>& cc, const Ciphertext<DCRTPoly>& ct,")
         self.wl("                                                              const std::vector<std::vector<std::vector<double>>>& sets, uint32_t bstep) {")
         self.wl("    bool same = !sets.empty() && !sets[0].empty();")
         self.wl("    for (auto& d : sets) same = same && d.size() == sets[0].size();")
-        self.wl("    if (fideslib::BackendFromEnv() == fideslib::Backend::HAZE || !same)")
+        self.wl("    if (fideslib::BackendFromEnv() == fideslib::Backend::HAZE || std::getenv(\"NB_LT_LOOP\") || !same)")
         self.wl("        return nb_linear_transforms_loop(cc, ct, sets, bstep);")
-        self.wl("    std::vector<std::vector<Plaintext>> pts;")
-        self.wl("    for (auto& d : sets) pts.push_back(nb_lt_encode(cc, ct, d));")
-        self.wl("    return cc->LinearTransformMany(ct, static_cast<int>(sets[0].size()), static_cast<int>(bstep), pts);")
+        self.wl("    const size_t n = sets[0].size(), chunk = nb_lt_chunk(cc, ct, sets.size(), n, bstep);")
+        self.wl("    std::vector<Ciphertext<DCRTPoly>> ys(sets.size());")
+        self.wl("    for (size_t k0 = 0; k0 < n; k0 += chunk) {")
+        self.wl("        std::vector<std::vector<Plaintext>> pts;")
+        self.wl("        size_t len = 0;")
+        self.wl("        for (auto& d : sets) { auto part = nb_lt_slice(d, k0, chunk); len = part.size(); pts.push_back(nb_lt_encode(cc, ct, part)); }")
+        self.wl("        auto rs = cc->LinearTransformMany(ct, static_cast<int>(len), static_cast<int>(bstep), pts, 1, static_cast<int>(k0));")
+        self.wl("        for (size_t t = 0; t < rs.size(); ++t) ys[t] = ys[t] ? cc->EvalAdd(ys[t], rs[t]) : rs[t];")
+        self.wl("    }")
+        self.wl("    return ys;")
         self.wl("}")
         self.blank()
 
@@ -4465,14 +4503,28 @@ endforeach()
             budget = self._bootstrap_budget()
             # One more level per extra iteration (OpenFHE's own example).
             extra = self._bootstrap_iterations() - 1
-            lines += [
-                f"    std::vector<uint32_t> _level_budget = {{{budget}, {budget}}};",
-                f"    parameters.SetMultiplicativeDepth({depth} + "
-                + ("lbcrypto::FHECKKSRNS::GetBootstrapDepth(_level_budget, "
-                   f"lbcrypto::{key_dist})" if self._fideslib else
-                   f"FHECKKSRNS::GetBootstrapDepth(_level_budget, {key_dist})")
-                + (f" + {extra}" if extra else "") + ");",
-            ]
+            # bootstrap_depth: the levels a refresh really consumes, when it is
+            # less than OpenFHE's GetBootstrapDepth reserve (+1): measured, a
+            # sparse-secret {3,3} refresh at 2^16 consumes 15 where the
+            # reserve is 17, so `depth` alone would undersell the levels it
+            # leaves. Then the chain is depth + bootstrap_depth levels.
+            bdepth = scheme_cfg.get("bootstrap_depth")
+            if bdepth is not None:
+                bd = int(str(bdepth).split()[0])
+                lines += [
+                    f"    std::vector<uint32_t> _level_budget = {{{budget}, {budget}}};",
+                    f"    parameters.SetMultiplicativeDepth({depth} + {bd}"
+                    + (f" + {extra}" if extra else "") + ");",
+                ]
+            else:
+                lines += [
+                    f"    std::vector<uint32_t> _level_budget = {{{budget}, {budget}}};",
+                    f"    parameters.SetMultiplicativeDepth({depth} + "
+                    + ("lbcrypto::FHECKKSRNS::GetBootstrapDepth(_level_budget, "
+                       f"lbcrypto::{key_dist})" if self._fideslib else
+                       f"FHECKKSRNS::GetBootstrapDepth(_level_budget, {key_dist})")
+                    + (f" + {extra}" if extra else "") + ");",
+                ]
         else:
             lines.append(f"    parameters.SetMultiplicativeDepth({depth});")
         lines.append(f"    parameters.SetScalingModSize({precision});")
@@ -4496,6 +4548,17 @@ endforeach()
             f"    parameters.SetScalingTechnique({scaling});",
             "    parameters.SetKeySwitchTechnique(HYBRID);",
         ]
+        # key_switch_digits: HYBRID key switching's digit count (OpenFHE's
+        # dnum, SetNumLargeDigits; its default 0 lets OpenFHE choose, 3 for a
+        # deep chain). More digits shrink the special modulus P, which is
+        # what lets a deep modulus chain fit a security level at a given ring,
+        # and enlarge every key-switching key by the same factor.
+        digits = scheme_cfg.get("key_switch_digits")
+        if digits is not None:
+            n = int(str(digits).split()[0])
+            if n < 1:
+                raise CodegenError(f"scheme key_switch_digits: {n}: at least 1")
+            lines.append(f"    parameters.SetNumLargeDigits({n});")
         if self._fideslib:
             # The keys are generated on the host; the server picks its own
             # engine when it imports the context. The FBC variant is the one
