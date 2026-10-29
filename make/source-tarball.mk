@@ -4,7 +4,6 @@
 # Produces niobium-client-<version>.tar.gz vendoring the submodule sources, for
 # the from-source install targets for Homebrew / Linux / Docker (WIP).
 # GitHub's auto-generated tarball leaves submodules EMPTY; this doesn't.
-# Excludes niobium-haze (entry point 4, deferred — no target builds it yet).
 #
 # Assembles from `git archive` (tracked files only — no .git, no build trees)
 # into a staging dir, then a plain `tar -c`; cross-platform (no GNU-tar-only
@@ -27,7 +26,6 @@ source-tarball: ## Build the self-contained source tarball (override VERSION=x.y
 	stage="$$work/$(SOURCE_TARBALL_PREFIX)"; mkdir -p "$$stage"; \
 	git archive HEAD | tar -x -C "$$stage"; \
 	STAGE="$$stage" git submodule foreach --recursive --quiet ' \
-		case "$$displaypath" in vendor/niobium-haze*) exit 0 ;; esac; \
 		mkdir -p "$$STAGE/$$displaypath"; \
 		git archive HEAD | tar -x -C "$$STAGE/$$displaypath" '; \
 	c=$$(git rev-parse HEAD); \
@@ -56,5 +54,4 @@ check-source-tarball: ## Validate the built source tarball is self-contained
 	grep -q "\"version\": \"$(VERSION)\"" "$$root/manifest.json" || fail "manifest version != $(VERSION)"; \
 	if find "$$root" -name .git -print -quit | grep -q .; then fail ".git present in tarball"; fi; \
 	if find "$$root" \( -name build -o -name dbuild \) -type d -print -quit | grep -q .; then fail "a build/ or dbuild/ tree is present"; fi; \
-	if [ -e "$$root/vendor/niobium-haze" ]; then fail "niobium-haze should be excluded"; fi; \
 	echo "OK: $(SOURCE_TARBALL_PREFIX) is self-contained ($$(du -sh "$$root" | cut -f1) unpacked)"
