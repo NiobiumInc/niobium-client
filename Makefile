@@ -127,7 +127,7 @@ NATIVEOPT ?= OFF
 # Targets
 # ==============================================================================
 
-.PHONY: help sync sync-submodules sync-fhetch sync-haze sync-skill update-openfhe update-niobium-fhetch \
+.PHONY: help sync sync-submodules sync-skill update-openfhe update-niobium-fhetch \
         config config-release build build-release release \
         config-openfhe config-openfhe-release build-openfhe build-openfhe-release \
         config-client config-client-release \
@@ -151,12 +151,6 @@ sync: sync-submodules ## Sync all submodules (recursive) — niobium-fhetch + it
 
 sync-submodules: ## Sync niobium-fhetch and its nested submodules
 	git submodule update --init --recursive
-
-sync-fhetch: ## Sync only niobium-fhetch + its nested submodules (openfhe/json; no haze)
-	git submodule update --init --recursive vendor/niobium-fhetch
-
-sync-haze: ## Sync only niobium-haze + its nested submodules (GPU / FIDESlib integrators)
-	git submodule update --init --recursive vendor/niobium-haze
 
 sync-skill: ## Install the fhe-application-design skill (latest main) into .claude + .agents
 	scripts/update-fhe-skill.sh

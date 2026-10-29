@@ -1,8 +1,8 @@
 # .github/workflows/compiler-tests.yml
 #
-# Commit this (exact path/filename) to each of: niobium-fhetch, niobium-haze,
-# niobium-client. The runner group `gcp-ephemeral` is pinned to this path
-# @refs/heads/main, so the filename must match.
+# Commit this (exact path/filename) to each of: niobium-fhetch, niobium-client.
+# The runner group `gcp-ephemeral` is pinned to this path @refs/heads/main, so
+# the filename must match.
 #
 # ===========================================================================
 # HARD REQUIREMENT: NO nbcc / compiler output in the public Actions log.

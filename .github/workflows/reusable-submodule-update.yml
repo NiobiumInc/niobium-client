@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       submodule-name:
-        description: 'Short name of the submodule (e.g. niobium-fhetch, niobium-haze)'
+        description: 'Short name of the submodule (e.g. niobium-fhetch)'
         required: true
         type: string
       submodule-org-repo:
@@ -26,7 +26,7 @@ on:
         required: true
         type: string
       submodule-name:
-        description: 'Short name of the submodule (e.g. niobium-fhetch, niobium-haze)'
+        description: 'Short name of the submodule (e.g. niobium-fhetch)'
         required: true
         type: string
       submodule-org-repo:

@@ -36,37 +36,36 @@ elsewhere `fog` falls back to the system trust store.
 
 ## Choose your entry point
 
-There are four ways in, by audience:
+There are three ways in, by audience:
 
 | You are… | Entry point | Start here |
 |---|---|---|
 | **An AI coding agent** (or pairing with one) | **nb DSL + design skill** — a staged FHE design methodology that auto-loads for Claude Code, OpenAI Codex, and other agentskills.io-compatible agents, paired with a compact DSL whose compiler generates all the plumbing | [`dsl_fhe/`](dsl_fhe/README.md), [`niobium-skills`](https://github.com/NiobiumInc/niobium-skills) |
 | **An application developer** with OpenFHE C++ | **Instrumented OpenFHE** — write standard `EvalMult`/`EvalAdd`/… code, bracket it with `niobium::compiler()` calls; probes record everything | [Instrumenting an OpenFHE application](#entry-point-2--openfhe-for-application-developers), [`examples/`](examples/) |
 | **A compiler / code-generator author** | **FHETCH Polynomial IR** — emit the IR directly through the recording API (or the text trace format) and use the session, replay, and transport machinery as your backend | [`niobium-fhetch`](https://github.com/NiobiumInc/niobium-fhetch), [`src/fhetch_transport/`](src/fhetch_transport/) |
-| **An FHE library integrator** (GPU/accelerator back-ends) | **HAZE** — a CUDA-shaped C API (`hazeMalloc`/`hazeMemcpy`/`hazeNTT`/…): each call records one polynomial-level IR op, so CUDA-targeting FHE libraries port with minimal effort | [`vendor/niobium-haze`](https://github.com/NiobiumInc/niobium-haze) |
 
-All four converge on the same recorder and the same trace:
+All three converge on the same recorder and the same trace:
 
 ```
-     AI agents               End users              FHE compilers          FHE libraries
-  (Claude Code +          (OpenFHE C++              (emit Polynomial      (CUDA-shaped code,
-   design skill)           applications)             IR directly)          e.g. FIDESlib)
-        |                        |                        |                      |
-        v                        |                        |                      v
- +---------------+               |                        |               +---------------+
- |  nb DSL       |               |                        |               |  HAZE         |
- |  dsl_fhe/     |--generates--->|                        |               |  libhaze      |
- |  (nbc)        |  OpenFHE C++  |                        |               |  hazeAdd,     |
- +---------------+               v                        |               |  hazeNTT, ... |
-                    +---------------------+               |               +---------------+
-                    |  Niobium-           |               |                      |
-                    |  instrumented       |               |                      |
-                    |  OpenFHE (probes.h) |               |                      |
-                    +---------------------+               |                      |
-                                 | openfhe_cprobe_*       | fhetch_api.h         | one IR op
-                                 | fires on every         | (sr_addp,            | per haze
-                                 | NTT, ADD, MUL, ...     |  sr_ntt, ...)        | call
-                                 v                        v                      v
+     AI agents               End users              FHE compilers
+  (Claude Code +          (OpenFHE C++              (emit Polynomial
+   design skill)           applications)             IR directly)
+        |                        |                        |
+        v                        |                        |
+ +---------------+               |                        |
+ |  nb DSL       |               |                        |
+ |  dsl_fhe/     |--generates--->|                        |
+ |  (nbc)        |  OpenFHE C++  |                        |
+ +---------------+               v                        |
+                    +---------------------+               |
+                    |  Niobium-           |               |
+                    |  instrumented       |               |
+                    |  OpenFHE (probes.h) |               |
+                    +---------------------+               |
+                                 | openfhe_cprobe_*       | fhetch_api.h
+                                 | fires on every         | (sr_addp,
+                                 | NTT, ADD, MUL, ...     |  sr_ntt, ...)
+                                 v                        v
                     +----------------------------------------------------------------+
                     |        libnbfhetch  —  FHETCH Polynomial IR recorder           |
                     |  niobium::compiler() session API: init / start / probe / stop  |
@@ -323,19 +322,6 @@ The trace records FHETCH operation names, not hardware instructions — the
 server-side compiler does the lowering (NTT splitting, load/store insertion,
 register allocation).
 
-## Entry point 4 — HAZE, for FHE library integrators
-
-[`niobium-haze`](https://github.com/NiobiumInc/niobium-haze) (vendored at
-`vendor/niobium-haze`) exposes a **CUDA-shaped C API** one level below
-OpenFHE: `hazeMalloc` / `hazeMemcpy` / `hazeAdd` / `hazeNTT` / … — each public
-entry point is a single polynomial-level IR op, recorded through the same
-`libnbfhetch` core. The shape is deliberately CUDA's so GPU FHE libraries
-written against CUDA — for example
-[FIDESlib](https://github.com/CKKS-Community/FIDESlib) — can be retargeted to
-Niobium hardware with minimal porting effort: swap the `cuda*` calls for
-`haze*` calls, then `hazeFlush()` finalizes the trace and dispatches replay
-(local or remote) and `hazeMemcpy` D2H reads back reconstructed results.
-
 ---
 
 ## Building
@@ -438,17 +424,12 @@ sudo apt install -y build-essential cmake libssl-dev python3 git
 ### 3. Build and install the CLI
 
 ```bash
-make sync         # fetch submodules: niobium-fhetch + nested OpenFHE + json + niobium-haze
+make sync         # fetch submodules: niobium-fhetch + nested OpenFHE + json
 make release      # build OpenFHE + libnbfhetch + transport client + examples (Release)
 make install-release  # install the client SDK to vendor/lib/niobium-client
 make install-cli  # install fog + nbcc_fhetch_replay to ~/.local/bin
 make sync-skill   # install the FHE design skill into .claude + .agents
 ```
-
-Use `make sync-fhetch` in place of `make sync` to fetch only niobium-fhetch and
-its nested OpenFHE, skipping the GPU-oriented `niobium-haze` submodule (nothing
-in the default build needs it). `make sync-haze` fetches haze on its own for
-GPU-oriented applications.
 
 `make install-cli` copies the standalone `fog` script plus the
 `nbcc_fhetch_replay` transport client that `fog` hands each job off to at submit
@@ -682,15 +663,14 @@ niobium-client/
   vendor/
     niobium-fhetch/           # submodule: libnbfhetch + fhetch_sim + API headers
       vendor/openfhe/         #   nested submodule: Niobium-instrumented OpenFHE
-    niobium-haze/             # submodule: CUDA-shaped C API — entry point 4
     lib/openfhe/              # installed OpenFHE (built by the Makefile)
   CMakeLists.txt  Makefile  README.md  CLAUDE.md  LICENSE (Apache 2.0)
 ```
 
 ## Architecture decisions
 
-- **Many front-ends, one IR** — the DSL, instrumented OpenFHE, direct FHETCH
-  emission, and HAZE all converge on the same FHETCH Polynomial IR and the
+- **Many front-ends, one IR** — the DSL, instrumented OpenFHE, and direct
+  FHETCH emission all converge on the same FHETCH Polynomial IR and the
   same `niobium::compiler()` session machinery. Anything that records a valid
   trace gets the simulator, the cache, replay-with-new-inputs, and the
   compilation service for free.
