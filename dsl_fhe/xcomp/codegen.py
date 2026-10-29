@@ -1373,6 +1373,10 @@ endforeach()
         self.wl("  Slots r(std::min(a.size(), b.size()));")
         self.wl("  for (size_t i = 0; i < r.size(); ++i) r[i] = a[i] * b[i]; return r; }")
         self.wl("inline Slots mul(Slots a, double s) { for (auto& x : a) x *= s; return a; }")
+        # A scalar on the left, as OpenFHE's EvalAdd/EvalSub/EvalMult(double, ct)
+        self.wl("inline Slots add(double s, Slots a) { return add(std::move(a), s); }")
+        self.wl("inline Slots sub(double s, Slots a) { for (auto& x : a) x = s - x; return a; }")
+        self.wl("inline Slots mul(double s, Slots a) { return mul(std::move(a), s); }")
         self.wl("inline Slots nullsafe_add(const Slots& a, const Slots& b) {")
         self.wl("  return a.empty() ? b : add(a, b); }")
         self.wl("inline Slots negate(Slots a) { for (auto& x : a) x = -x; return a; }")
@@ -4898,7 +4902,15 @@ endforeach()
             return False
         if isinstance(expr, ast.Ident):
             # Check if this variable was assigned from a vector-returning function
-            return self._local_var_cpp_types.get(expr.name, "").startswith("std::vector")
+            if expr.name in self._local_var_cpp_types:
+                return self._local_var_cpp_types[expr.name].startswith("std::vector")
+            # or is a plaintext vec<f64> parameter of the function being emitted
+            if self._current_fn:
+                for p in self._current_fn.params:
+                    if p.name == expr.name and p.type_ann is not None:
+                        return (not self._has_enc_type(p.type_ann)
+                                and self._type_to_cpp(p.type_ann) == "std::vector<double>")
+            return False
         if isinstance(expr, ast.ArrayLiteral):
             return True
         return False

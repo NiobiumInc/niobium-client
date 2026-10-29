@@ -1237,3 +1237,31 @@ def test_linear_transform_scheme_fields():
             assert False, bad
         except cg.CodegenError as e:
             assert msg in str(e)
+
+
+# A shared helper taking a plaintext vector parameter, and a scalar on the
+# left of a ciphertext: the two plaintext-operand forms of `affine`.
+PLAIN_OPERAND_SRC = FIDESLIB_SRC.replace(
+    '@client @stage("key_generation")',
+    "fn affine(x: enc<vec<f64>>, m: vec<f64>) -> enc<vec<f64>> {\n"
+    '    return 2.0 * (x * m) - 1.0\n'
+    '}\n\n@client @stage("key_generation")').replace(
+    "    return Output { y: bootstrap(b) }",
+    "    return Output { y: bootstrap(affine(b, [0.5, 0.25])) }")
+
+
+def test_vec_parameter_operand_is_encoded():
+    for files in (compile_str(PLAIN_OPERAND_SRC), compile_fideslib(PLAIN_OPERAND_SRC)):
+        shared = files["nb_shared.cpp"]
+        body = shared[shared.find("affine("):]
+        # the vec<f64> parameter becomes a packed plaintext at the ciphertext's level
+        assert "MakeCKKSPackedPlaintext(m, 1, _ct->GetLevel()" in body, body[:400]
+        assert "EvalMult(x, m)" not in body
+
+
+def test_twin_takes_a_scalar_on_the_left():
+    files = compile_str(PLAIN_OPERAND_SRC)
+    header = "\n".join(v for k, v in files.items() if k.endswith(".h"))
+    assert "inline Slots mul(double s, Slots a)" in header
+    assert "inline Slots sub(double s, Slots a)" in header
+    assert "inline Slots add(double s, Slots a)" in header
