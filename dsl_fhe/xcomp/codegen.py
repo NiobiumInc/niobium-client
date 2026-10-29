@@ -1062,6 +1062,12 @@ endforeach()
 
     def _gen_linear_transform_helpers(self):
         """nb_linear_transform / nb_linear_transforms (see _gen_linear_transform)."""
+        # scheme `linear_transform: chained`: the loop with its rotations
+        # chained, the baby steps one rotation by 1 after another and the
+        # giant steps summed Horner-style by rotations of bstep. The same
+        # number of key switches as the loop, with two rotation keys (1 and
+        # bstep) instead of bstep - 1 baby and one per giant step.
+        chained = self._lt_mode() == "chained"
         self.wl("// linear_transform(ct, d, bstep) = sum_g Rot(sum_b Rot(ct, b) * d[g*bstep + b], g*bstep):")
         self.wl("// the baby-step giant-step diagonal product, d[k] already counter-rotated by")
         self.wl("// its giant step; every diagonal is encoded at the level it is consumed at.")
@@ -1070,6 +1076,8 @@ endforeach()
         self.wl("                            const std::vector<std::vector<double>>& d, uint32_t bstep) {")
         self.indent()
         self.wl("CT y;")
+        if chained:
+            self.wl("std::vector<CT> parts;")
         self.wl("for (size_t g = 0; g * bstep < d.size(); ++g) {")
         self.indent()
         self.wl("CT part;")
@@ -1080,17 +1088,29 @@ endforeach()
         self.wl("part = part ? cc->EvalAdd(part, term) : term;")
         self.dedent()
         self.wl("}")
-        self.wl("if (g > 0) part = cc->EvalRotate(part, static_cast<int32_t>(g * bstep));")
-        self.wl("y = y ? cc->EvalAdd(y, part) : part;")
+        if chained:
+            # Horner over the giant steps (run from the last one down):
+            # y = Rot(y, bstep) + part_g, one rotation key for every step
+            self.wl("parts.push_back(part);")
+        else:
+            self.wl("if (g > 0) part = cc->EvalRotate(part, static_cast<int32_t>(g * bstep));")
+            self.wl("y = y ? cc->EvalAdd(y, part) : part;")
         self.dedent()
         self.wl("}")
+        if chained:
+            self.wl("for (size_t g = parts.size(); g-- > 0;)")
+            self.wl("    y = y ? cc->EvalAdd(cc->EvalRotate(y, static_cast<int32_t>(bstep)), parts[g]) : parts[g];")
         self.wl("return y;")
         self.dedent()
         self.wl("}")
         self.wl("template <typename CC, typename CT>")
         self.wl("std::vector<CT> nb_baby_rotations(const CC& cc, const CT& ct, size_t n) {")
         self.wl("    std::vector<CT> baby(n);")
-        self.wl("    for (size_t b = 0; b < n; ++b) baby[b] = b == 0 ? ct : cc->EvalRotate(ct, static_cast<int32_t>(b));")
+        if chained:
+            # each baby step one rotation by 1 from the previous one
+            self.wl("    for (size_t b = 0; b < n; ++b) baby[b] = b == 0 ? ct : cc->EvalRotate(baby[b - 1], 1);")
+        else:
+            self.wl("    for (size_t b = 0; b < n; ++b) baby[b] = b == 0 ? ct : cc->EvalRotate(ct, static_cast<int32_t>(b));")
         self.wl("    return baby;")
         self.wl("}")
         self.wl("template <typename CC, typename CT>")
@@ -1109,7 +1129,7 @@ endforeach()
         self.wl("}")
         # scheme `linear_transform: loop` takes the loop on fideslib too: one
         # diagonal encoded and multiplied at a time, the least device memory.
-        if not self._fideslib or self._lt_mode() == "loop":
+        if not self._fideslib or self._lt_mode() in ("loop", "chained"):
             self.wl("template <typename CC, typename CT>")
             self.wl("CT nb_linear_transform(const CC& cc, const CT& ct, const std::vector<std::vector<double>>& d, uint32_t bstep) {")
             self.wl("    return nb_linear_transform_loop(cc, ct, d, bstep);")
@@ -2059,11 +2079,12 @@ endforeach()
         """How linear_transform runs on fideslib (scheme `linear_transform`):
         `fused` (default), the facade's prepared transform with the diagonals
         encoded on the device, or `loop`, one diagonal at a time on the host,
-        slower but with the least device memory. OpenFHE always loops."""
+        slower but with the least device memory, or `chained`, the loop with
+        rotation keys for 1 and bstep only. OpenFHE always loops."""
         v = self._scheme_field("linear_transform")
         mode = "fused" if v is None else str(v).split()[0]
-        if mode not in ("fused", "loop"):
-            raise CodegenError(f"scheme linear_transform: {mode}: fused or loop")
+        if mode not in ("fused", "loop", "chained"):
+            raise CodegenError(f"scheme linear_transform: {mode}: fused, loop or chained")
         return mode
 
     def _lt_memory_bytes(self) -> float:
