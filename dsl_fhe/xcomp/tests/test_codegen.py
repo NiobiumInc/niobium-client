@@ -1169,10 +1169,15 @@ def test_linear_transform_openfhe_runs_the_loop():
 def test_linear_transform_fideslib_uses_the_fused_transform():
     files = compile_fideslib(LT_SRC)
     header = files["nb_shared.h"]
-    assert "cc->LinearTransformInPlace(r, static_cast<int>(d.size()), static_cast<int>(bstep), pts);" in header
-    assert "cc->LinearTransformMany(ct, static_cast<int>(sets[0].size()), static_cast<int>(bstep), pts);" in header
+    assert "cc->LinearTransformInPlace(r, static_cast<int>(part.size()), static_cast<int>(bstep), pts, 1, static_cast<int>(k0));" in header
+    assert "cc->LinearTransformMany(ct, static_cast<int>(len), static_cast<int>(bstep), pts, 1, static_cast<int>(k0));" in header
+    # bounded device memory: chunks of whole giant steps under NB_LT_DIAG_BYTES
+    assert 'std::getenv("NB_LT_DIAG_BYTES")' in header
+    assert "size_t chunk = std::max<size_t>(1, giants) * bstep;" in header
     # haze has no fused transform: the loop, the same result
     assert "fideslib::BackendFromEnv() == fideslib::Backend::HAZE" in header
+    # NB_LT_LOOP selects the loop on any engine (least device memory)
+    assert header.count('std::getenv("NB_LT_LOOP")') == 2
     # diagonals at the level the products happen at
     assert "ct->GetLevel() + (ct->GetNoiseScaleDeg() == 2 ? 1 : 0)" in header
     assert "cc->MakeCKKSPackedPlaintextDeviceMany(d, 1, level, ct->GetSlots())" in header
@@ -1196,3 +1201,19 @@ def test_linear_transform_rejects_a_plaintext_input():
         assert False, "a plaintext first argument must be rejected"
     except cg.CodegenError as e:
         assert "must be a ciphertext" in str(e)
+
+
+def test_key_switch_digits():
+    src = FIDESLIB_SRC.replace("    bootstrap_budget: 3 levels\n", "    bootstrap_budget: 3 levels\n    key_switch_digits: 6\n")
+    assert "key_switch_digits: 6" in src
+    for files in (compile_str(src), compile_fideslib(src)):
+        assert "parameters.SetNumLargeDigits(6);" in files["key_generation.cpp"]
+    assert "SetNumLargeDigits" not in compile_str(FIDESLIB_SRC)["key_generation.cpp"]
+
+
+def test_bootstrap_depth():
+    src = FIDESLIB_SRC.replace("    bootstrap_budget: 3 levels\n", "    bootstrap_budget: 3 levels\n    bootstrap_depth: 15 levels\n")
+    for files in (compile_str(src), compile_fideslib(src)):
+        kg = files["key_generation.cpp"]
+        assert "parameters.SetMultiplicativeDepth(8 + 15);" in kg, kg[kg.find("SetMultiplicativeDepth"):][:80]
+        assert "GetBootstrapDepth" not in kg.split("SetMultiplicativeDepth")[1].split(";")[0]
