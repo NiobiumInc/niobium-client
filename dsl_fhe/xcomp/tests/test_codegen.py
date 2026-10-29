@@ -1171,13 +1171,13 @@ def test_linear_transform_fideslib_uses_the_fused_transform():
     header = files["nb_shared.h"]
     assert "cc->LinearTransformInPlace(r, static_cast<int>(part.size()), static_cast<int>(bstep), pts, 1, static_cast<int>(k0));" in header
     assert "cc->LinearTransformMany(ct, static_cast<int>(len), static_cast<int>(bstep), pts, 1, static_cast<int>(k0));" in header
-    # bounded device memory: chunks of whole giant steps under NB_LT_DIAG_BYTES
-    assert 'std::getenv("NB_LT_DIAG_BYTES")' in header
+    # bounded device memory: chunks of whole giant steps under the scheme's
+    # linear_transform_memory (6 GB by default)
+    assert "const double budget = 6e+09;" in header
     assert "size_t chunk = std::max<size_t>(1, giants) * bstep;" in header
     # haze has no fused transform: the loop, the same result
     assert "fideslib::BackendFromEnv() == fideslib::Backend::HAZE" in header
-    # NB_LT_LOOP selects the loop on any engine (least device memory)
-    assert header.count('std::getenv("NB_LT_LOOP")') == 2
+    assert "getenv" not in header
     # diagonals at the level the products happen at
     assert "ct->GetLevel() + (ct->GetNoiseScaleDeg() == 2 ? 1 : 0)" in header
     assert "cc->MakeCKKSPackedPlaintextDeviceMany(d, 1, level, ct->GetSlots())" in header
@@ -1217,3 +1217,23 @@ def test_bootstrap_depth():
         kg = files["key_generation.cpp"]
         assert "parameters.SetMultiplicativeDepth(8 + 15);" in kg, kg[kg.find("SetMultiplicativeDepth"):][:80]
         assert "GetBootstrapDepth" not in kg.split("SetMultiplicativeDepth")[1].split(";")[0]
+
+
+def _lt_scheme(src, fields):
+    return src.replace("    bootstrap_budget: 3 levels\n", "    bootstrap_budget: 3 levels\n" + fields)
+
+
+def test_linear_transform_scheme_fields():
+    import xcomp.codegen as cg
+    loop = compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: loop\n"))["nb_shared.h"]
+    assert "LinearTransformInPlace" not in loop and "LinearTransformMany" not in loop
+    assert "return nb_linear_transform_loop(cc, ct, d, bstep);" in loop
+    mem = compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform_memory: 1500 MB\n"))["nb_shared.h"]
+    assert "const double budget = 1.5e+09;" in mem
+    for bad, msg in (("    linear_transform: maybe\n", "fused or loop"),
+                     ("    linear_transform_memory: 3 bytes\n", "N GB or N MB")):
+        try:
+            compile_fideslib(_lt_scheme(LT_SRC, bad))
+            assert False, bad
+        except cg.CodegenError as e:
+            assert msg in str(e)

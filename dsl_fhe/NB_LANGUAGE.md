@@ -252,6 +252,16 @@ consumes 15 levels where the reserve is 17), and under a security level every
 level of the chain counts against the modulus budget. Measure the
 consumption first: an output level too high for the chain fails at run time.
 
+`linear_transform: fused` (default) or `loop` chooses how
+`linear_transform` runs on the fideslib back end. `fused` is the facade's
+prepared transform, with the diagonals encoded on the device. `loop` is one
+diagonal at a time on the host, slower but with the least device memory.
+`linear_transform_memory: N GB` (or `N MB`, N an integer, default 6 GB)
+bounds the diagonals one fused call holds on the device; a larger product
+runs in chunks of whole giant steps. Both are static: they shape
+`nb_shared.h`, which every stage shares, so `scheme.override` rejects them.
+OpenFHE always runs the loop.
+
 `key_switch_digits: N` sets hybrid key switching's digit count (OpenFHE's
 `dnum`, `SetNumLargeDigits`; unset, OpenFHE chooses). More digits shrink the
 special modulus P, which can let a deep chain fit a security level at a
@@ -634,7 +644,7 @@ scheme.override(security: not_set, ring_dim: 2048)
 | `relin(ct)` | Relinearize after *_norelin | `cc->Relinearize(ct)` |
 | `chebyshev(fn, ct, domain:, degree:)` | Chebyshev function evaluation | `cc->EvalChebyshevFunction(...)` |
 | `chebyshev(fn, ct, domain:, max_error:)` | Same, with the degree **auto-selected at compile time**: the closure is evaluated numerically, Chebyshev interpolants are fitted on the domain, and the minimal ladder degree (5, 13, 27, 59, 119, 247, 495, 1007, 2031) meeting the error target is chosen. `nbc` reports the selection as a note (degree, est. max approx error, levels consumed) and charges the implied depth. Requires a compile-time-evaluable closure (arithmetic + `exp`/`tanh`/`abs` + consts + pure user fns) and a literal/const domain; an unreachable tolerance is a compile error | `cc->EvalChebyshevFunction(..., <selected degree>)` |
-| `linear_transform(ct, d, bstep)` | The baby-step giant-step diagonal product `sum_g Rot(sum_b Rot(ct, b) * d[g*bstep + b], g*bstep)`, `b` in `[0, bstep)`: `d` is a `vec<vec<f64>>`, `d[k]` the diagonal of rotation `k` already counter-rotated by its giant step `g*bstep`. One plaintext multiplication deep; every diagonal is encoded at the level it is consumed at. Rotation keys: `1 .. bstep` and the giant steps | OpenFHE: the loop, the `bstep` baby rotations computed once (`nb_linear_transform` in `nb_shared.h`); fideslib: the facade's fused `cc->LinearTransformInPlace` (cpu and cuda engines; the loop on haze), the diagonals encoded on the device (`MakeCKKSPackedPlaintextDeviceMany`: the host's FFT and rounding, the engine's CRT reduction and NTT, one upload of N words per diagonal). The diagonals of one call are resident on the device together, so a product larger than `NB_LT_DIAG_BYTES` (environment, default 6e9 bytes) runs as chunks of whole giant steps whose results are added; `NB_LT_LOOP` set selects the loop instead (one diagonal at a time on the host: less device memory, slower) |
+| `linear_transform(ct, d, bstep)` | The baby-step giant-step diagonal product `sum_g Rot(sum_b Rot(ct, b) * d[g*bstep + b], g*bstep)`, `b` in `[0, bstep)`: `d` is a `vec<vec<f64>>`, `d[k]` the diagonal of rotation `k` already counter-rotated by its giant step `g*bstep`. One plaintext multiplication deep; every diagonal is encoded at the level it is consumed at. Rotation keys: `1 .. bstep` and the giant steps | OpenFHE: the loop, the `bstep` baby rotations computed once (`nb_linear_transform` in `nb_shared.h`); fideslib: the facade's fused `cc->LinearTransformInPlace` (cpu and cuda engines; the loop on haze), the diagonals encoded on the device (`MakeCKKSPackedPlaintextDeviceMany`: the host's FFT and rounding, the engine's CRT reduction and NTT, one upload of N words per diagonal). The diagonals of one call are resident on the device together, so a product larger than the scheme's `linear_transform_memory` (default 6 GB) runs as chunks of whole giant steps whose results are added; scheme `linear_transform: loop` selects the loop instead (one diagonal at a time on the host: less device memory, slower) |
 | `linear_transforms(ct, sets, bstep)` | `linear_transform` of one ciphertext by several diagonal sets (`vec<vec<vec<f64>>>`), one result per set, the baby rotations shared | OpenFHE: the loop over the sets on one set of baby rotations; fideslib: `cc->LinearTransformMany` when every set has the same length (one hoisted rotation, one batched kernel on cuda) |
 | `slot_sum(ct, n)` | Sum all slots | `cc->EvalSum(ct, n)` |
 | `running_sums(cts, stride:, depth:)` | In-place running sums | `RunningSums(cc, ...).eval_in_place(cts)` |
