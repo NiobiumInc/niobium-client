@@ -1,10 +1,26 @@
 name: SCANOSS License Compliance
 
+# Which branch: the repo's DEFAULT branch, read when the workflow runs
+# (github.event.repository.default_branch in each job's `if`), never named
+# here. An `on:` filter cannot read the default branch, and naming main/master
+# meant repos whose default is something else were never scanned on push or PR
+# (openfhe-development and FIDESlib-fork: nb_main; qemu-fhe: niobium_master,
+# 2026-09-29) -- and any repo whose default is renamed later would stop
+# silently. So every branch starts the workflow, and on any branch but the
+# default every job is skipped: no runner is taken, self-hosted included, no
+# scan runs, and a skipped required check does not block a merge.
 on:
   pull_request:
-    branches: [main, master]
   push:
-    branches: [main, master]
+    branches: ['**']   # every branch, but not tags
+    # Trigger-level guard: pushes that only touch these paths never start the
+    # workflow at all (free — no runner, no scan). GitHub evaluates the
+    # workflow file from the pushed commit, so this protects the very merge
+    # that introduces it. NOTE: kept OFF pull_request — a paths-ignored PR
+    # would hang forever on any repo where scanoss-pr is a required check.
+    paths-ignore:
+      - 'NOTICE'
+      - '.github/workflows/scanoss.yml'
   # Manual rescan from the Actions tab → "SCANOSS License Compliance" → "Run workflow".
   # Behaves like a push (full scan + ORT trigger). Use this to re-run after
   # adding/editing .scanoss-curations.json or scanoss.json without bumping a commit.
@@ -22,7 +38,7 @@ concurrency:
 jobs:
   scanoss-pr:
     name: SCANOSS License Scan (PR)
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.base_ref == github.event.repository.default_branch
     runs-on: ubuntu-latest
     steps:
       - name: Generate GitHub App token
@@ -41,6 +57,9 @@ jobs:
       - name: SCANOSS Delta Scan
         uses: scanoss/gha-code-scan@v1
         with:
+          # Pinned to match the ORT VM's scanoss-py (upgraded 2026-07-17).
+          # Bump deliberately alongside VM upgrades — never float.
+          runtimeContainer: ghcr.io/scanoss/scanoss-py:v1.54.1
           api.key: ${{ secrets.SCANOSS_API_KEY }}
           github.token: ${{ steps.app-token.outputs.token }}
           policies: copyleft
@@ -51,7 +70,7 @@ jobs:
 
   scanoss-full:
     name: SCANOSS Full Scan (post-merge)
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == github.event.repository.default_branch)
     runs-on: ubuntu-latest
     steps:
       - name: Generate GitHub App token
@@ -89,6 +108,9 @@ jobs:
       - name: SCANOSS Full Scan
         uses: scanoss/gha-code-scan@v1
         with:
+          # Pinned to match the ORT VM's scanoss-py (upgraded 2026-07-17).
+          # Bump deliberately alongside VM upgrades — never float.
+          runtimeContainer: ghcr.io/scanoss/scanoss-py:v1.54.1
           api.key: ${{ secrets.SCANOSS_API_KEY }}
           github.token: ${{ steps.app-token.outputs.token }}
           policies: copyleft
@@ -99,8 +121,15 @@ jobs:
 
   trigger-ort:
     name: Trigger ORT Scan
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: self-hosted
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_name == github.event.repository.default_branch)
+    # The dispatch pool, not plain `self-hosted`. The webhook is on the ORT VM,
+    # inside the network, so a GitHub-hosted runner cannot reach it; but
+    # `self-hosted` alone landed on any org runner -- the build runners on tron,
+    # momo and gollum, which are being retired (NiobiumInc/slurm#1505), and the
+    # Macs. The dispatchers sit on the same internal CI hosts and this job is one
+    # HTTP call, which fits their 2 CPUs / 8G. (They serve private repos only, as
+    # the org's self-hosted runners always have.)
+    runs-on: [self-hosted, slurm-dispatch]
     steps:
       - name: Check if ORT scan needed
         id: check
@@ -120,11 +149,23 @@ jobs:
 
       - name: Trigger ORT scan via webhook
         if: steps.filter.outputs.skip != 'true'
+        env:
+          ORT_WEBHOOK_URL: ${{ vars.ORT_WEBHOOK_URL }}
+          ORT_WEBHOOK_TOKEN: ${{ secrets.ORT_WEBHOOK_TOKEN }}
         run: |
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
-          HTTP_CODE=$(curl -s -o /tmp/ort-response.json -w "%{http_code}" -X POST "${{ vars.ORT_WEBHOOK_URL }}/scan" -H "Authorization: Bearer ${{ secrets.ORT_WEBHOOK_TOKEN }}" -H "Content-Type: application/json" -d "{\"repo\": \"${REPO_NAME}\"}")
+          # The token reaches curl on stdin (`-H @-`), not on its command line:
+          # a self-hosted runner shares its host with other users, and every
+          # process's argv is readable by all of them (ps). printf is a shell
+          # builtin, so the token is on no argv at all. The response goes to
+          # the job's own temp dir rather than the host's shared /tmp.
+          resp="$RUNNER_TEMP/ort-response.json"
+          HTTP_CODE=$(printf 'Authorization: Bearer %s\n' "$ORT_WEBHOOK_TOKEN" \
+            | curl -s -o "$resp" -w "%{http_code}" -X POST "$ORT_WEBHOOK_URL/scan" \
+                -H @- -H "Content-Type: application/json" \
+                -d "{\"provider\": \"github\", \"repo\": \"${REPO_NAME}\"}")
           echo "HTTP $HTTP_CODE"
-          cat /tmp/ort-response.json
+          cat "$resp"
           if [ "$HTTP_CODE" = "202" ]; then
             echo "::notice::ORT scan triggered for $REPO_NAME"
           else
