@@ -2,7 +2,7 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-10-24
+Generated: 2026-10-29
 Tool: SCANOSS (snippet detection with License dataset)
 Components: 70
 
@@ -16,13 +16,12 @@ WARNING: The following component(s) have no license information.
 These require manual review to determine licensing terms.
 
   - goog-coredumper/google-perftools (https://sourceforge.net/projects/goog-coredumper/google-perftools)
-  - startle (https://github.com/raphael-group/startle)
 
 ------------------------------------------------------------
 
 LICENSE SUMMARY
 
-  Apache-2.0: 16 component(s)
+  Apache-2.0: 17 component(s)
   Apache-2.0 WITH LLVM-exception: 2 component(s)
   Apache-2.0 WITH LLVM-exception AND NCSA: 1 component(s)
   Apache-2.0 WITH LLVM-exception AND NCSA AND NCSA OR MIT AND NCSA AND MIT: 1 component(s)
@@ -39,7 +38,7 @@ LICENSE SUMMARY
   ISC: 1 component(s)
   LGPL-2.1-only [COPYLEFT]: 2 component(s)
   LGPL-3.0-only [COPYLEFT]: 1 component(s)
-  MIT: 18 component(s)
+  MIT: 19 component(s)
   MPL-2.0 [COPYLEFT]: 1 component(s)
   NCSA: 3 component(s)
   OpenSSL: 1 component(s)
@@ -1019,7 +1018,7 @@ COMPONENT ATTRIBUTIONS
   Version: e124345
   Source: https://github.com/nettrino/slowfuzz
   PURL: pkg:github/nettrino/slowfuzz
-  License: NCSA
+  License: Apache-2.0, NCSA
 
   startle
   Version: v1.1.0
@@ -1031,7 +1030,7 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2017-2019 Vincent La
     Copyright (c) 2018 Pranav Srinivas Kumar <pranav.srinivas.kumar@gmail.com>
     Copyright 2008; Google Inc.
-  License: UNKNOWN — requires manual review
+  License: MIT
 
   Torque2D
   Version: v4.0-ea3
