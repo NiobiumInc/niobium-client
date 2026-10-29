@@ -959,6 +959,7 @@ endforeach()
 
         # Utility template: read2vecs
         self._gen_utility_templates()
+        self._gen_linear_transform_helpers()
         self.blank()
 
         for module in self.module_order:
@@ -1054,6 +1055,99 @@ endforeach()
         # Forward declare load_kitnet_model if KitNETModel struct exists
         if any(s.name == "KitNETModel" for s in structs):
             self.wl("KitNETModel load_kitnet_model(std::filesystem::path path);")
+        self.blank()
+
+    def _gen_linear_transform_helpers(self):
+        """nb_linear_transform / nb_linear_transforms (see _gen_linear_transform)."""
+        self.wl("// linear_transform(ct, d, bstep) = sum_g Rot(sum_b Rot(ct, b) * d[g*bstep + b], g*bstep):")
+        self.wl("// the baby-step giant-step diagonal product, d[k] already counter-rotated by")
+        self.wl("// its giant step; every diagonal is encoded at the level it is consumed at.")
+        self.wl("template <typename CC, typename CT>")
+        self.wl("CT nb_linear_transform_from(const CC& cc, const std::vector<CT>& baby,")
+        self.wl("                            const std::vector<std::vector<double>>& d, uint32_t bstep) {")
+        self.indent()
+        self.wl("CT y;")
+        self.wl("for (size_t g = 0; g * bstep < d.size(); ++g) {")
+        self.indent()
+        self.wl("CT part;")
+        self.wl("for (size_t b = 0; b < bstep && g * bstep + b < d.size(); ++b) {")
+        self.indent()
+        self.wl("auto pt = cc->MakeCKKSPackedPlaintext(d[g * bstep + b], 1, baby[b]->GetLevel(), nullptr, baby[b]->GetSlots());")
+        self.wl("auto term = cc->EvalMult(baby[b], pt);")
+        self.wl("part = part ? cc->EvalAdd(part, term) : term;")
+        self.dedent()
+        self.wl("}")
+        self.wl("if (g > 0) part = cc->EvalRotate(part, static_cast<int32_t>(g * bstep));")
+        self.wl("y = y ? cc->EvalAdd(y, part) : part;")
+        self.dedent()
+        self.wl("}")
+        self.wl("return y;")
+        self.dedent()
+        self.wl("}")
+        self.wl("template <typename CC, typename CT>")
+        self.wl("std::vector<CT> nb_baby_rotations(const CC& cc, const CT& ct, size_t n) {")
+        self.wl("    std::vector<CT> baby(n);")
+        self.wl("    for (size_t b = 0; b < n; ++b) baby[b] = b == 0 ? ct : cc->EvalRotate(ct, static_cast<int32_t>(b));")
+        self.wl("    return baby;")
+        self.wl("}")
+        self.wl("template <typename CC, typename CT>")
+        self.wl("CT nb_linear_transform_loop(const CC& cc, const CT& ct, const std::vector<std::vector<double>>& d, uint32_t bstep) {")
+        self.wl("    return nb_linear_transform_from(cc, nb_baby_rotations(cc, ct, std::min<size_t>(bstep, d.size())), d, bstep);")
+        self.wl("}")
+        self.wl("template <typename CC, typename CT>")
+        self.wl("std::vector<CT> nb_linear_transforms_loop(const CC& cc, const CT& ct,")
+        self.wl("                                          const std::vector<std::vector<std::vector<double>>>& sets, uint32_t bstep) {")
+        self.wl("    size_t n = 0;")
+        self.wl("    for (auto& d : sets) n = std::max(n, std::min<size_t>(bstep, d.size()));")
+        self.wl("    auto baby = nb_baby_rotations(cc, ct, n);  // shared by every set")
+        self.wl("    std::vector<CT> r;")
+        self.wl("    for (auto& d : sets) r.push_back(nb_linear_transform_from(cc, baby, d, bstep));")
+        self.wl("    return r;")
+        self.wl("}")
+        if not self._fideslib:
+            self.wl("template <typename CC, typename CT>")
+            self.wl("CT nb_linear_transform(const CC& cc, const CT& ct, const std::vector<std::vector<double>>& d, uint32_t bstep) {")
+            self.wl("    return nb_linear_transform_loop(cc, ct, d, bstep);")
+            self.wl("}")
+            self.wl("template <typename CC, typename CT>")
+            self.wl("std::vector<CT> nb_linear_transforms(const CC& cc, const CT& ct,")
+            self.wl("                                     const std::vector<std::vector<std::vector<double>>>& sets, uint32_t bstep) {")
+            self.wl("    return nb_linear_transforms_loop(cc, ct, sets, bstep);")
+            self.wl("}")
+            self.blank()
+            return
+        # The facade's fused transform: one hoisted rotation and one MAC kernel on
+        # the cuda engine, OpenFHE's composition on cpu; haze has none, so the loop.
+        # Its contract (CryptoContext.hpp) is the loop's: d[k] counter-rotated by
+        # bstep * (k / bstep), every diagonal at the level the products happen at,
+        # which is ct's level, or one more when ct arrives un-rescaled.
+        self.wl("inline std::vector<Plaintext> nb_lt_encode(const CryptoContext<DCRTPoly>& cc, const Ciphertext<DCRTPoly>& ct,")
+        self.wl("                                           const std::vector<std::vector<double>>& d) {")
+        self.wl("    const uint32_t level = ct->GetLevel() + (ct->GetNoiseScaleDeg() == 2 ? 1 : 0);")
+        self.wl("    std::vector<Plaintext> pts;")
+        self.wl("    pts.reserve(d.size());")
+        self.wl("    for (auto& v : d) pts.push_back(cc->MakeCKKSPackedPlaintext(v, 1, level, nullptr, ct->GetSlots()));")
+        self.wl("    return pts;")
+        self.wl("}")
+        self.wl("inline Ciphertext<DCRTPoly> nb_linear_transform(const CryptoContext<DCRTPoly>& cc, const Ciphertext<DCRTPoly>& ct,")
+        self.wl("                                                const std::vector<std::vector<double>>& d, uint32_t bstep) {")
+        self.wl("    if (fideslib::BackendFromEnv() == fideslib::Backend::HAZE || d.empty())")
+        self.wl("        return nb_linear_transform_loop(cc, ct, d, bstep);")
+        self.wl("    auto pts = nb_lt_encode(cc, ct, d);")
+        self.wl("    auto r = ct->Clone();")
+        self.wl("    cc->LinearTransformInPlace(r, static_cast<int>(d.size()), static_cast<int>(bstep), pts);")
+        self.wl("    return r;")
+        self.wl("}")
+        self.wl("inline std::vector<Ciphertext<DCRTPoly>> nb_linear_transforms(const CryptoContext<DCRTPoly>& cc, const Ciphertext<DCRTPoly>& ct,")
+        self.wl("                                                              const std::vector<std::vector<std::vector<double>>>& sets, uint32_t bstep) {")
+        self.wl("    bool same = !sets.empty() && !sets[0].empty();")
+        self.wl("    for (auto& d : sets) same = same && d.size() == sets[0].size();")
+        self.wl("    if (fideslib::BackendFromEnv() == fideslib::Backend::HAZE || !same)")
+        self.wl("        return nb_linear_transforms_loop(cc, ct, sets, bstep);")
+        self.wl("    std::vector<std::vector<Plaintext>> pts;")
+        self.wl("    for (auto& d : sets) pts.push_back(nb_lt_encode(cc, ct, d));")
+        self.wl("    return cc->LinearTransformMany(ct, static_cast<int>(sets[0].size()), static_cast<int>(bstep), pts);")
+        self.wl("}")
         self.blank()
 
     def _gen_utility_templates(self):
@@ -1248,6 +1342,18 @@ endforeach()
         self.wl("  double s = 0.0;")
         self.wl("  for (size_t i = 0; i < std::min(n, a.size()); ++i) s += a[i];")
         self.wl("  return Slots(a.empty() ? n : a.size(), s); }")
+        self.wl("// linear_transform: sum_g rotate(sum_b rotate(x, b) * d[g*bstep + b], g*bstep)")
+        self.wl("inline Slots linear_transform(const Slots& x, const std::vector<Slots>& d, uint32_t bstep) {")
+        self.wl("  Slots y;")
+        self.wl("  for (size_t g = 0; g * bstep < d.size(); ++g) {")
+        self.wl("    Slots part;")
+        self.wl("    for (size_t b = 0; b < bstep && g * bstep + b < d.size(); ++b)")
+        self.wl("      part = nullsafe_add(part, mul(rotate(x, (int)b), d[g * bstep + b]));")
+        self.wl("    y = nullsafe_add(y, g == 0 ? part : rotate(part, (int)(g * bstep)));")
+        self.wl("  }")
+        self.wl("  return y; }")
+        self.wl("inline std::vector<Slots> linear_transforms(const Slots& x, const std::vector<std::vector<Slots>>& sets, uint32_t bstep) {")
+        self.wl("  std::vector<Slots> r; for (auto& d : sets) r.push_back(linear_transform(x, d, bstep)); return r; }")
         self.wl("template <typename F> inline Slots apply(Slots a, F f) {")
         self.wl("  for (auto& x : a) x = f(x); return a; }")
         self.wl("inline Slots read_slots(const std::filesystem::path& p) {")
@@ -3315,6 +3421,28 @@ endforeach()
             if saved:
                 self._pop_loop_bindings(saved)
 
+    def _gen_linear_transform(self, fname: str, ast_args, args: list[str]) -> str:
+        """linear_transform(ct, diagonals, bstep) and linear_transforms(ct,
+        sets, bstep): the baby-step giant-step diagonal product
+
+            y = sum_g Rot( sum_b Rot(ct, b) * d[g*bstep + b], g*bstep )
+
+        for b in [0, bstep), over the diagonals d (a vec<vec<f64>>, d[k] the
+        diagonal of rotation k already counter-rotated by its giant step
+        g*bstep). The helpers it calls are in nb_shared.h: the OpenFHE
+        backend runs the loop, sharing the baby rotations; the fideslib
+        backend hands it to the facade's fused LinearTransformInPlace /
+        LinearTransformMany (cpu and cuda engines; the loop on haze)."""
+        if len(args) != 3:
+            raise CodegenError(
+                f"{fname}(ct, diagonals, bstep) takes three arguments, got {len(args)}")
+        if not self._is_encrypted_expr(ast_args[0].value):
+            raise CodegenError(f"{fname}: the first argument must be a ciphertext")
+        ct, diags, bstep = args
+        if self._plain_mode:
+            return f"nb_plain::{fname}({ct}, {diags}, {bstep})"
+        return f"nb_{fname}(cc, {ct}, {diags}, static_cast<uint32_t>({bstep}))"
+
     def _gen_call_expr_impl(self, expr: ast.CallExpr) -> str:
         func = self._expr_to_cpp(expr.func)
         args = [self._expr_to_cpp(a.value) for a in expr.args]
@@ -3343,6 +3471,8 @@ endforeach()
                         f"cc->{FHE_RELIN}(tmp); return tmp; }}()")
             if fname == "chebyshev":
                 return self._gen_chebyshev(expr.args, expr)
+            if fname in ("linear_transform", "linear_transforms"):
+                return self._gen_linear_transform(fname, expr.args, args)
             if fname == "slot_sum":
                 if self._plain_mode:
                     return f"nb_plain::slot_sum({', '.join(args)})"

@@ -66,6 +66,11 @@ BUILTINS: list[Builtin] = [
     Builtin("negate", "enc"),
     Builtin("mul_monomial", "enc"),
     Builtin("chebyshev", "enc", depth_opaque=True),
+    # The baby-step giant-step diagonal product sum_g Rot(sum_b Rot(ct, b) *
+    # d[g*bstep + b], g*bstep), one plaintext multiplication deep; the plural
+    # form takes several diagonal sets against one ciphertext.
+    Builtin("linear_transform", "enc", depth_opaque=True),
+    Builtin("linear_transforms", "unknown", enc_hint=True, depth_opaque=True),
     Builtin("slot_sum", "enc"),
     Builtin("total_sums", "enc"),
     Builtin("running_sums", "void", depth_opaque=True),
