@@ -1124,10 +1124,12 @@ endforeach()
         self.wl("inline std::vector<Plaintext> nb_lt_encode(const CryptoContext<DCRTPoly>& cc, const Ciphertext<DCRTPoly>& ct,")
         self.wl("                                           const std::vector<std::vector<double>>& d) {")
         self.wl("    const uint32_t level = ct->GetLevel() + (ct->GetNoiseScaleDeg() == 2 ? 1 : 0);")
-        self.wl("    std::vector<Plaintext> pts;")
-        self.wl("    pts.reserve(d.size());")
-        self.wl("    for (auto& v : d) pts.push_back(cc->MakeCKKSPackedPlaintext(v, 1, level, nullptr, ct->GetSlots()));")
-        self.wl("    return pts;")
+        # Device encode: the host runs the inverse FFT and the rounding, the
+        # engine the CRT reduction and the NTT, one upload of N words per
+        # diagonal instead of L x N, the whole set in one copy. Bit-identical
+        # to MakeCKKSPackedPlaintext; on an engine without it (cpu) it is that
+        # call. The plaintexts are device-only, which a transform diagonal is.
+        self.wl("    return cc->MakeCKKSPackedPlaintextDeviceMany(d, 1, level, ct->GetSlots());")
         self.wl("}")
         self.wl("inline Ciphertext<DCRTPoly> nb_linear_transform(const CryptoContext<DCRTPoly>& cc, const Ciphertext<DCRTPoly>& ct,")
         self.wl("                                                const std::vector<std::vector<double>>& d, uint32_t bstep) {")

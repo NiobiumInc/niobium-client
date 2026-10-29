@@ -1175,6 +1175,7 @@ def test_linear_transform_fideslib_uses_the_fused_transform():
     assert "fideslib::BackendFromEnv() == fideslib::Backend::HAZE" in header
     # diagonals at the level the products happen at
     assert "ct->GetLevel() + (ct->GetNoiseScaleDeg() == 2 ? 1 : 0)" in header
+    assert "cc->MakeCKKSPackedPlaintextDeviceMany(d, 1, level, ct->GetSlots())" in header
     assert "nb_linear_transform(cc, i.x, d, static_cast<uint32_t>(2))" in files["compute.cpp"]
 
 
