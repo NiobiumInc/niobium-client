@@ -289,10 +289,13 @@ class CodeGenerator:
         # per-stage override would make the two diverge silently.
         # The same for the iterations (keygen reserves their level) and the
         # precision (a call overrides it with precision: P instead).
+        # The linear-transform mode and memory shape nb_shared.h, which every
+        # stage shares.
         for fn in self.shared_fns + [s.fn for s in self.stages]:
             for ov in self._scheme_overrides(fn):
                 for key in ("bootstrap_budget", "bootstrap_iterations",
-                            "bootstrap_precision"):
+                            "bootstrap_precision", "linear_transform",
+                            "linear_transform_memory"):
                     if key in ov:
                         raise CodegenError(
                             f"scheme.override({key}: ...) in {fn.name!r}: "
@@ -921,7 +924,6 @@ endforeach()
         self.wl("#include <iomanip>")
         self.wl("#include <algorithm>")
         self.wl("#include <functional>")
-        self.wl("#include <cstdlib>")
         self.blank()
         if self._fideslib:
             for inc in FIDESLIB_INCLUDES:
@@ -1105,7 +1107,9 @@ endforeach()
         self.wl("    for (auto& d : sets) r.push_back(nb_linear_transform_from(cc, baby, d, bstep));")
         self.wl("    return r;")
         self.wl("}")
-        if not self._fideslib:
+        # scheme `linear_transform: loop` takes the loop on fideslib too: one
+        # diagonal encoded and multiplied at a time, the least device memory.
+        if not self._fideslib or self._lt_mode() == "loop":
             self.wl("template <typename CC, typename CT>")
             self.wl("CT nb_linear_transform(const CC& cc, const CT& ct, const std::vector<std::vector<double>>& d, uint32_t bstep) {")
             self.wl("    return nb_linear_transform_loop(cc, ct, d, bstep);")
@@ -1134,7 +1138,8 @@ endforeach()
         self.wl("}")
         # Device memory bounds a call: its diagonals are all resident at once
         # (device-encoded ones at twice a loaded plaintext's size), so a product
-        # whose diagonals exceed NB_LT_DIAG_BYTES (6 GB by default) is split
+        # whose diagonals exceed the scheme's linear_transform_memory (6 GB by
+        # default) is split
         # into chunks of whole giant steps. The facade's offset parameter makes
         # a chunk the transform over rotations [k0, k0 + n): every diagonal
         # keeps the counter-rotation of its global giant step, which is what
@@ -1143,8 +1148,7 @@ endforeach()
         # rotation key the BSGS circuit already has.
         self.wl("inline size_t nb_lt_chunk(const CryptoContext<DCRTPoly>& cc, const Ciphertext<DCRTPoly>& ct,")
         self.wl("                          size_t sets, size_t n, uint32_t bstep) {")
-        self.wl("    double budget = 6e9;")
-        self.wl('    if (const char* e = std::getenv("NB_LT_DIAG_BYTES")) budget = std::atof(e);')
+        self.wl(f"    const double budget = {self._lt_memory_bytes():.6g};")
         self.wl("    const size_t towers = cc->multiplicative_depth + 1 > ct->GetLevel() ? cc->multiplicative_depth + 1 - ct->GetLevel() : 1;")
         self.wl("    const double per = 2.0 * towers * cc->GetRingDimension() * sizeof(uint64_t) * sets;")
         self.wl("    size_t giants = static_cast<size_t>(budget / (per * bstep));")
@@ -1154,11 +1158,9 @@ endforeach()
         self.wl("inline std::vector<std::vector<double>> nb_lt_slice(const std::vector<std::vector<double>>& d, size_t k0, size_t n) {")
         self.wl("    return std::vector<std::vector<double>>(d.begin() + k0, d.begin() + std::min(d.size(), k0 + n));")
         self.wl("}")
-        # NB_LT_LOOP set at run time takes the loop on every engine: one
-        # diagonal encoded and multiplied at a time, the least device memory.
         self.wl("inline Ciphertext<DCRTPoly> nb_linear_transform(const CryptoContext<DCRTPoly>& cc, const Ciphertext<DCRTPoly>& ct,")
         self.wl("                                                const std::vector<std::vector<double>>& d, uint32_t bstep) {")
-        self.wl("    if (fideslib::BackendFromEnv() == fideslib::Backend::HAZE || std::getenv(\"NB_LT_LOOP\") || d.empty())")
+        self.wl("    if (fideslib::BackendFromEnv() == fideslib::Backend::HAZE || d.empty())")
         self.wl("        return nb_linear_transform_loop(cc, ct, d, bstep);")
         self.wl("    const size_t chunk = nb_lt_chunk(cc, ct, 1, d.size(), bstep);")
         self.wl("    Ciphertext<DCRTPoly> y;")
@@ -1175,7 +1177,7 @@ endforeach()
         self.wl("                                                              const std::vector<std::vector<std::vector<double>>>& sets, uint32_t bstep) {")
         self.wl("    bool same = !sets.empty() && !sets[0].empty();")
         self.wl("    for (auto& d : sets) same = same && d.size() == sets[0].size();")
-        self.wl("    if (fideslib::BackendFromEnv() == fideslib::Backend::HAZE || std::getenv(\"NB_LT_LOOP\") || !same)")
+        self.wl("    if (fideslib::BackendFromEnv() == fideslib::Backend::HAZE || !same)")
         self.wl("        return nb_linear_transforms_loop(cc, ct, sets, bstep);")
         self.wl("    const size_t n = sets[0].size(), chunk = nb_lt_chunk(cc, ct, sets.size(), n, bstep);")
         self.wl("    std::vector<Ciphertext<DCRTPoly>> ys(sets.size());")
@@ -2048,6 +2050,34 @@ endforeach()
                 if f.key == key:
                     return f.value
         return None
+
+    def _lt_mode(self) -> str:
+        """How linear_transform runs on fideslib (scheme `linear_transform`):
+        `fused` (default), the facade's prepared transform with the diagonals
+        encoded on the device, or `loop`, one diagonal at a time on the host,
+        slower but with the least device memory. OpenFHE always loops."""
+        v = self._scheme_field("linear_transform")
+        mode = "fused" if v is None else str(v).split()[0]
+        if mode not in ("fused", "loop"):
+            raise CodegenError(f"scheme linear_transform: {mode}: fused or loop")
+        return mode
+
+    def _lt_memory_bytes(self) -> float:
+        """Device memory one fused linear_transform call may hold in diagonals
+        (scheme `linear_transform_memory: N GB` or `N MB`, N an integer, default
+        6 GB);
+        a larger product runs in chunks of whole giant steps."""
+        v = self._scheme_field("linear_transform_memory")
+        if v is None:
+            return 6e9
+        parts = str(v).split()
+        unit = parts[1].upper() if len(parts) > 1 else "GB"
+        if unit not in ("GB", "MB"):
+            raise CodegenError(f"scheme linear_transform_memory: {v}: N GB or N MB")
+        n = float(parts[0]) * (1e9 if unit == "GB" else 1e6)
+        if n <= 0:
+            raise CodegenError("scheme linear_transform_memory must be positive")
+        return n
 
     def _bootstrap_iterations(self) -> int:
         """Iterations of a bootstrap (scheme `bootstrap_iterations`, default 1).

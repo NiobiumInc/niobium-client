@@ -286,7 +286,7 @@ class Parser:
                 return f"{val}-{word2}"
             # Check for "42 bits" pattern (INT IDENT) — only if the
             # ident is a known unit, not the start of the next field
-            UNITS = {"bits", "bytes", "levels"}
+            UNITS = {"bits", "bytes", "levels", "MB", "GB"}
             if self.at(TT.IDENT) and self.peek().value in UNITS:
                 unit = self.advance().value
                 return f"{val} {unit}"
