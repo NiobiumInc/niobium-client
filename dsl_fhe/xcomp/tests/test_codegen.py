@@ -1230,13 +1230,27 @@ def test_linear_transform_scheme_fields():
     assert "return nb_linear_transform_loop(cc, ct, d, bstep);" in loop
     mem = compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform_memory: 1500 MB\n"))["nb_shared.h"]
     assert "const double budget = 1.5e+09;" in mem
-    for bad, msg in (("    linear_transform: maybe\n", "fused or loop"),
+    for bad, msg in (("    linear_transform: maybe\n", "fused, loop or chained"),
                      ("    linear_transform_memory: 3 bytes\n", "N GB or N MB")):
         try:
             compile_fideslib(_lt_scheme(LT_SRC, bad))
             assert False, bad
         except cg.CodegenError as e:
             assert msg in str(e)
+
+
+def test_linear_transform_chained():
+    import xcomp.codegen as cg
+    for files in (compile_str(_lt_scheme(LT_SRC, "    linear_transform: chained\n")),
+                  compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: chained\n"))):
+        h = files["nb_shared.h"]
+        assert "LinearTransformInPlace" not in h
+        # baby steps chained by 1, giant steps by Horner with bstep
+        assert "baby[b] = b == 0 ? ct : cc->EvalRotate(baby[b - 1], 1);" in h
+        assert "cc->EvalRotate(y, static_cast<int32_t>(bstep))" in h
+        assert "static_cast<int32_t>(g * bstep)" not in h
+    loop = compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: loop\n"))["nb_shared.h"]
+    assert "cc->EvalRotate(ct, static_cast<int32_t>(b))" in loop
 
 
 # A shared helper taking a plaintext vector parameter, and a scalar on the

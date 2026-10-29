@@ -252,10 +252,16 @@ consumes 15 levels where the reserve is 17), and under a security level every
 level of the chain counts against the modulus budget. Measure the
 consumption first: an output level too high for the chain fails at run time.
 
-`linear_transform: fused` (default) or `loop` chooses how
+`linear_transform: fused` (default), `loop` or `chained` chooses how
 `linear_transform` runs on the fideslib back end. `fused` is the facade's
 prepared transform, with the diagonals encoded on the device. `loop` is one
 diagonal at a time on the host, slower but with the least device memory.
+`chained` is the loop with its rotations chained: each baby step is one
+rotation by 1 of the previous one, and the giant steps are summed
+Horner-style by rotations of `bstep`. It makes the same number of key
+switches as `loop` and needs rotation keys for 1 and `bstep` only, instead
+of `1 .. bstep - 1` and every giant step, so a circuit whose keys do not fit
+the device can declare just those two.
 `linear_transform_memory: N GB` (or `N MB`, N an integer, default 6 GB)
 bounds the diagonals one fused call holds on the device; a larger product
 runs in chunks of whole giant steps. Both are static: they shape
