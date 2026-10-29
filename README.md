@@ -1,8 +1,8 @@
 # Niobium Client
 
-This repo is your entry point to develop an FHE application and deploy it to the Niobium Fog.
+This repo is your entry point to develop an FHE application and deploy it to the [Niobium Fog](https://console.niobium.co/).
 It contains the SDK and tools to manipulate the polynomial IR and the client-server transport.
-FHE inputs supported include OpenFHE programs, FHETCH instructions, the nb DSL, and more to follow.
+FHE inputs supported include [OpenFHE programs](examples/), [FHETCH instructions](https://github.com/NiobiumInc/niobium-fhetch), the [nb DSL](dsl_fhe/), and more to follow.
 Whichever you use, the computation is recorded as a FHETCH trace (`.fhex`) that you can replay
 locally with the bundled `fhetch_sim` simulator or submit to the Fog.
 
@@ -44,12 +44,12 @@ the local simulator.
 Fog access is gated. Request an account at
 **<https://console.niobium.co/request-account>**. You will receive an account
 email and password — `fog login` uses them once to mint a long-lived API key
-that is stored locally (`~/.fog/credentials`, mode `0600`).
+that is stored locally (`~/.fog/credentials`).
 
 ### 2. Install build prerequisites
 
 You can either install the client and associated tools locally, or use a prebuilt Docker container.
-Proceed to step 3b below if you would like to use a Docker container.
+Proceed to [step 3b](#3b-or-run-the-examples-in-the-fhe-dev-container) below if you would like to use a Docker container.
 
 **macOS** — install Apple's command-line tools, then [Homebrew](https://brew.sh),
 then CMake and OpenSSL:
@@ -99,7 +99,7 @@ The [FHE-dev image](https://github.com/NiobiumInc/niobium-skills) ships this
 client prebuilt: the examples, the `fog` CLI, and the design skill's
 build-and-run toolchain, from a snapshot of this repository's main branch
 taken when the image was published. Docker is the only local install. Build
-natively (step 3) when you will modify the client itself.
+natively (step 3) when you want to modify the client itself.
 
 ```bash
 docker pull ghcr.io/niobiuminc/fhe-dev:latest
