@@ -1137,3 +1137,61 @@ if __name__ == "__main__":
             failed += 1
     print(f"\n{passed} passed, {failed} failed")
     sys.exit(1 if failed else 0)
+
+
+# ── linear_transform: the baby-step giant-step diagonal product ──────────────
+
+LT_SRC = FIDESLIB_SRC.replace(
+    "    let a = rotate(i.x, 1) + i.x * i.x\n",
+    "    let d = vec_zeros<vec<f64>>(4)\n"
+    "    for k in 0..4 {\n"
+    "        d[k] = vec_zeros<f64>(8)\n"
+    "        d[k][k] = 1.0\n"
+    "    }\n"
+    "    let one = linear_transform(i.x, d, 2)\n"
+    "    let many = linear_transforms(i.x, [d, d], 2)\n"
+    "    let a = one + many[0] + many[1]\n")
+
+
+def test_linear_transform_openfhe_runs_the_loop():
+    files = compile_str(LT_SRC)
+    server = files["compute.cpp"]
+    assert "nb_linear_transform(cc, i.x, d, static_cast<uint32_t>(2))" in server
+    assert "nb_linear_transforms(cc, i.x," in server
+    header = files["nb_shared.h"]
+    assert "CT nb_linear_transform_from(" in header
+    assert "return nb_linear_transform_loop(cc, ct, d, bstep);" in header
+    # The baby rotations are computed once and shared by every set.
+    assert "auto baby = nb_baby_rotations(cc, ct, n);" in header
+    assert "LinearTransformInPlace" not in header
+
+
+def test_linear_transform_fideslib_uses_the_fused_transform():
+    files = compile_fideslib(LT_SRC)
+    header = files["nb_shared.h"]
+    assert "cc->LinearTransformInPlace(r, static_cast<int>(d.size()), static_cast<int>(bstep), pts);" in header
+    assert "cc->LinearTransformMany(ct, static_cast<int>(sets[0].size()), static_cast<int>(bstep), pts);" in header
+    # haze has no fused transform: the loop, the same result
+    assert "fideslib::BackendFromEnv() == fideslib::Backend::HAZE" in header
+    # diagonals at the level the products happen at
+    assert "ct->GetLevel() + (ct->GetNoiseScaleDeg() == 2 ? 1 : 0)" in header
+    assert "nb_linear_transform(cc, i.x, d, static_cast<uint32_t>(2))" in files["compute.cpp"]
+
+
+def test_linear_transform_twin():
+    files = compile_str(LT_SRC)
+    header = files["nb_shared.h"]
+    assert "inline Slots linear_transform(const Slots& x, const std::vector<Slots>& d, uint32_t bstep)" in header
+    ref = files.get("compute_ref.cpp", "")
+    if ref:
+        assert "nb_plain::linear_transform(" in ref
+
+
+def test_linear_transform_rejects_a_plaintext_input():
+    import xcomp.codegen as cg
+    src = LT_SRC.replace("linear_transform(i.x, d, 2)", "linear_transform(d[0], d, 2)")
+    try:
+        compile_str(src)
+        assert False, "a plaintext first argument must be rejected"
+    except cg.CodegenError as e:
+        assert "must be a ciphertext" in str(e)
