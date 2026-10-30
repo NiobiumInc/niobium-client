@@ -2,8 +2,8 @@
 """nbc — the nb FHE language cross-compiler.
 
 Usage:
-    nbc compile file1.niob [file2.niob ...] [--outdir DIR]
-    nbc check   file1.niob [file2.niob ...]
+    nbc compile file1.niob [file2.niob ...] [--outdir DIR] [--set NAME=VALUE ...]
+    nbc check   file1.niob [file2.niob ...] [--set NAME=VALUE ...]
     nbc lex     file1.niob
     nbc parse   file1.niob
 """
@@ -21,6 +21,7 @@ from .semantic import analyze as semantic_analyze
 from .codegen import generate
 from .errors import CompileError
 from .modules import load_program
+from .params import apply_overrides
 
 
 # One-line pointer to the design skill. Printed to stderr by check/compile so an
@@ -73,6 +74,7 @@ def cmd_check(args):
     _print_design_banner()
     try:
         program, loader = load_program(args.files, args.module_path)
+        params = apply_overrides(program, args.set)
         sa = semantic_analyze(program)
         if sa.errors.has_errors():
             print(sa.errors.report(), file=sys.stderr)
@@ -94,13 +96,16 @@ def cmd_compile(args):
     _print_design_banner()
     try:
         program, loader = load_program(args.files, args.module_path)
+        params = apply_overrides(program, args.set)
         sa = semantic_analyze(program)
 
         if sa.errors.has_errors():
             print(sa.errors.report(), file=sys.stderr)
             return 1
 
-        files = generate(program, sa, backend=args.backend)
+        files = generate(program, sa, backend=args.backend, params=params)
+        for p in params:
+            print(f"  param {p.name} = {p.text}")
 
         # Warnings from module loading, analysis AND code generation
         # (heuristic fallbacks).
@@ -202,11 +207,17 @@ def main():
     module_path_help = ("Directory searched for `use`d modules (repeatable); "
                         "the inputs' parent directory is always searched too")
 
+    # Compile-time parameters: the value of a top-level const, overridden
+    set_help = ("Override a top-level `const NAME: <type> = <default>` with VALUE "
+                "(repeatable; <module>::NAME when the name is declared in several modules)")
+
     # check
     p_check = subparsers.add_parser("check", help="Semantic analysis only")
     p_check.add_argument("files", nargs="+", help="Input .niob files")
     p_check.add_argument("--module-path", action="append", default=[],
                          metavar="DIR", help=module_path_help)
+    p_check.add_argument("--set", action="append", default=[], metavar="NAME=VALUE",
+                         help=set_help)
 
     # compile
     p_compile = subparsers.add_parser(
@@ -222,6 +233,8 @@ def main():
              "time, cpu, cuda or haze; the client stages stay on the host)")
     p_compile.add_argument("--module-path", action="append", default=[],
                            metavar="DIR", help=module_path_help)
+    p_compile.add_argument("--set", action="append", default=[], metavar="NAME=VALUE",
+                           help=set_help)
 
     args = parser.parse_args()
 

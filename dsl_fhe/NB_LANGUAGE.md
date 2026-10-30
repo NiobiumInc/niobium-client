@@ -120,6 +120,36 @@ const MAX_VAL: u32 = 256
 
 Constants are evaluated at compile time and emitted as `constexpr` in C++.
 
+#### Compile-time parameters
+
+A top-level constant is also a compile-time parameter: `nbc compile`
+(and `nbc check`) take `--set NAME=VALUE`, repeatable, which replaces the
+constant's value for that build. The source value is the default.
+
+```nb
+const PARAM1: u32 = 16          // the default
+const PARAM2: f64 = 0.5
+
+struct Instance { n: u32, ring_dim: u32 }
+fn instance() -> Instance { Instance { n: PARAM1, ring_dim: 65536 } }
+```
+
+```console
+nbc compile app.niob --set PARAM1=64 --set PARAM2=0.25 --outdir nb_out_64
+```
+
+- The value is checked against the declared type (an integer, a float,
+  `bool`, `string`); an unknown name, a name given twice or a value of the
+  wrong type is a compile error.
+- It is applied before semantic analysis, so every use sees it: the
+  `constexpr`, loop bounds, instance tables, and what the compiler evaluates
+  itself (`chebyshev` domains, the auto-selected degrees).
+- A name declared in several modules is given as `<module>::NAME`.
+- The build records it: `nb_params.json` in the output directory (each name
+  and its value), a `// nbc --set NAME=VALUE` line at the top of
+  `nb_shared.h`, and a cache parameter `nbc:NAME` of every `@hardware` stage,
+  so a recording made with one value is never replayed for another.
+
 ### Enums
 
 ```nb
