@@ -1279,3 +1279,79 @@ def test_twin_takes_a_scalar_on_the_left():
     assert "inline Slots mul(double s, Slots a)" in header
     assert "inline Slots sub(double s, Slots a)" in header
     assert "inline Slots add(double s, Slots a)" in header
+
+
+def _decl_line(header: str, name: str) -> str:
+    return next(l for l in header.splitlines() if f" {name}(" in l)
+
+
+def test_cc_for_vec_of_ciphertexts_param():
+    """A function whose only ciphertexts come in a vec<enc<...>> still
+    takes the crypto context: its body's FHE calls pass cc."""
+    files = compile_str("""
+    fn twice(x: enc<f64>) -> enc<f64> { return x + x }
+    fn first_twice(xs: vec<enc<f64>>) -> f64 {
+        let y = twice(xs[0])
+        return 0.0
+    }
+    """)
+    header = files["nb_shared.h"]
+    assert "CryptoContext<DCRTPoly> cc" in _decl_line(header, "first_twice")
+    assert "twice(cc, " in files["nb_shared.cpp"]
+
+
+def test_cc_for_tuple_and_wire_returns():
+    """A ciphertext inside a tuple or a wire return type needs cc too."""
+    files = compile_str("""
+    wire Pair { a: enc<f64>, b: enc<f64> }
+    fn split(xs: vec<enc<f64>>) -> (vec<enc<f64>>, vec<enc<f64>>) { return (xs, xs) }
+    fn pack(n: u32) -> Pair { let z: enc<f64> = zero()
+        return Pair { a: z, b: z } }
+    """)
+    header = files["nb_shared.h"]
+    assert "CryptoContext<DCRTPoly> cc" in _decl_line(header, "split")
+    assert "CryptoContext<DCRTPoly> cc" in _decl_line(header, "pack")
+
+
+def test_cc_through_the_call_graph():
+    """No ciphertext in the signature, but a call (direct or not) to a
+    function that takes cc: the caller needs cc in scope."""
+    files = compile_str("""
+    fn leaf(x: enc<f64>) -> enc<f64> { return x }
+    fn mid(n: u32) -> u32 { let z: enc<f64> = zero()
+        let y = leaf(z)
+        return n }
+    fn top(n: u32) -> u32 { return mid(n) }
+    fn plain(n: u32) -> u32 { return n + 1 }
+    """)
+    header = files["nb_shared.h"]
+    assert "CryptoContext<DCRTPoly> cc" in _decl_line(header, "mid")
+    assert "CryptoContext<DCRTPoly> cc" in _decl_line(header, "top")
+    assert "cc" not in _decl_line(header, "plain")
+    assert "mid(cc, " in files["nb_shared.cpp"]
+
+
+def test_load_from_computed_path_pairs_with_save():
+    """save(W, to: f(c)) writes a file at f(c); load(W, from: f(c)) must read
+    that file, and still read a stage result's directory layout when the
+    path is a directory."""
+    files = compile_str("""
+    struct Instance { ring_dim: u32 }
+    wire EncOut { ciphertext: enc<f64> }
+    fn part(inst: Instance, c: u32) -> path { "io" / ("part_" + str(c) + ".bin") }
+    @client @stage(name: "put")
+    fn put(inst: Instance) {
+        let ct: enc<f64> = zero()
+        save(EncOut { ciphertext: ct }, to: part(inst, 1))
+    }
+    @server @stage(name: "get")
+    fn get(inst: Instance) -> writes(EncOut) {
+        let w = load(EncOut, from: part(inst, 1))
+        return w
+    }
+    """)
+    cpp = files["get.cpp"]
+    assert 'fs::is_regular_file(_p) ? _p : _p / "ciphertext.bin"' in cpp
+    ref = files.get("get_ref.cpp", "")
+    if ref:
+        assert '_p / "ciphertext.ref.bin"' in ref and '.string() + ".ref"' in ref
