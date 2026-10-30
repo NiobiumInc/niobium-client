@@ -404,17 +404,56 @@ class CodeGenerator:
                 return arg0.value
         return None
 
-    def _fn_uses_fhe(self, fn: ast.FnDecl) -> bool:
-        """Check if a function body references encrypted types or FHE operations."""
-        if fn.return_type and isinstance(fn.return_type, ast.EncType):
+    def _type_has_enc(self, t, seen: frozenset = frozenset()) -> bool:
+        """True if a type carries a ciphertext anywhere: enc<...> itself, a
+        vec, mat or tuple of them, or a struct or wire with such a field."""
+        if t is None:
+            return False
+        if isinstance(t, ast.EncType):
             return True
-        if fn.return_type and isinstance(fn.return_type, ast.VecType):
-            if isinstance(fn.return_type.elem, ast.EncType):
-                return True
-        for p in fn.params:
-            if p.type_ann and isinstance(p.type_ann, ast.EncType):
-                return True
+        if isinstance(t, (ast.VecType, ast.MatType)):
+            return self._type_has_enc(t.elem, seen)
+        if isinstance(t, ast.TupleType):
+            return any(self._type_has_enc(e, seen) for e in t.elements)
+        if isinstance(t, ast.NamedType) and t.name not in seen:
+            decl = next((d for d in self.structs + self.wires
+                         if t.name in (d.name, self._decl_name(d))), None)
+            if decl is not None:
+                return any(self._type_has_enc(f.type_ann, seen | {t.name})
+                           for f in decl.fields)
+        return False
+
+    def _fn_signature_uses_fhe(self, fn: ast.FnDecl) -> bool:
+        """A ciphertext in a parameter or the return type, or a library
+        function that takes the crypto context."""
+        if self._type_has_enc(fn.return_type):
+            return True
+        if any(self._type_has_enc(p.type_ann) for p in fn.params):
+            return True
         return fn.name in FHE_SHARED_FNS
+
+    def _fn_uses_fhe(self, fn: ast.FnDecl) -> bool:
+        """Does this function take the crypto context `cc`? Yes if its
+        signature carries a ciphertext (`_fn_signature_uses_fhe`), and also
+        if it calls, directly or not, a function that takes `cc`, an extern
+        wrapper or extern_call: the call sites in its body pass `cc`, so it
+        must have one in scope whatever its own parameters are."""
+        cache = self.__dict__.setdefault("_uses_fhe_cache", {})
+        if id(fn) in cache:
+            return cache[id(fn)]
+        uses = self._fn_signature_uses_fhe(fn)
+        if not uses and fn.body:
+            called: dict = {}
+            self._collect_called_fns(fn, called)
+            uses = any(self._fn_signature_uses_fhe(g) or self._is_extern_wrapper(g)
+                       for g in called.values() if g is not fn)
+            if not uses:
+                uses = any(isinstance(n, ast.CallExpr) and isinstance(n.func, ast.Ident)
+                           and (n.func.name == "extern_call"
+                                or base_name(n.func.name) in FHE_SHARED_FNS)
+                           for n in self._walk_ast(fn.body))
+        cache[id(fn)] = uses
+        return uses
 
     # ===== Generate all outputs =====
 
@@ -4257,6 +4296,23 @@ endforeach()
                             f"return _w; }}()")
                 return (f"[&]() {{ {type_name} _w; Ciphertext<DCRTPoly> _ct; "
                         f"Serial::DeserializeFromFile(fs::path({from_path}), _ct, SerType::BINARY); "
+                        f"_w.{f0.name} = _ct; return _w; }}()")
+            # A single-ciphertext wire from a computed path (no literal .bin
+            # to tell): save(..., to: <path>) writes a file at <path> (the
+            # cleartext twin: <path>.ref), a stage's result a directory with
+            # {field}.bin in it. Which one it is is decided at run time.
+            if len(enc_fields) == 1 and len(wire_def.fields) == 1:
+                f0 = enc_fields[0]
+                if self._plain_mode:
+                    return (f"[&]() {{ {type_name} _w; fs::path _p = fs::path({from_path}); "
+                            f"fs::path _f = _p.string() + \".ref\"; "
+                            f"_w.{f0.name} = nb_plain::read_slots("
+                            f"fs::is_regular_file(_f) ? _f : _p / \"{f0.name}.ref.bin\"); "
+                            f"return _w; }}()")
+                return (f"[&]() {{ {type_name} _w; fs::path _p = fs::path({from_path}); "
+                        f"Ciphertext<DCRTPoly> _ct; "
+                        f"Serial::DeserializeFromFile(fs::is_regular_file(_p) ? _p : _p / \"{f0.name}.bin\", "
+                        f"_ct, SerType::BINARY); "
                         f"_w.{f0.name} = _ct; return _w; }}()")
             # Generic layout: {field}.bin / {field}_<i>.bin /
             # batchNNNN/{field}_NNNN.bin.
