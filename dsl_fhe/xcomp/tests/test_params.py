@@ -150,3 +150,9 @@ def test_run_time_memory_overrides_are_generated():
     assert 'std::getenv("NB_LT_MEMORY_GB")' in fused["nb_shared.h"]
     _, chained = _scheme_build("    linear_transform: chained\n", [])
     assert 'std::getenv("NB_LT_BATCH")' in chained["nb_shared.h"]
+
+
+def test_scheme_override_encode():
+    _, files = _scheme_build("    linear_transform: chained\n", ["linear_transform_encode=host"])
+    assert '!= "host" : false; }();' in files["nb_shared.h"]
+    assert json.loads(files["nb_params.json"])["scheme::linear_transform_encode"] == "host"

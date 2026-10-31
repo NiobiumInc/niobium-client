@@ -1263,7 +1263,8 @@ def test_linear_transform_chained_device_encodes_a_giant_step():
     chained = compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: chained\n"))["nb_shared.h"]
     assert "cc->MakeCKKSPackedPlaintextDeviceMany(batch, 1, baby[0]->GetLevel(), baby[0]->GetSlots())" in chained
     assert "cc->EvalMult(baby[b0 + b], pts[b])" in chained
-    assert "MakeCKKSPackedPlaintext(d[g * bstep + b]" not in chained
+    # the host path is there too, behind the run-time switch
+    assert "if (nb_lt_on_device()) {" in chained and "} else {" in chained
     for files in (compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: loop\n")),
                   compile_str(_lt_scheme(LT_SRC, "    linear_transform: chained\n"))):
         h = files["nb_shared.h"]
@@ -1457,3 +1458,22 @@ def test_linear_transform_batch():
         assert False, "linear_transform_batch: -1 accepted"
     except (cg.CodegenError, ParseError):
         pass
+
+
+def test_linear_transform_encode_host_or_device():
+    # chained on fideslib: NB_LT_ENCODE (host or device) at run time over the
+    # scheme's linear_transform_encode (device by default); both paths emitted
+    dev = compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: chained\n"))["nb_shared.h"]
+    assert "inline bool nb_lt_on_device()" in dev
+    assert 'std::getenv("NB_LT_ENCODE")' in dev and '!= "host" : true; }();' in dev
+    assert "if (nb_lt_on_device()) {" in dev
+    assert "MakeCKKSPackedPlaintextDeviceMany(batch" in dev
+    assert "MakeCKKSPackedPlaintext(d[g * bstep + b], 1, baby[b]->GetLevel()" in dev   # the host branch
+    host = compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: chained\n    linear_transform_encode: host\n"))["nb_shared.h"]
+    assert '!= "host" : false; }();' in host
+    import xcomp.codegen as cg
+    try:
+        compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: chained\n    linear_transform_encode: gpu\n"))
+        assert False, "linear_transform_encode: gpu accepted"
+    except cg.CodegenError as e:
+        assert "device or host" in str(e)

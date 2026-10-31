@@ -298,7 +298,8 @@ class CodeGenerator:
             for ov in self._scheme_overrides(fn):
                 for key in ("bootstrap_budget", "bootstrap_iterations",
                             "bootstrap_precision", "linear_transform",
-                            "linear_transform_memory", "linear_transform_batch"):
+                            "linear_transform_memory", "linear_transform_batch",
+                            "linear_transform_encode"):
                     if key in ov:
                         raise CodegenError(
                             f"scheme.override({key}: ...) in {fn.name!r}: "
@@ -1128,6 +1129,13 @@ endforeach()
             self.wl(f"    static const long v = [] {{ const char* e = std::getenv(\"NB_LT_BATCH\"); return e && *e ? std::atol(e) : {self._lt_batch()}L; }}();")
             self.wl("    return v <= 0 || static_cast<size_t>(v) > bstep ? bstep : static_cast<size_t>(v);")
             self.wl("}")
+            # Where a chained product's diagonals are encoded: NB_LT_ENCODE
+            # (host or device) at run time, else the scheme's
+            # linear_transform_encode. Read once.
+            self.wl("inline bool nb_lt_on_device() {")
+            self.wl(f"    static const bool v = [] {{ const char* e = std::getenv(\"NB_LT_ENCODE\"); return e && *e ? std::string(e) != \"host\" : {'false' if self._lt_encode() == 'host' else 'true'}; }}();")
+            self.wl("    return v;")
+            self.wl("}")
         self.wl("// linear_transform(ct, d, bstep) = sum_g Rot(sum_b Rot(ct, b) * d[g*bstep + b], g*bstep):")
         self.wl("// the baby-step giant-step diagonal product, d[k] already counter-rotated by")
         self.wl("// its giant step; every diagonal is encoded at the level it is consumed at.")
@@ -1141,18 +1149,32 @@ endforeach()
         self.wl("for (size_t g = 0; g * bstep < d.size(); ++g) {")
         self.indent()
         self.wl("CT part;")
+        host_loop = [
+            "for (size_t b = 0; b < bstep && g * bstep + b < d.size(); ++b) {",
+            "    auto pt = cc->MakeCKKSPackedPlaintext(d[g * bstep + b], 1, baby[b]->GetLevel(), nullptr, baby[b]->GetSlots());",
+            "    auto term = cc->EvalMult(baby[b], pt);",
+            "    part = part ? cc->EvalAdd(part, term) : term;",
+            "}",
+        ]
         if chained and self._fideslib:
-            # chained on fideslib: a giant step's diagonals encoded on the
-            # device in batches of nb_lt_batch(bstep) at the baby steps' level
-            # (they share it: a rotation keeps the level). The host still runs
-            # each inverse FFT; the engine does the CRT reduction and the NTT
-            # for a batch in one launch, after one upload of N words per
-            # diagonal instead of L x N. Bit-identical to
-            # MakeCKKSPackedPlaintext; an engine without a batched device
-            # encode loops the single call. One batch is resident at a time:
-            # a whole giant step by default, fewer diagonals for less device
-            # memory (scheme linear_transform_batch, or NB_LT_BATCH at run
-            # time); `loop` keeps one diagonal and every rotation key.
+            # chained on fideslib: where the diagonals are encoded is a
+            # run-time choice (nb_lt_on_device: NB_LT_ENCODE, else the scheme's
+            # linear_transform_encode, device by default).
+            # - device: a giant step's diagonals encoded on the device in
+            #   batches of nb_lt_batch(bstep) at the baby steps' level (they
+            #   share it: a rotation keeps the level). The host still runs each
+            #   inverse FFT; the engine does the CRT reduction and the NTT for a
+            #   batch in one launch, after one upload of N words per diagonal
+            #   instead of L x N. One batch is resident at a time: a whole giant
+            #   step by default, fewer diagonals with linear_transform_batch or
+            #   NB_LT_BATCH. Faster, and the engine keeps its device-encoding
+            #   buffers pooled.
+            # - host: one diagonal at a time, encoded on the host and uploaded
+            #   at full width: slower, the least device memory.
+            # Both are bit-identical (MakeCKKSPackedPlaintext); an engine
+            # without a batched device encode loops the single call.
+            self.wl("if (nb_lt_on_device()) {")
+            self.indent()
             self.wl("const size_t n = std::min<size_t>(bstep, d.size() - g * bstep);")
             self.wl("const size_t nb = nb_lt_batch(bstep);")
             self.wl("for (size_t b0 = 0; b0 < n; b0 += nb) {")
@@ -1163,17 +1185,21 @@ endforeach()
             self.wl("for (size_t b = 0; b < m; ++b) {")
             self.indent()
             self.wl("auto term = cc->EvalMult(baby[b0 + b], pts[b]);")
-        else:
-            self.wl("for (size_t b = 0; b < bstep && g * bstep + b < d.size(); ++b) {")
-            self.indent()
-            self.wl("auto pt = cc->MakeCKKSPackedPlaintext(d[g * bstep + b], 1, baby[b]->GetLevel(), nullptr, baby[b]->GetSlots());")
-            self.wl("auto term = cc->EvalMult(baby[b], pt);")
-        self.wl("part = part ? cc->EvalAdd(part, term) : term;")
-        self.dedent()
-        self.wl("}")
-        if chained and self._fideslib:
+            self.wl("part = part ? cc->EvalAdd(part, term) : term;")
             self.dedent()
-            self.wl("}")  # the batches of the giant step
+            self.wl("}")
+            self.dedent()
+            self.wl("}")
+            self.dedent()
+            self.wl("} else {")
+            self.indent()
+            for line in host_loop:
+                self.wl(line)
+            self.dedent()
+            self.wl("}")
+        else:
+            for line in host_loop:
+                self.wl(line)
         if chained:
             # Horner over the giant steps (run from the last one down):
             # y = Rot(y, bstep) + part_g, one rotation key for every step
@@ -2194,6 +2220,18 @@ endforeach()
         if n <= 0:
             raise CodegenError("scheme linear_transform_memory must be positive")
         return n
+
+    def _lt_encode(self) -> str:
+        """Where a chained linear_transform encodes its diagonals (scheme
+        `linear_transform_encode: device` (default) or `host`). NB_LT_ENCODE
+        overrides it at run time."""
+        v = self._scheme_field("linear_transform_encode")
+        if v is None:
+            return "device"
+        v = str(v).split()[0]
+        if v not in ("device", "host"):
+            raise CodegenError(f"scheme linear_transform_encode: {v}: device or host")
+        return v
 
     def _lt_batch(self) -> int:
         """Diagonals a chained linear_transform encodes on the device at once
