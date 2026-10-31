@@ -3053,16 +3053,22 @@ endforeach()
         if len(stmt.pattern.names) == 2:
             self.wl("}")
 
+    @staticmethod
+    def _is_wildcard(pattern) -> bool:
+        """The catch-all arm `_`: the parser's WildcardPattern (an
+        IdentPattern named `_` is accepted too)."""
+        return isinstance(pattern, ast.WildcardPattern) or (
+            isinstance(pattern, ast.IdentPattern) and pattern.name == "_")
+
     def _gen_match(self, stmt: ast.MatchStmt):
         subject = self._expr_to_cpp(stmt.subject)
         self.wl(f"switch ({subject}) {{")
         self.indent()
         for arm in stmt.arms:
-            if isinstance(arm.pattern, ast.IdentPattern):
-                if arm.pattern.name == "_":
-                    self.wl("default: {")
-                else:
-                    self.wl(f"case {arm.pattern.name}: {{")
+            if self._is_wildcard(arm.pattern):
+                self.wl("default: {")
+            elif isinstance(arm.pattern, ast.IdentPattern):
+                self.wl(f"case {arm.pattern.name}: {{")
             elif isinstance(arm.pattern, ast.LiteralPattern):
                 val = self._expr_to_cpp(arm.pattern.value)
                 self.wl(f"case {val}: {{")
@@ -3094,10 +3100,7 @@ endforeach()
             self.dedent()
             self.wl("}")
         # Add default: __builtin_unreachable() if no default arm was generated
-        has_default = any(
-            isinstance(arm.pattern, ast.IdentPattern) and arm.pattern.name == "_"
-            for arm in stmt.arms
-        )
+        has_default = any(self._is_wildcard(arm.pattern) for arm in stmt.arms)
         if not has_default:
             self.wl("default: __builtin_unreachable();")
         self.dedent()
@@ -4128,11 +4131,10 @@ endforeach()
         self.wl(f"switch ({subject}) {{")
         self.indent()
         for arm in expr.arms:
-            if isinstance(arm.pattern, ast.IdentPattern):
-                if arm.pattern.name == "_":
-                    self.wl("default: {")
-                else:
-                    self.wl(f"case {arm.pattern.name}: {{")
+            if self._is_wildcard(arm.pattern):
+                self.wl("default: {")
+            elif isinstance(arm.pattern, ast.IdentPattern):
+                self.wl(f"case {arm.pattern.name}: {{")
             elif isinstance(arm.pattern, ast.LiteralPattern):
                 self.wl(f"case {self._expr_to_cpp(arm.pattern.value)}: {{")
             else:
@@ -4157,10 +4159,7 @@ endforeach()
             self.wl("break; }")
             self.dedent()
 
-        has_default = any(
-            isinstance(arm.pattern, ast.IdentPattern) and arm.pattern.name == "_"
-            for arm in expr.arms
-        )
+        has_default = any(self._is_wildcard(arm.pattern) for arm in expr.arms)
         if not has_default:
             self.wl("default: __builtin_unreachable();")
         self.dedent()

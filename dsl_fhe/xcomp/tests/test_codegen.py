@@ -1370,3 +1370,62 @@ def test_load_from_computed_path_pairs_with_save():
     ref = files.get("get_ref.cpp", "")
     if ref:
         assert '_p / "ciphertext.ref.bin"' in ref and '.string() + ".ref"' in ref
+
+
+def _switches(cpp: str) -> list[str]:
+    """The bodies of the generated switch statements, outermost braces only."""
+    out = []
+    i = cpp.find("switch (")
+    while i >= 0:
+        j = cpp.index("{", i)
+        depth, k = 0, j
+        while True:
+            depth += {"{": 1, "}": -1}.get(cpp[k], 0)
+            if depth == 0:
+                break
+            k += 1
+        out.append(cpp[j:k + 1])
+        i = cpp.find("switch (", k)
+    return out
+
+
+def test_match_wildcard_is_the_only_default():
+    # `_ =>` parses as a WildcardPattern: it is the switch's default arm, and
+    # no unreachable default may be added next to it (two default labels do
+    # not compile), in a match expression and in a match statement
+    files = compile_str("""
+    enum Size { Small, Medium, Large }
+    fn is_small(s: Size) -> bool {
+        match s {
+            Small => true,
+            _ => false,
+        }
+    }
+    fn width(s: Size) -> u32 {
+        let w = 1
+        match s {
+            Large => { w = 4 }
+            _ => { w = 2 }
+        }
+        return w
+    }
+    """)
+    cpp = files["nb_shared.cpp"]
+    switches = _switches(cpp)
+    assert len(switches) == 2, cpp
+    for body in switches:
+        assert body.count("default:") == 1, body
+        assert "__builtin_unreachable" not in body, body
+        assert "unhandled pattern" not in body, body
+    # a match with no wildcard still gets the unreachable default
+    full = compile_str("""
+    enum Size { Small, Large }
+    fn is_small(s: Size) -> bool {
+        match s {
+            Small => true,
+            Large => false,
+        }
+    }
+    """)["nb_shared.cpp"]
+    (body,) = _switches(full)
+    assert body.count("default:") == 1 and "__builtin_unreachable" in body, body
