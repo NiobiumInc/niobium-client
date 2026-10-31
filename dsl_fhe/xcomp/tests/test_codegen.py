@@ -1173,11 +1173,14 @@ def test_linear_transform_fideslib_uses_the_fused_transform():
     assert "cc->LinearTransformMany(ct, static_cast<int>(len), static_cast<int>(bstep), pts, 1, static_cast<int>(k0));" in header
     # bounded device memory: chunks of whole giant steps under the scheme's
     # linear_transform_memory (6 GB by default)
-    assert "const double budget = 6e+09;" in header
+    assert "std::atof(e) * 1e9 : 6e+09; }();" in header
     assert "size_t chunk = std::max<size_t>(1, giants) * bstep;" in header
     # haze has no fused transform: the loop, the same result
     assert "fideslib::BackendFromEnv() == fideslib::Backend::HAZE" in header
-    assert "getenv" not in header
+    # the only environment read: NB_LT_MEMORY_GB, a run-time override of the
+    # chunk budget (the mode itself is static: its rotation keys are keygen's)
+    import re
+    assert re.findall(r'getenv\("([A-Z_]+)"\)', header) == ["NB_LT_MEMORY_GB"]
     # diagonals at the level the products happen at
     assert "ct->GetLevel() + (ct->GetNoiseScaleDeg() == 2 ? 1 : 0)" in header
     assert "cc->MakeCKKSPackedPlaintextDeviceMany(d, 1, level, ct->GetSlots())" in header
@@ -1229,7 +1232,7 @@ def test_linear_transform_scheme_fields():
     assert "LinearTransformInPlace" not in loop and "LinearTransformMany" not in loop
     assert "return nb_linear_transform_loop(cc, ct, d, bstep);" in loop
     mem = compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform_memory: 1500 MB\n"))["nb_shared.h"]
-    assert "const double budget = 1.5e+09;" in mem
+    assert "std::atof(e) * 1e9 : 1.5e+09; }();" in mem
     for bad, msg in (("    linear_transform: maybe\n", "fused, loop or chained"),
                      ("    linear_transform_memory: 3 bytes\n", "N GB or N MB")):
         try:
@@ -1259,7 +1262,7 @@ def test_linear_transform_chained_device_encodes_a_giant_step():
     # diagonal at a time
     chained = compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: chained\n"))["nb_shared.h"]
     assert "cc->MakeCKKSPackedPlaintextDeviceMany(batch, 1, baby[0]->GetLevel(), baby[0]->GetSlots())" in chained
-    assert "cc->EvalMult(baby[b], pts[b])" in chained
+    assert "cc->EvalMult(baby[b0 + b], pts[b])" in chained
     assert "MakeCKKSPackedPlaintext(d[g * bstep + b]" not in chained
     for files in (compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: loop\n")),
                   compile_str(_lt_scheme(LT_SRC, "    linear_transform: chained\n"))):
@@ -1429,3 +1432,28 @@ def test_match_wildcard_is_the_only_default():
     """)["nb_shared.cpp"]
     (body,) = _switches(full)
     assert body.count("default:") == 1 and "__builtin_unreachable" in body, body
+
+
+def test_linear_transform_batch():
+    import xcomp.codegen as cg
+    # chained on fideslib: a giant step encoded in batches of nb_lt_batch,
+    # NB_LT_BATCH at run time over the scheme's linear_transform_batch
+    # (default 0, a whole giant step)
+    dflt = compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: chained\n"))["nb_shared.h"]
+    assert "inline size_t nb_lt_batch(size_t bstep)" in dflt
+    assert 'std::getenv("NB_LT_BATCH")' in dflt and ": 0L;" in dflt
+    assert "for (size_t b0 = 0; b0 < n; b0 += nb)" in dflt
+    assert "#include <cstdlib>" in dflt
+    eight = compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: chained\n    linear_transform_batch: 8\n"))["nb_shared.h"]
+    assert ": 8L;" in eight
+    # no batching where nothing is device-encoded
+    for files in (compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: loop\n")),
+                  compile_str(_lt_scheme(LT_SRC, "    linear_transform: chained\n"))):
+        assert "nb_lt_batch" not in files["nb_shared.h"]
+    # a negative batch is refused (the parser takes no negative scheme value)
+    from xcomp.errors import ParseError
+    try:
+        compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: chained\n    linear_transform_batch: -1\n"))
+        assert False, "linear_transform_batch: -1 accepted"
+    except (cg.CodegenError, ParseError):
+        pass

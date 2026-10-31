@@ -21,7 +21,7 @@ from .semantic import analyze as semantic_analyze
 from .codegen import generate
 from .errors import CompileError
 from .modules import load_program
-from .params import apply_overrides
+from .params import apply_overrides, apply_scheme_overrides
 
 
 # One-line pointer to the design skill. Printed to stderr by check/compile so an
@@ -74,7 +74,7 @@ def cmd_check(args):
     _print_design_banner()
     try:
         program, loader = load_program(args.files, args.module_path)
-        params = apply_overrides(program, args.set)
+        params = apply_overrides(program, args.set) + apply_scheme_overrides(program, args.scheme)
         sa = semantic_analyze(program)
         if sa.errors.has_errors():
             print(sa.errors.report(), file=sys.stderr)
@@ -96,7 +96,7 @@ def cmd_compile(args):
     _print_design_banner()
     try:
         program, loader = load_program(args.files, args.module_path)
-        params = apply_overrides(program, args.set)
+        params = apply_overrides(program, args.set) + apply_scheme_overrides(program, args.scheme)
         sa = semantic_analyze(program)
 
         if sa.errors.has_errors():
@@ -208,6 +208,8 @@ def main():
                         "the inputs' parent directory is always searched too")
 
     # Compile-time parameters: the value of a top-level const, overridden
+    scheme_help = ("Override a scheme field that trades run time against device memory "
+                   "(linear_transform_memory, linear_transform_batch; repeatable)")
     set_help = ("Override a top-level `const NAME: <type> = <default>` with VALUE "
                 "(repeatable; <module>::NAME when the name is declared in several modules)")
 
@@ -218,6 +220,8 @@ def main():
                          metavar="DIR", help=module_path_help)
     p_check.add_argument("--set", action="append", default=[], metavar="NAME=VALUE",
                          help=set_help)
+    p_check.add_argument("--scheme", action="append", default=[], metavar="FIELD=VALUE",
+                         help=scheme_help)
 
     # compile
     p_compile = subparsers.add_parser(
@@ -235,6 +239,8 @@ def main():
                            metavar="DIR", help=module_path_help)
     p_compile.add_argument("--set", action="append", default=[], metavar="NAME=VALUE",
                            help=set_help)
+    p_compile.add_argument("--scheme", action="append", default=[], metavar="FIELD=VALUE",
+                           help=scheme_help)
 
     args = parser.parse_args()
 

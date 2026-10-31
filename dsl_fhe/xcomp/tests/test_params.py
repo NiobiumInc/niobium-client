@@ -103,3 +103,50 @@ def test_hardware_stage_cache_parameters_carry_the_set():
     assert 'nb_params.push_back({"nbc:PARAM1", "32"});' in files["compute.cpp"]
     _, files = build(src, [])
     assert "nbc:PARAM1" not in files["compute.cpp"]
+
+
+# --scheme FIELD=VALUE: the scheme fields that trade run time against device
+# memory, overridden for one build
+
+def _scheme_build(field_lines: str, schemes: list[str]):
+    from xcomp.params import apply_scheme_overrides
+    from xcomp.tests.test_codegen import LT_SRC, _lt_scheme
+    program = parse(lex(_lt_scheme(LT_SRC, field_lines)))
+    params = apply_scheme_overrides(program, schemes)
+    sa = analyze(program)
+    assert not sa.errors.has_errors(), sa.errors.report()
+    return params, generate(program, sa, backend="fideslib", params=params)
+
+
+def test_scheme_override_sets_the_memory_and_is_recorded():
+    params, files = _scheme_build("    linear_transform: fused\n", ["linear_transform_memory=20GB"])
+    h = files["nb_shared.h"]
+    assert "2e+10" in h                                               # the 20 GB budget
+    assert "// nbc --scheme linear_transform_memory=20GB" in h
+    recorded = json.loads(files["nb_params.json"])
+    assert recorded["scheme::linear_transform_memory"] == "20 GB"
+
+
+def test_scheme_override_adds_a_missing_field():
+    _, files = _scheme_build("    linear_transform: chained\n", ["linear_transform_batch=4"])
+    assert ": 4L;" in files["nb_shared.h"]
+
+
+def test_scheme_override_refuses_other_fields():
+    from xcomp.params import apply_scheme_overrides
+    from xcomp.tests.test_codegen import LT_SRC, _lt_scheme
+    program = parse(lex(_lt_scheme(LT_SRC, "    linear_transform: chained\n")))
+    # the mode changes the rotation keys the circuit must declare: refused
+    with pytest.raises(CompileError, match="rotation keys"):
+        apply_scheme_overrides(program, ["linear_transform=fused"])
+    for bad in (["key_switch_digits=4"], ["depth=12"], ["linear_transform_batch"],
+                ["linear_transform_batch=2", "linear_transform_batch=4"], ["linear_transform_memory=lots of"]):
+        with pytest.raises(CompileError):
+            apply_scheme_overrides(program, bad)
+
+
+def test_run_time_memory_overrides_are_generated():
+    _, fused = _scheme_build("    linear_transform: fused\n", [])
+    assert 'std::getenv("NB_LT_MEMORY_GB")' in fused["nb_shared.h"]
+    _, chained = _scheme_build("    linear_transform: chained\n", [])
+    assert 'std::getenv("NB_LT_BATCH")' in chained["nb_shared.h"]
