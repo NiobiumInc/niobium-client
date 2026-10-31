@@ -1253,6 +1253,21 @@ def test_linear_transform_chained():
     assert "cc->EvalRotate(ct, static_cast<int32_t>(b))" in loop
 
 
+def test_linear_transform_chained_device_encodes_a_giant_step():
+    # chained on fideslib: each giant step's diagonals encoded as one device
+    # batch at the baby steps' level; loop and OpenFHE keep one host-encoded
+    # diagonal at a time
+    chained = compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: chained\n"))["nb_shared.h"]
+    assert "cc->MakeCKKSPackedPlaintextDeviceMany(batch, 1, baby[0]->GetLevel(), baby[0]->GetSlots())" in chained
+    assert "cc->EvalMult(baby[b], pts[b])" in chained
+    assert "MakeCKKSPackedPlaintext(d[g * bstep + b]" not in chained
+    for files in (compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: loop\n")),
+                  compile_str(_lt_scheme(LT_SRC, "    linear_transform: chained\n"))):
+        h = files["nb_shared.h"]
+        assert "MakeCKKSPackedPlaintext(d[g * bstep + b], 1, baby[b]->GetLevel()" in h
+        assert "MakeCKKSPackedPlaintextDeviceMany(batch" not in h
+
+
 # A shared helper taking a plaintext vector parameter, and a scalar on the
 # left of a ciphertext: the two plaintext-operand forms of `affine`.
 PLAIN_OPERAND_SRC = FIDESLIB_SRC.replace(

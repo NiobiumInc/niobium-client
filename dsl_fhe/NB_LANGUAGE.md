@@ -291,7 +291,11 @@ rotation by 1 of the previous one, and the giant steps are summed
 Horner-style by rotations of `bstep`. It makes the same number of key
 switches as `loop` and needs rotation keys for 1 and `bstep` only, instead
 of `1 .. bstep - 1` and every giant step, so a circuit whose keys do not fit
-the device can declare just those two.
+the device can declare just those two. Each giant step's diagonals are
+encoded on the device as one batch at the baby steps' level (the host runs
+each inverse FFT; the device the CRT reduction and the NTT, after one upload
+of N words per diagonal), bit-identical to the host encoding; one giant
+step's batch is resident at a time.
 `linear_transform_memory: N GB` (or `N MB`, N an integer, default 6 GB)
 bounds the diagonals one fused call holds on the device; a larger product
 runs in chunks of whole giant steps. Both are static: they shape

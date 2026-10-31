@@ -1128,10 +1128,27 @@ endforeach()
         self.wl("for (size_t g = 0; g * bstep < d.size(); ++g) {")
         self.indent()
         self.wl("CT part;")
-        self.wl("for (size_t b = 0; b < bstep && g * bstep + b < d.size(); ++b) {")
-        self.indent()
-        self.wl("auto pt = cc->MakeCKKSPackedPlaintext(d[g * bstep + b], 1, baby[b]->GetLevel(), nullptr, baby[b]->GetSlots());")
-        self.wl("auto term = cc->EvalMult(baby[b], pt);")
+        if chained and self._fideslib:
+            # chained on fideslib: a giant step's diagonals encoded as one
+            # device batch at the baby steps' level (they share it: a rotation
+            # keeps the level). The host still runs each inverse FFT; the
+            # engine does the CRT reduction and the NTT for the whole batch in
+            # one launch, after one upload of N words per diagonal instead of
+            # L x N. Bit-identical to MakeCKKSPackedPlaintext; an engine
+            # without a batched device encode loops the single call. One
+            # giant step's batch is resident at a time; `loop` keeps one
+            # diagonal, for the least device memory.
+            self.wl("const size_t n = std::min<size_t>(bstep, d.size() - g * bstep);")
+            self.wl("std::vector<std::vector<double>> batch(d.begin() + g * bstep, d.begin() + g * bstep + n);")
+            self.wl("auto pts = cc->MakeCKKSPackedPlaintextDeviceMany(batch, 1, baby[0]->GetLevel(), baby[0]->GetSlots());")
+            self.wl("for (size_t b = 0; b < n; ++b) {")
+            self.indent()
+            self.wl("auto term = cc->EvalMult(baby[b], pts[b]);")
+        else:
+            self.wl("for (size_t b = 0; b < bstep && g * bstep + b < d.size(); ++b) {")
+            self.indent()
+            self.wl("auto pt = cc->MakeCKKSPackedPlaintext(d[g * bstep + b], 1, baby[b]->GetLevel(), nullptr, baby[b]->GetSlots());")
+            self.wl("auto term = cc->EvalMult(baby[b], pt);")
         self.wl("part = part ? cc->EvalAdd(part, term) : term;")
         self.dedent()
         self.wl("}")
@@ -2127,7 +2144,8 @@ endforeach()
         `fused` (default), the facade's prepared transform with the diagonals
         encoded on the device, or `loop`, one diagonal at a time on the host,
         slower but with the least device memory, or `chained`, the loop with
-        rotation keys for 1 and bstep only. OpenFHE always loops."""
+        rotation keys for 1 and bstep only, each giant step's diagonals
+        encoded on the device as one batch. OpenFHE always loops."""
         v = self._scheme_field("linear_transform")
         mode = "fused" if v is None else str(v).split()[0]
         if mode not in ("fused", "loop", "chained"):
