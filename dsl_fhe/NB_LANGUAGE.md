@@ -153,7 +153,8 @@ nbc compile app.niob --set PARAM1=64 --set PARAM2=0.25 --outdir nb_out_64
 `--scheme FIELD=VALUE`, repeatable, overrides a field of the scheme block
 for one build in the same way, for the fields that trade device memory and
 change neither the security, the results nor the rotation keys:
-`linear_transform_memory` (N GB or N MB) and `linear_transform_batch` (N).
+`linear_transform_memory` (N GB or N MB), `linear_transform_batch` (N) and
+`linear_transform_encode` (device or host).
 Any other field is refused. The product mode (`linear_transform`) is one of
 them: fused and loop need a rotation key per baby and giant step, which the
 circuit's rotation set must declare, so a mode change is a change to the
@@ -314,7 +315,11 @@ step's batch is resident at a time.
 of a giant step's diagonals at once instead, for less device memory at a
 little more host-to-device traffic; `NB_LT_BATCH=N` in the environment
 overrides it at run time, so one build can run on devices of different
-memory.
+memory. `linear_transform_encode: device` (default) or `host` chooses where
+a chained transform encodes its diagonals: on the device (faster; the
+engine keeps its device-encoding buffers pooled) or on the host, one
+diagonal at a time (slower, the least device memory). `NB_LT_ENCODE=host`
+or `device` overrides it at run time.
 `linear_transform_memory: N GB` (or `N MB`, N an integer, default 6 GB)
 bounds the diagonals one fused call holds on the device; a larger product
 runs in chunks of whole giant steps. `NB_LT_MEMORY_GB=X` in the environment
@@ -331,6 +336,7 @@ Run time against device memory, from the most memory to the least:
 | `linear_transform: fused`, a large `NB_LT_MEMORY_GB` | the scheme block, with the rotation set | 1 .. bstep - 1 and every giant step | the whole product, or chunks of the budget |
 | `linear_transform: chained` (default batch) | the scheme block | 1 and bstep | one giant step |
 | `NB_LT_BATCH=N` with `chained` | run | 1 and bstep | N diagonals |
+| `NB_LT_ENCODE=host` with `chained` | run | 1 and bstep | one diagonal, encoded on the host; no device-encoding buffers |
 | `linear_transform: loop` | the scheme block, with the rotation set | 1 .. bstep - 1 and every giant step | one diagonal, encoded on the host |
 
 `key_switch_digits: N` sets hybrid key switching's digit count (OpenFHE's

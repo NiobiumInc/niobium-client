@@ -209,7 +209,7 @@ def main():
 
     # Compile-time parameters: the value of a top-level const, overridden
     scheme_help = ("Override a scheme field that trades run time against device memory "
-                   "(linear_transform_memory, linear_transform_batch; repeatable)")
+                   "(linear_transform_memory, linear_transform_batch, linear_transform_encode; repeatable)")
     set_help = ("Override a top-level `const NAME: <type> = <default>` with VALUE "
                 "(repeatable; <module>::NAME when the name is declared in several modules)")
 

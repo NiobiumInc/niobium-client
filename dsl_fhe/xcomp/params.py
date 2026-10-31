@@ -16,8 +16,8 @@ declared in more than one module.
 `nbc compile --scheme FIELD=VALUE` overrides a field of the scheme block in
 the same way, for the fields that trade run time against device memory and
 change neither the security, nor the results, nor the rotation keys:
-`linear_transform_memory` (N GB or N MB) and `linear_transform_batch` (N).
-Recorded as `scheme::FIELD` next to the `--set` parameters. The product mode
+`linear_transform_memory` (N GB or N MB), `linear_transform_batch` (N) and
+`linear_transform_encode` (device or host). Recorded as `scheme::FIELD` next to the `--set` parameters. The product mode
 (`linear_transform`) is not overridable: fused and loop need rotation keys
 the circuit's own rotation set must declare.
 
@@ -129,7 +129,7 @@ def apply_overrides(program: ast.Program, sets: list[str] | None) -> list[ParamO
 # them: fused and loop need a rotation key per baby and giant step, which only
 # the circuit's own rotation set (requires { rotate(...) }) provides, so a
 # mode change is a change to the circuit.
-SCHEME_OVERRIDABLE = ("linear_transform_memory", "linear_transform_batch")
+SCHEME_OVERRIDABLE = ("linear_transform_memory", "linear_transform_batch", "linear_transform_encode")
 
 
 def _scheme_value(field: str, text: str):
