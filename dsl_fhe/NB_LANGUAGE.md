@@ -150,6 +150,20 @@ nbc compile app.niob --set PARAM1=64 --set PARAM2=0.25 --outdir nb_out_64
   `nb_shared.h`, and a cache parameter `nbc:NAME` of every `@hardware` stage,
   so a recording made with one value is never replayed for another.
 
+`--scheme FIELD=VALUE`, repeatable, overrides a field of the scheme block
+for one build in the same way, for the fields that trade device memory and
+change neither the security, the results nor the rotation keys:
+`linear_transform_memory` (N GB or N MB) and `linear_transform_batch` (N).
+Any other field is refused. The product mode (`linear_transform`) is one of
+them: fused and loop need a rotation key per baby and giant step, which the
+circuit's rotation set must declare, so a mode change is a change to the
+circuit. It is recorded as `scheme::FIELD` next to the `--set` parameters
+(and a `// nbc --scheme FIELD=VALUE` line):
+
+```console
+nbc compile app.niob --backend fideslib --scheme linear_transform_memory=40GB --scheme linear_transform_batch=4
+```
+
 ### Enums
 
 ```nb
@@ -296,11 +310,28 @@ encoded on the device as one batch at the baby steps' level (the host runs
 each inverse FFT; the device the CRT reduction and the NTT, after one upload
 of N words per diagonal), bit-identical to the host encoding; one giant
 step's batch is resident at a time.
+`linear_transform_batch: N` (default 0, a whole giant step) encodes at most N
+of a giant step's diagonals at once instead, for less device memory at a
+little more host-to-device traffic; `NB_LT_BATCH=N` in the environment
+overrides it at run time, so one build can run on devices of different
+memory.
 `linear_transform_memory: N GB` (or `N MB`, N an integer, default 6 GB)
 bounds the diagonals one fused call holds on the device; a larger product
-runs in chunks of whole giant steps. Both are static: they shape
-`nb_shared.h`, which every stage shares, so `scheme.override` rejects them.
-OpenFHE always runs the loop.
+runs in chunks of whole giant steps. `NB_LT_MEMORY_GB=X` in the environment
+overrides it at run time (the chunks are whole giant steps, whose rotation
+keys the circuit has whatever the budget). These fields shape
+`nb_shared.h`, which every stage shares, so `scheme.override` rejects them;
+`nbc compile --scheme FIELD=VALUE` sets the two budgets for one build (below). OpenFHE
+always runs the loop.
+
+Run time against device memory, from the most memory to the least:
+
+| choice | set at | rotation keys | device memory for a product's diagonals |
+|---|---|---|---|
+| `linear_transform: fused`, a large `NB_LT_MEMORY_GB` | the scheme block, with the rotation set | 1 .. bstep - 1 and every giant step | the whole product, or chunks of the budget |
+| `linear_transform: chained` (default batch) | the scheme block | 1 and bstep | one giant step |
+| `NB_LT_BATCH=N` with `chained` | run | 1 and bstep | N diagonals |
+| `linear_transform: loop` | the scheme block, with the rotation set | 1 .. bstep - 1 and every giant step | one diagonal, encoded on the host |
 
 `key_switch_digits: N` sets hybrid key switching's digit count (OpenFHE's
 `dnum`, `SetNumLargeDigits`; unset, OpenFHE chooses). More digits shrink the

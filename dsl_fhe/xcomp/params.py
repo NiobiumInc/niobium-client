@@ -12,6 +12,16 @@ written in the source. The source value stays the default.
 
 NAME is the constant's name, or `<module>::NAME` when the same name is
 declared in more than one module.
+
+`nbc compile --scheme FIELD=VALUE` overrides a field of the scheme block in
+the same way, for the fields that trade run time against device memory and
+change neither the security, nor the results, nor the rotation keys:
+`linear_transform_memory` (N GB or N MB) and `linear_transform_batch` (N).
+Recorded as `scheme::FIELD` next to the `--set` parameters. The product mode
+(`linear_transform`) is not overridable: fused and loop need rotation keys
+the circuit's own rotation set must declare.
+
+    nbc compile app.niob --backend fideslib --scheme linear_transform_memory=20GB --scheme linear_transform_batch=4
 """
 from __future__ import annotations
 
@@ -110,4 +120,61 @@ def apply_overrides(program: ast.Program, sets: list[str] | None) -> list[ParamO
         lit.module = const.module
         const.value = lit
         out.append(ParamOverride(canon, tname, value, text))
+    return out
+
+
+# The scheme fields --scheme may override: how much device memory a product
+# may hold. They change neither the security (the moduli, the key), nor the
+# results, nor the rotation keys. `linear_transform` (the mode) is not one of
+# them: fused and loop need a rotation key per baby and giant step, which only
+# the circuit's own rotation set (requires { rotate(...) }) provides, so a
+# mode change is a change to the circuit.
+SCHEME_OVERRIDABLE = ("linear_transform_memory", "linear_transform_batch")
+
+
+def _scheme_value(field: str, text: str):
+    t = text.strip()
+    import re
+    if re.fullmatch(r"\d+", t):
+        return int(t)
+    m = re.fullmatch(r"(\d+)\s*(GB|MB)", t)
+    if m:
+        return f"{m.group(1)} {m.group(2)}"
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", t):
+        return t
+    raise CompileError(f"--scheme {field}={text}: expected a word, a whole number, or N GB / N MB")
+
+
+def apply_scheme_overrides(program: ast.Program, schemes: list[str] | None) -> list[ParamOverride]:
+    """Apply the `--scheme FIELD=VALUE` overrides to the program's scheme
+    block, in place (a field the block lacks is added). Only the fields in
+    SCHEME_OVERRIDABLE; the code generator validates the values."""
+    if not schemes:
+        return []
+    blocks = [i for i in program.items if isinstance(i, ast.SchemeDecl)]
+    if not blocks:
+        raise CompileError("--scheme: the program has no scheme block")
+    out: list[ParamOverride] = []
+    seen: set[str] = set()
+    for arg in schemes:
+        if "=" not in arg:
+            raise CompileError(f"--scheme {arg!r}: expected FIELD=VALUE")
+        field, text = (x.strip() for x in arg.split("=", 1))
+        if field not in SCHEME_OVERRIDABLE:
+            why = (" (the mode decides which rotation keys key generation must make: change it in the "
+                   "scheme block, with a rotation set that has them)" if field == "linear_transform" else "")
+            raise CompileError(f"--scheme {field}: not overridable{why}; only {', '.join(SCHEME_OVERRIDABLE)}, "
+                               "the memory choices that change neither the security, the results nor the keys")
+        if field in seen:
+            raise CompileError(f"--scheme {field}: given more than once")
+        seen.add(field)
+        value = _scheme_value(field, text)
+        for b in blocks:
+            hit = [f for f in b.fields if f.key == field]
+            if hit:
+                for f in hit:
+                    f.value = value
+            else:
+                b.fields.append(ast.SchemeField(loc=b.loc, key=field, value=value))
+        out.append(ParamOverride(f"scheme::{field}", "scheme", value, text))
     return out
