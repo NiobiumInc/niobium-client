@@ -2982,7 +2982,56 @@ endforeach()
             self.wl(f"{cpp_type} {stmt.name};")
 
 
+    def _const_bool(self, expr) -> bool | None:
+        """The value of a condition that depends on build parameters only:
+        `const` names (with their --set values) compared with literals, or
+        combined with && || !. None when the condition is not constant. A
+        branch the parameters rule out is not generated at all, so what it
+        contains (a save() on a stage-local path, say) is not held to the
+        rules of the stages that do run: `if KV_CACHE == 2 { save(...) }`
+        in a build with KV_CACHE=1 is dead code, not a probe."""
+        def value(e):
+            if isinstance(e, ast.IntLiteral):
+                return e.value
+            if isinstance(e, ast.BoolLiteral):
+                return e.value
+            if isinstance(e, ast.Ident):
+                # a const is referred to by its name, or module-qualified
+                # (`mod::NAME`) once the resolver has been over it
+                for c in self.consts:
+                    names = {c.name, f"{getattr(c, 'module', '')}::{c.name}"}
+                    if e.name in names and isinstance(c.value, (ast.IntLiteral, ast.BoolLiteral)):
+                        return c.value.value
+                return None
+            if isinstance(e, ast.UnaryExpr) and e.op == "!":
+                v = value(e.operand)
+                return None if v is None else not v
+            if isinstance(e, ast.BinaryExpr):
+                if e.op in ("&&", "||"):
+                    l, r = value(e.left), value(e.right)
+                    if l is None or r is None:
+                        return None
+                    return (l and r) if e.op == "&&" else (l or r)
+                l, r = value(e.left), value(e.right)
+                if l is None or r is None or isinstance(l, bool) != isinstance(r, bool):
+                    return None
+                ops = {"==": l == r, "!=": l != r, "<": l < r, "<=": l <= r, ">": l > r, ">=": l >= r}
+                return ops.get(e.op)
+            return None
+        v = value(expr)
+        return None if v is None else bool(v)
+
     def _gen_if_stmt(self, stmt: ast.IfStmt):
+        folded = self._const_bool(stmt.condition)
+        if folded is True:
+            self._gen_block_contents(stmt.then_block)
+            return
+        if folded is False:
+            if isinstance(stmt.else_block, ast.IfStmt):
+                self._gen_if_stmt(stmt.else_block)
+            elif stmt.else_block:
+                self._gen_block_contents(stmt.else_block)
+            return
         cond = self._expr_to_cpp(stmt.condition)
         self.wl(f"if ({cond}) {{")
         self.indent()

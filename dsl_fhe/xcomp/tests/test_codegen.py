@@ -1477,3 +1477,38 @@ def test_linear_transform_encode_host_or_device():
         assert False, "linear_transform_encode: gpu accepted"
     except cg.CodegenError as e:
         assert "device or host" in str(e)
+
+
+def test_hardware_save_in_dead_const_branch_is_not_generated():
+    """An `if` on build parameters is folded at codegen: the branch the
+    parameters rule out is not generated, so a save() on a stage-local path
+    inside it is neither emitted nor registered as a probe. The branch the
+    parameters select is generated in its place."""
+    src = """
+    struct Instance { ring_dim: u32 }
+    wire EncOut { ciphertext: enc<f64> }
+    const MODE: u32 = 1
+    fn outdir(inst: Instance) -> path { "io" / "out" }
+    fn blockdir(inst: Instance, l: u32) -> path { outdir(inst) / ("block_" + str(l)) }
+    @server @stage(name: "compute") @hardware(cache_key: ["wl"])
+    fn compute(inst: Instance) {
+        let ct: enc<f64> = zero()
+        for l in 0..2 {
+            if MODE == 2 {
+                save(EncOut { ciphertext: ct }, to: blockdir(inst, l) / "entry.bin")
+            } else {
+                save(EncOut { ciphertext: ct }, to: outdir(inst) / "kept.bin")
+            }
+        }
+    }
+    """
+    cpp = compile_str(src)["compute.cpp"]
+    assert "block_" not in cpp
+    assert 'probe("kept"' in cpp
+    # With MODE=2 the stage-local path IS generated, and is refused as before.
+    from xcomp.codegen import CodegenError
+    try:
+        compile_str(src.replace("const MODE: u32 = 1", "const MODE: u32 = 2"))
+        assert False, "expected CodegenError for the stage-local save() path"
+    except CodegenError as e:
+        assert "stage-local" in str(e)
