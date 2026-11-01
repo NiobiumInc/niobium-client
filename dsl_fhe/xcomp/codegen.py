@@ -775,7 +775,8 @@ inline Context import_context(const Context& stored) {
 
 struct PendingOutput {
     std::string path;
-    Cipher ct;
+    Cipher ct;                                       // haze: read back at the flush
+    lbcrypto::Ciphertext<lbcrypto::DCRTPoly> host;   // cpu, cuda: read back when queued
 };
 
 inline std::vector<PendingOutput>& pending_outputs() {
@@ -784,13 +785,24 @@ inline std::vector<PendingOutput>& pending_outputs() {
 }
 
 // A ciphertext write: marked as an output now, written at flush_outputs().
+// On the cpu and cuda engines the value is final when it is queued, so it is
+// read back to the host here and only the host copy is kept: the device copy
+// goes when the stage's own reference does, and a stage that saves many
+// ciphertexts as it goes (a KV cache, a block at a time) does not hold every
+// one on the device until it ends. The haze engine reads its outputs back in
+// one flush at the end, so there the ciphertext itself is kept.
 inline void queue_output(const std::string& path, const Cipher& ct) {
     if (!ct) {
         throw std::runtime_error("nb_fideslib: writing a null ciphertext to " + path);
     }
     Cipher c = ct;
     context()->MarkOutput(c);
-    pending_outputs().push_back({path, c});
+    if (fideslib::BackendFromEnv() == fideslib::Backend::HAZE) {
+        pending_outputs().push_back({path, c, nullptr});
+        return;
+    }
+    context()->RecoverHostCiphertext(c);
+    pending_outputs().push_back({path, nullptr, fideslib::ExportCiphertext(c)});
 }
 
 // Called at the end of main(), once every output is known. Nothing is
@@ -802,11 +814,13 @@ inline void queue_output(const std::string& path, const Cipher& ct) {
 inline void flush_outputs() {
     auto& cc = context_slot();
     for (auto& p : pending_outputs()) {
-        if (cc) {
-            cc->RecoverHostCiphertext(p.ct);
+        if (!p.host) {
+            if (cc) {
+                cc->RecoverHostCiphertext(p.ct);
+            }
+            p.host = fideslib::ExportCiphertext(p.ct);
         }
-        if (!lbcrypto::Serial::SerializeToFile(p.path, fideslib::ExportCiphertext(p.ct),
-                                               lbcrypto::SerType::BINARY)) {
+        if (!lbcrypto::Serial::SerializeToFile(p.path, p.host, lbcrypto::SerType::BINARY)) {
             throw std::runtime_error("nb_fideslib: failed to write " + p.path);
         }
     }

@@ -1512,3 +1512,26 @@ def test_hardware_save_in_dead_const_branch_is_not_generated():
         assert False, "expected CodegenError for the stage-local save() path"
     except CodegenError as e:
         assert "stage-local" in str(e)
+
+
+def test_fideslib_outputs_leave_the_device_when_queued():
+    """A saved ciphertext is read back to the host when it is queued on the cpu
+    and cuda engines, so the device copy is not held until the stage ends; the
+    haze engine keeps the ciphertext for its single flush."""
+    files = compile_fideslib("""
+    struct Instance { ring_dim: u32 }
+    wire EncOut { ciphertext: enc<f64> }
+    fn outdir(inst: Instance) -> path { "io" / "out" }
+    @server @stage(name: "compute")
+    fn compute(inst: Instance) {
+        let ct: enc<f64> = zero()
+        save(EncOut { ciphertext: ct }, to: outdir(inst) / "out.bin")
+    }
+    """)
+    hdr = files["nb_fideslib.h"]
+    queue = hdr.split("inline void queue_output")[1].split("inline void flush_outputs")[0]
+    assert "fideslib::Backend::HAZE" in queue
+    assert "RecoverHostCiphertext(c)" in queue
+    assert "ExportCiphertext(c)" in queue
+    flush = hdr.split("inline void flush_outputs")[1]
+    assert "if (!p.host)" in flush
