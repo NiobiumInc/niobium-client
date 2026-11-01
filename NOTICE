@@ -2,9 +2,9 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-10-29
+Generated: 2026-11-01
 Tool: SCANOSS (snippet detection with License dataset)
-Components: 70
+Components: 72
 
 This file lists all third-party software components detected
 in this repository, along with their licenses and copyright
@@ -25,7 +25,7 @@ LICENSE SUMMARY
   Apache-2.0 WITH LLVM-exception: 2 component(s)
   Apache-2.0 WITH LLVM-exception AND NCSA: 1 component(s)
   Apache-2.0 WITH LLVM-exception AND NCSA AND NCSA OR MIT AND NCSA AND MIT: 1 component(s)
-  BSD-2-Clause: 6 component(s)
+  BSD-2-Clause: 7 component(s)
   BSD-3-Clause: 29 component(s)
   BSD-3-Clause-LBNL: 1 component(s)
   BSL-1.0: 1 component(s)
@@ -34,7 +34,7 @@ LICENSE SUMMARY
   EPL-2.0 [COPYLEFT]: 1 component(s)
   GPL-2.0-only [COPYLEFT]: 4 component(s)
   GPL-2.0-or-later [COPYLEFT]: 2 component(s)
-  GPL-3.0-only [COPYLEFT]: 3 component(s)
+  GPL-3.0-only [COPYLEFT]: 4 component(s)
   ISC: 1 component(s)
   LGPL-2.1-only [COPYLEFT]: 2 component(s)
   LGPL-3.0-only [COPYLEFT]: 1 component(s)
@@ -121,6 +121,7 @@ COMPONENT ATTRIBUTIONS
     Copyright 2013-2022 Randolph Voorhies Shane Grant
     Copyright 2015 THL A29 Limited a Tencent company and Milo Yip. All rights reserved
     Copyright (c) 2006; 2007 Marcin Kalicinski
+    Copyright (c) 2013; Randolph Voorhies; Shane Grant
     Copyright (c) 2014; 2017; Randolph Voorhies; Shane Grant; Juan Pedro
     Copyright (c) 2014; Randolph Voorhies; Shane Grant
     Copyright (c) 2015; Kyle Fleming
@@ -353,7 +354,7 @@ COMPONENT ATTRIBUTIONS
   License: Apache-2.0, BSD-3-Clause
 
   firefox
-  Version: FIREFOX_73_0b2_RELEASE
+  Version: DEVEDITION_73_0b2_RELEASE
   Source: https://github.com/mozilla-firefox/firefox
   PURL: pkg:github/mozilla-firefox/firefox
   Copyright:
@@ -538,7 +539,6 @@ COMPONENT ATTRIBUTIONS
   Source: https://github.com/gperftools/gperftools
   PURL: pkg:github/gperftools/gperftools
   Copyright:
-    Copyright 2001-2004 Wolfram Gloger
     Copyright 2005 ; Google Inc.
     Copyright 2008 ; Google Inc.
     Copyright 2012-2016 Free Software Foundation Inc
@@ -960,6 +960,16 @@ COMPONENT ATTRIBUTIONS
     Copyright 2016; Samuel Neves <sneves@dei.uc.pt>
   License: BSD-2-Clause
 
+  openfhe-python
+  Version: v1.4.2.0
+  Source: https://github.com/openfheorg/openfhe-python
+  PURL: pkg:github/openfheorg/openfhe-python
+  Copyright:
+    Copyright 2022 ; OpenFHE
+    Copyright  c) 2023-2025  Duality Technologies Inc. and other contributors
+    Copyright (c) 2023-2025; Duality Technologies Inc. and other contributors
+  License: BSD-2-Clause
+
   Otus_IP_filter
   Version: 3
   Source: https://github.com/daniil199820/otus_ip_filter
@@ -997,6 +1007,15 @@ COMPONENT ATTRIBUTIONS
     Copyright 2024 Google Inc
     Copyright 2007; Google Inc.
   License: BSD-3-Clause
+
+  Pyfhel
+  Version: 7148501
+  Source: https://github.com/ibarrond/Pyfhel
+  PURL: pkg:github/ibarrond/pyfhel
+  Copyright:
+    (C) 2007 Free Software Foundation; Inc. <http:  fsf.org >
+    Copyright copyright owner or entity authorized by
+  License: GPL-3.0-only
 
   rayx
   Version: v0.19.4
