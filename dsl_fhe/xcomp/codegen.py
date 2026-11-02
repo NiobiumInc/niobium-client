@@ -788,8 +788,8 @@ inline std::vector<PendingOutput>& pending_outputs() {
 // On the cpu and cuda engines the value is final when it is queued, so it is
 // read back to the host here and only the host copy is kept: the device copy
 // goes when the stage's own reference does, and a stage that saves many
-// ciphertexts as it goes (a KV cache, a block at a time) does not hold every
-// one on the device until it ends. The haze engine reads its outputs back in
+// ciphertexts as it goes does not hold every one on the device until it
+// ends. The haze engine reads its outputs back in
 // one flush at the end, so there the ciphertext itself is kept.
 inline void queue_output(const std::string& path, const Cipher& ct) {
     if (!ct) {
@@ -3002,8 +3002,8 @@ endforeach()
         combined with && || !. None when the condition is not constant. A
         branch the parameters rule out is not generated at all, so what it
         contains (a save() on a stage-local path, say) is not held to the
-        rules of the stages that do run: `if KV_CACHE == 2 { save(...) }`
-        in a build with KV_CACHE=1 is dead code, not a probe."""
+        rules of the stages that do run: `if MODE == 2 { save(...) }` in a
+        build with MODE=1 is dead code, not a probe."""
         def value(e):
             if isinstance(e, ast.IntLiteral):
                 return e.value
