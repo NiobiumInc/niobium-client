@@ -246,6 +246,10 @@ credentials described below.
 | `fog init [-f\|--force]` | Write `~/.fog/config` with default values (edit to taste). `--force` overwrites an existing file. |
 | `fog login [-u\|--username EMAIL] [-n\|--name NAME]` | Authenticate (OAuth2 password flow) and provision a **named** API key, saved to `~/.fog/credentials` (`0600`). Prompts for email/password if not given; `-n` labels the key (default `fog@<hostname>`). Adds a key — existing keys stay valid. Also prints the raw token to stdout, so `export FOG_API_TOKEN=$(fog login)` works. |
 | `fog submit ./app --target=T [args…]` | **Wrapper mode** — provision a job for target `T`, wait for a worker, then run your OpenFHE app `./app` against it (extra args pass through to the app). |
+| `fog keys create [-l LABEL] [--versions v1,v2] [--max-jobs N] [--max-lifetime S]` | **Fog V2.** Generate a P-256 signing key, register its public half with the organization (needs an organization admin's API key) and keep the private half in `~/.fog/keys/<kid>.pem` (`0600`). Prints the `kid`. `--purpose manifest` for a manifest-signing key. |
+| `fog keys register FILE` | Register an existing public key (PEM or JWK) whose private half lives in your app backend. |
+| `fog keys list` / `fog keys revoke KID` | The organization's keys; revoke one, which refuses every token it signed at once. |
+| `fog token sign --identity ID --grant run --versions v1 [--grant jobs] [--max-jobs N] [--ttl S] [--kid KID]` | Sign a V2 access token for an end user with a key made by `fog keys create`: the signer for development and tests. An app backend signs with the reference signers in [`docs/fog-token-signers/`](docs/fog-token-signers/). |
 | `fog list` | Table of all your jobs (id, status, mode, target, worker, enqueued time) with an in-flight count. |
 | `fog get ID [ID…]` | Full JSON detail for one or more job ids. |
 | `fog cancel ID [ID…]` | Cancel/release specific jobs. |

@@ -12,6 +12,17 @@
 #   fog get <id> [<id>…]              # full details for specific jobs
 #   fog cancel <id> [<id>…]           # cancel/release specific jobs
 #   fog cancel --pending              # cancel every in-flight job (frees workers)
+#   fog keys create|register|list|revoke   # the organization's signing keys (Fog V2)
+#   fog token sign --identity ID --grant run --versions v1   # sign an access token
+#
+# Fog V2 (FOG-v2-architecture.md §3.3): a developer registers a P-256 signing
+# key with an organization admin's API key, and their app backend signs
+# short-lived access tokens with the private half; an end user with no Fog
+# account presents one to POST /v2/jobs. `fog keys create` generates the pair
+# and keeps the private half in ~/.fog/keys/<kid>.pem; `fog token sign` is the
+# signer for development and tests (an app backend uses the reference signers
+# in docs/fog-token-signers/). Keys and signatures come from the `openssl`
+# binary, so this stays stdlib-only.
 #
 # `submit` has two shapes. Given a leading program — `fog submit ./app
 # --target=T …` (outer/wrapper mode) — it POSTs {mode,target} to fog-api, waits
@@ -50,6 +61,7 @@
 #   FOG_JOB_MAXWAIT  total seconds to keep polling a queue   [default 600]
 #   NBCC_FHETCH_REPLAY_BIN  path to nbcc_fhetch_replay       [default: PATH / build dir]
 import argparse
+import base64
 import configparser
 import getpass
 import json
@@ -57,7 +69,10 @@ import os
 import shutil
 import socket
 import ssl
+import subprocess
 import sys
+import time
+import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -404,6 +419,203 @@ def cmd_cancel(rest):
             print(f"[{jid}] HTTP {status}: {_detail(body)}", file=sys.stderr)
 
 
+# ---- signing keys and access tokens (Fog V2) ---------------------------------
+def _keys_dir():
+    return _home() / "keys"
+
+
+def _openssl(*args, stdin=None):
+    try:
+        r = subprocess.run(["openssl", *args], input=stdin, capture_output=True)
+    except FileNotFoundError:
+        die("openssl not found: `fog keys` and `fog token` need the openssl binary")
+    if r.returncode != 0:
+        die(f"openssl {args[0]} failed: {r.stderr.decode(errors='replace').strip()}")
+    return r.stdout
+
+
+def _b64url(raw):
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+def _public_jwk(private_pem_path):
+    """The public half of a P-256 key as a JWK, from its SubjectPublicKeyInfo DER:
+    the last 65 bytes are the uncompressed point 04 || X || Y."""
+    der = _openssl("ec", "-in", str(private_pem_path), "-pubout", "-outform", "DER")
+    point = der[-65:]
+    if len(der) < 65 or point[0] != 4:
+        die(f"{private_pem_path} is not a P-256 key")
+    return {"kty": "EC", "crv": "P-256", "x": _b64url(point[1:33]), "y": _b64url(point[33:65])}
+
+
+def _der_to_raw(sig):
+    """An ECDSA signature from DER (SEQUENCE of two INTEGERs) to the JWS form,
+    r || s as two 32-byte big-endian integers."""
+    if len(sig) < 8 or sig[0] != 0x30 or sig[2] != 0x02:
+        die("openssl produced an unexpected signature encoding")
+    r_len = sig[3]
+    r = sig[4:4 + r_len]
+    if sig[4 + r_len] != 0x02:
+        die("openssl produced an unexpected signature encoding")
+    s_len = sig[5 + r_len]
+    s_ = sig[6 + r_len:6 + r_len + s_len]
+    return r.lstrip(b"\0").rjust(32, b"\0") + s_.lstrip(b"\0").rjust(32, b"\0")
+
+
+def _sign_es256(private_pem_path, header, claims):
+    signing_input = f"{_b64url(json.dumps(header, separators=(',', ':')).encode())}." \
+                    f"{_b64url(json.dumps(claims, separators=(',', ':')).encode())}"
+    der = _openssl("dgst", "-sha256", "-sign", str(private_pem_path), stdin=signing_input.encode())
+    return f"{signing_input}.{_b64url(_der_to_raw(der))}"
+
+
+def _limits_args(p):
+    """The limits every token signed with the key must satisfy (FOG_V2_API.md §2)."""
+    p.add_argument("--purpose", choices=("tokens", "manifest"), default="tokens")
+    p.add_argument("--grants", default="keys,run,jobs",
+                   help="grant kinds the key may sign (comma-separated) [keys,run,jobs]")
+    p.add_argument("--versions", help="program versions the key may name (comma-separated) [any]")
+    p.add_argument("--max-lifetime", type=int, default=900, help="seconds a token may live [900]")
+    p.add_argument("--max-jobs", type=int, default=1, help="jobs per token [1]")
+    p.add_argument("--max-keysets", type=int, default=1, help="keysets per identity [1]")
+
+
+def _register(args, public_jwk):
+    body = {"purpose": args.purpose, "label": args.label, "public_jwk": public_jwk}
+    if args.purpose == "tokens":
+        body["limits"] = {
+            "grant_kinds": [g for g in args.grants.split(",") if g],
+            "versions": [v for v in args.versions.split(",") if v] if args.versions else None,
+            "max_lifetime_seconds": args.max_lifetime,
+            "max_jobs_per_token": args.max_jobs,
+            "max_keysets_per_identity": args.max_keysets,
+        }
+    status, key = request("POST", f"{_api()}/v2/signing-keys", token=_require_token(), json_body=body)
+    if status != 201:
+        die(f"POST /v2/signing-keys returned HTTP {status}: {_detail(key)}")
+    return key
+
+
+def _save_key(key, private_pem=None):
+    """<keys>/<kid>.json is the registration (the organization is the tokens'
+    `iss`); <kid>.pem the private half, 0600, only for keys made here."""
+    d = _keys_dir()
+    d.mkdir(mode=0o700, parents=True, exist_ok=True)
+    (d / f"{key['kid']}.json").write_text(json.dumps(key, indent=2) + "\n")
+    if private_pem is not None:
+        path = d / f"{key['kid']}.pem"
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            f.write(private_pem)
+        os.chmod(path, 0o600)
+
+
+def cmd_keys(rest):
+    p = argparse.ArgumentParser(prog="fog keys", description="The organization's signing keys (Fog V2).")
+    sub = p.add_subparsers(dest="op", required=True)
+    c = sub.add_parser("create", help="generate a P-256 key pair and register the public half")
+    c.add_argument("-l", "--label", default=f"fog@{socket.gethostname()}"[:64])
+    _limits_args(c)
+    r = sub.add_parser("register", help="register an existing public key (PEM or JWK file)")
+    r.add_argument("public_key", help="a PEM public key, or a JWK as JSON")
+    r.add_argument("-l", "--label", default=f"fog@{socket.gethostname()}"[:64])
+    _limits_args(r)
+    sub.add_parser("list", help="the organization's keys, revoked ones included")
+    v = sub.add_parser("revoke", help="revoke a key: every token it signed is refused at once")
+    v.add_argument("kid")
+    args = p.parse_args(rest)
+
+    if args.op == "create":
+        d = _keys_dir()
+        d.mkdir(mode=0o700, parents=True, exist_ok=True)
+        # PKCS#8, which every signer loads (jose's importPKCS8 refuses SEC1).
+        pem = _openssl("pkcs8", "-topk8", "-nocrypt",
+                       stdin=_openssl("ecparam", "-name", "prime256v1", "-genkey", "-noout"))
+        tmp = d / f".new-{uuid.uuid4().hex}.pem"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            f.write(pem)
+        try:
+            key = _register(args, _public_jwk(tmp))
+        finally:
+            tmp.unlink()
+        _save_key(key, pem)
+        print(f"[fog] registered {args.purpose} key '{key['label']}' for {key['organization']};"
+              f" private half in {_keys_dir() / (key['kid'] + '.pem')}", file=sys.stderr)
+        print(key["kid"])
+    elif args.op == "register":
+        text = Path(args.public_key).read_text()
+        if text.lstrip().startswith("{"):
+            jwk = json.loads(text)
+        else:
+            der = _openssl("pkey", "-pubin", "-in", args.public_key, "-outform", "DER")
+            point = der[-65:]
+            if len(der) < 65 or point[0] != 4:
+                die(f"{args.public_key} is not a P-256 public key")
+            jwk = {"kty": "EC", "crv": "P-256", "x": _b64url(point[1:33]), "y": _b64url(point[33:65])}
+        key = _register(args, jwk)
+        _save_key(key)
+        print(f"[fog] registered {args.purpose} key '{key['label']}' for {key['organization']}", file=sys.stderr)
+        print(key["kid"])
+    elif args.op == "list":
+        status, keys = request("GET", f"{_api()}/v2/signing-keys", token=_require_token())
+        if status != 200 or not isinstance(keys, list):
+            die(f"GET /v2/signing-keys returned HTTP {status}: {_detail(keys)}")
+        print(f"{'KID':<38}{'PURPOSE':<10}{'LABEL':<26}{'CREATED':<22}REVOKED")
+        for k in keys:
+            print(f"{k['kid']:<38}{k['purpose']:<10}{k.get('label') or '-':<26}"
+                  f"{(k.get('created_at') or '')[:19]:<22}{(k.get('revoked_at') or '')[:19]}")
+    elif args.op == "revoke":
+        status, key = request("POST", f"{_api()}/v2/signing-keys/{args.kid}/revoke", token=_require_token())
+        if status != 200:
+            die(f"revoke returned HTTP {status}: {_detail(key)}")
+        print(f"[fog] revoked {args.kid} ({key.get('revoked_at')})", file=sys.stderr)
+
+
+def _signing_key(kid):
+    """(kid, registration, private pem path) for `kid`, or the one key held here."""
+    d = _keys_dir()
+    held = sorted(x.stem for x in d.glob("*.pem")) if d.is_dir() else []
+    if kid is None:
+        if len(held) != 1:
+            die("--kid is required" if held else "no signing key here: run `fog keys create`")
+        kid = held[0]
+    pem = d / f"{kid}.pem"
+    if not pem.is_file():
+        die(f"no private key for {kid} in {d} (keys made elsewhere sign elsewhere)")
+    return kid, json.loads((d / f"{kid}.json").read_text()), pem
+
+
+def cmd_token(rest):
+    p = argparse.ArgumentParser(prog="fog token", description="Sign a Fog V2 access token (development and tests).")
+    sub = p.add_subparsers(dest="op", required=True)
+    s_ = sub.add_parser("sign")
+    s_.add_argument("--identity", required=True, help="the end user, an opaque label (sub)")
+    s_.add_argument("--grant", action="append", choices=("run", "jobs", "keys"), required=True,
+                    help="repeatable: run, jobs, keys")
+    s_.add_argument("--versions", help="program versions for run/keys grants (comma-separated)")
+    s_.add_argument("--max-jobs", type=int, default=1)
+    s_.add_argument("--ttl", type=int, default=900, help="seconds until expiry [900]")
+    s_.add_argument("--kid", help="the signing key [the one key in ~/.fog/keys]")
+    s_.add_argument("--aud", default=os.environ.get("FOG_TOKEN_AUDIENCE", "fog"),
+                    help="the deployment's audience [fog]")
+    args = p.parse_args(rest)
+
+    kid, key, pem = _signing_key(args.kid)
+    versions = [v for v in (args.versions or "").split(",") if v]
+    grants = {}
+    for g in args.grant:
+        if g in ("run", "keys") and not versions:
+            die(f"--versions is required for a {g} grant")
+        grants[g] = ({"versions": versions, "max_jobs": args.max_jobs} if g == "run"
+                     else {"versions": versions} if g == "keys"
+                     else {"read": True, "logs": True, "cancel": True})
+    now = int(time.time())
+    claims = {"iss": key["organization"], "aud": args.aud, "sub": args.identity, "jti": str(uuid.uuid4()),
+              "iat": now, "exp": now + args.ttl, "grants": grants}
+    print(_sign_es256(pem, {"alg": "ES256", "kid": kid, "typ": "JWT"}, claims))
+
+
 # ---- init -------------------------------------------------------------------
 def cmd_init(rest):
     p = argparse.ArgumentParser(prog="fog init",
@@ -454,6 +666,8 @@ COMMANDS = {
     "list": cmd_list,
     "get": cmd_get,
     "cancel": cmd_cancel,
+    "keys": cmd_keys,
+    "token": cmd_token,
 }
 
 USAGE = """usage: fog <command> [args]
@@ -466,6 +680,14 @@ USAGE = """usage: fog <command> [args]
   get ID [ID…]            full JSON for specific job(s)
   cancel ID [ID…]         cancel/release specific job(s)
   cancel --pending        cancel every in-flight job
+  keys create [-l LABEL] [--versions v1,v2] [--max-jobs N] [--max-lifetime S]
+                          generate a P-256 signing key, register the public half
+                          (organization admin), keep the private half in ~/.fog/keys
+  keys register FILE      register an existing public key (PEM or JWK)
+  keys list               the organization's signing keys
+  keys revoke KID         revoke one: every token it signed is refused at once
+  token sign --identity ID --grant run --versions v1 [--grant jobs] [--ttl S]
+                          sign an access token for an end user (dev/test signer)
 
 Global options:
   --config-dir DIR        config/credentials directory [default $FOG_HOME or ~/.fog]
@@ -542,6 +764,37 @@ def selftest():
             assert (Path(d) / "credentials").exists()
         finally:
             _CONFIG_DIR = None
+    # Fog V2 signer: a key pair from openssl, a JWS the fog's verifier accepts
+    # (ES256, raw r||s), and a public JWK of the right shape.
+    with tempfile.TemporaryDirectory() as d:
+        pem = Path(d) / "k.pem"
+        pem.write_bytes(_openssl("pkcs8", "-topk8", "-nocrypt",
+                                 stdin=_openssl("ecparam", "-name", "prime256v1", "-genkey", "-noout")))
+        jwk = _public_jwk(pem)
+        assert (jwk["kty"], jwk["crv"]) == ("EC", "P-256") and len(jwk["x"]) == len(jwk["y"]) == 43, jwk
+        token = _sign_es256(pem, {"alg": "ES256", "kid": "k1"}, {"sub": "u", "grants": {}})
+        h, c, sig = token.split(".")
+        pad = lambda x: x + "=" * (-len(x) % 4)
+        assert json.loads(base64.urlsafe_b64decode(pad(h))) == {"alg": "ES256", "kid": "k1"}
+        assert json.loads(base64.urlsafe_b64decode(pad(c)))["sub"] == "u"
+        assert len(base64.urlsafe_b64decode(pad(sig))) == 64, "ES256 signature is r||s, 64 bytes"
+        # The raw signature verifies with openssl once re-encoded as DER.
+        raw = base64.urlsafe_b64decode(pad(sig))
+        def der_int(b):
+            b = b.lstrip(b"\0") or b"\0"
+            if b[0] & 0x80:
+                b = b"\0" + b
+            return b"\x02" + bytes([len(b)]) + b
+        body = der_int(raw[:32]) + der_int(raw[32:])
+        der = b"\x30" + bytes([len(body)]) + body
+        pub, sigf = Path(d) / "pub.pem", Path(d) / "sig.der"
+        pub.write_bytes(_openssl("ec", "-in", str(pem), "-pubout"))
+        sigf.write_bytes(der)
+        out = _openssl("dgst", "-sha256", "-verify", str(pub), "-signature", str(sigf),
+                       stdin=f"{h}.{c}".encode())
+        assert out.strip() == b"Verified OK", out
+        # a DER r with a leading zero (high bit set) still packs to 32 bytes
+        assert len(_der_to_raw(der)) == 64
     print("[fog] selftest OK")
 
 
