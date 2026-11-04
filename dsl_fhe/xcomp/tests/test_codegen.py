@@ -1123,20 +1123,6 @@ def test_fideslib_backend_openfhe_default_unchanged():
     assert "cc->EvalChebyshevFunction(" in files["compute.cpp"]
 
 
-if __name__ == "__main__":
-    tests = [v for k, v in globals().items() if k.startswith("test_")]
-    passed = 0
-    failed = 0
-    for t in tests:
-        try:
-            t()
-            print(f"  PASS  {t.__name__}")
-            passed += 1
-        except Exception as e:
-            print(f"  FAIL  {t.__name__}: {e}")
-            failed += 1
-    print(f"\n{passed} passed, {failed} failed")
-    sys.exit(1 if failed else 0)
 
 
 # ── linear_transform: the baby-step giant-step diagonal product ──────────────
@@ -1177,10 +1163,12 @@ def test_linear_transform_fideslib_uses_the_fused_transform():
     assert "size_t chunk = std::max<size_t>(1, giants) * bstep;" in header
     # haze has no fused transform: the loop, the same result
     assert "fideslib::BackendFromEnv() == fideslib::Backend::HAZE" in header
-    # the only environment read: NB_LT_MEMORY_GB, a run-time override of the
+    # the only environment reads: NB_DT_RECIPES (where the products' recipes
+    # go, off by default; NB_LT_RECIPES is its earlier name) and
+    # NB_LT_MEMORY_GB, a run-time override of the
     # chunk budget (the mode itself is static: its rotation keys are keygen's)
     import re
-    assert re.findall(r'getenv\("([A-Z_]+)"\)', header) == ["NB_LT_MEMORY_GB"]
+    assert re.findall(r'getenv\("([A-Z_]+)"\)', header) == ["NB_DT_RECIPES", "NB_LT_RECIPES", "NB_LT_MEMORY_GB"]
     # diagonals at the level the products happen at
     assert "ct->GetLevel() + (ct->GetNoiseScaleDeg() == 2 ? 1 : 0)" in header
     assert "cc->MakeCKKSPackedPlaintextDeviceMany(d, 1, level, ct->GetSlots())" in header
@@ -1535,3 +1523,65 @@ def test_fideslib_outputs_leave_the_device_when_queued():
     assert "ExportCiphertext(c)" in queue
     flush = hdr.split("inline void flush_outputs")[1]
     assert "if (!p.host)" in flush
+
+
+# ── bsgs_diagonals: linear_transform's diagonals, and their recipes ─────────
+
+BSGS_SRC = LT_SRC.replace(
+    "    let d = vec_zeros<vec<f64>>(4)\n"
+    "    for k in 0..4 {\n"
+    "        d[k] = vec_zeros<f64>(8)\n"
+    "        d[k][k] = 1.0\n"
+    "    }\n",
+    "    let w = mat_zeros(2, 2)\n"
+    "    let d = bsgs_diagonals(w, 0, 0, 2, 2, 1, 4, 8, 0, 1, 0.5)\n")
+
+
+def test_bsgs_diagonals_call():
+    for files in (compile_str(BSGS_SRC), compile_fideslib(BSGS_SRC)):
+        assert "nb_bsgs_diagonals(w, 0, 0, 2, 2, 1, 4, 8, 0, 1, 0.5)" in files["compute.cpp"]
+        header = files["nb_shared.h"]
+        assert "inline std::vector<std::vector<double>> nb_bsgs_diagonals(" in header
+        # load_matrix's reader names the matrices it reads
+        assert "nb_recipe::note_source(fname, record_dim, result);" in header
+
+
+def test_bsgs_diagonals_arity():
+    import xcomp.codegen as cg
+    try:
+        compile_str(BSGS_SRC.replace(", 0.5)", ")"))
+        assert False, "ten arguments must be rejected"
+    except cg.CodegenError as e:
+        assert "eleven arguments" in str(e)
+
+
+def test_linear_transform_reports_recipes():
+    # every encode path hands each diagonal to nb_recipe, and every product
+    # writes its manifest line
+    for files in (compile_str(LT_SRC), compile_fideslib(LT_SRC),
+                  compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: chained\n"))):
+        header = files["nb_shared.h"]
+        assert "const nb_recipe::Diagonals* rc = nb_recipe::find(d);" in header
+        assert "nb_recipe::encoded(rc, g * bstep + b," in header
+        assert "nb_recipe::emit(" in header
+    fused = compile_fideslib(LT_SRC)["nb_shared.h"]
+    assert "nb_recipe::encoded(rc, k0 + i, level, ct->GetSlots(), &pts[i], part[i]);" in fused
+    assert "nb_recipe::encoded(rcs[s], k0 + i, level" in fused
+    chained = compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: chained\n"))["nb_shared.h"]
+    assert "nb_recipe::encoded(rc, g * bstep + b0 + b, baby[0]->GetLevel(), baby[0]->GetSlots(), &pts[b], batch[b]);" in chained
+
+
+if __name__ == "__main__":
+    tests = [v for k, v in globals().items() if k.startswith("test_")]
+    passed = 0
+    failed = 0
+    for t in tests:
+        try:
+            t()
+            print(f"  PASS  {t.__name__}")
+            passed += 1
+        except Exception as e:
+            print(f"  FAIL  {t.__name__}: {e}")
+            failed += 1
+    print(f"\n{passed} passed, {failed} failed")
+    sys.exit(1 if failed else 0)

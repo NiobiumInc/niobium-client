@@ -317,7 +317,7 @@ def test_unnamed_root_generates_exactly_as_before():
            "    let ct: enc<f64> = zero()\n    return EncOut { ciphertext: ct }\n}\n")
     d, p = _tree(**{"a.niob": src})
     _, _, files = _compile([p["a.niob"]])
-    assert "namespace " not in files["nb_shared.h"].replace("namespace fs", "").replace("namespace nb_plain", "").replace("namespace lbcrypto", "")
+    assert "namespace " not in files["nb_shared.h"].replace("namespace fs", "").replace("namespace nb_plain", "").replace("namespace nb_recipe", "").replace("namespace lbcrypto", "")
     assert "auto inst = instance(size);" in files["enc_stage.cpp"]
 
 

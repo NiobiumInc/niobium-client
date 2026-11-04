@@ -71,6 +71,10 @@ BUILTINS: list[Builtin] = [
     # form takes several diagonal sets against one ciphertext.
     Builtin("linear_transform", "enc", depth_opaque=True),
     Builtin("linear_transforms", "unknown", enc_hint=True, depth_opaque=True),
+    # The diagonals linear_transform takes, of a square submatrix,
+    # replicated over equal regions of a slot vector; the generated code can
+    # report them as a recipe instead of their values (NB_DT_RECIPES).
+    Builtin("bsgs_diagonals", "plain"),
     Builtin("slot_sum", "enc"),
     Builtin("total_sums", "enc"),
     Builtin("running_sums", "void", depth_opaque=True),

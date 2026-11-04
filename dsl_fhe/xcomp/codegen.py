@@ -130,6 +130,187 @@ class CodegenError(Exception):
     semantic error in the .niob source, which analyze() reports)."""
 
 
+RECIPE_HELPERS = r"""
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <deque>
+#include <mutex>
+#include <type_traits>
+#include <unordered_map>
+// nb_recipe: what a data transform's diagonals are made of (dsl_fhe/docs/RUN_METADATA.md).
+// bsgs_diagonals notes its arguments against the set it returns, and
+// load_matrix notes each matrix it reads by a digest of its values, so that a
+// set built from a loaded matrix names the file and the offsets it reads,
+// whatever copies the matrix went through on the way. A set built any other
+// way, or changed after bsgs_diagonals returned it, has no recipe.
+// Off unless NB_DT_RECIPES names a file, to which every product appends one
+// JSON line (schema nb.data_transform_recipe: its recipe, the level and slots
+// its diagonals are encoded at), or a hook is installed (nb_recipe::hook(),
+// called at every diagonal encoded).
+namespace nb_recipe {
+struct Source { std::string file; uint64_t rows = 0, cols = 0, digest = 0; };
+struct Diagonals {
+    Source source;                 // file empty: not a loaded matrix
+    uint64_t id = 0;               // the set's number in this process
+    uint32_t row0 = 0, col0 = 0, width = 0, count = 0, bstep = 0;
+    uint32_t region = 0, length = 0, r_lo = 0, r_hi = 0;
+    double scale = 1.0;
+    const void* outer = nullptr;   // identity of the returned set
+    const void* first = nullptr;
+    size_t n = 0;
+    uint64_t values = 0;           // digest of the set's values when it was returned
+};
+// r: the set's recipe (nullptr: none); k: the diagonal; plaintext: the
+// back end's Plaintext object just encoded from values
+using Hook = void (*)(const Diagonals* r, size_t k, uint32_t level, uint32_t slots,
+                      const void* plaintext, const std::vector<double>& values);
+inline Hook& hook() { static Hook h = nullptr; return h; }
+inline FILE* manifest() {
+    static FILE* f = [] {
+        const char* e = std::getenv("NB_DT_RECIPES");
+        if (!e || !*e) e = std::getenv("NB_LT_RECIPES");  // the earlier name, still read
+        return e && *e ? std::fopen(e, "a") : nullptr;
+    }();
+    return f;
+}
+inline bool on() { return manifest() != nullptr || hook() != nullptr; }
+struct Registry {
+    std::mutex mu;
+    std::unordered_map<uint64_t, Source> sources;
+    std::deque<Diagonals> sets;    // a deque: the pointers find() returns stay valid
+    uint64_t next_set = 0, next_product = 0;
+};
+inline Registry& registry() { static Registry& r = *new Registry; return r; }
+// The digest of a matrix's values (dsl_fhe/docs/RUN_METADATA.md, "digest").
+inline uint64_t digest(const std::vector<std::vector<double>>& m) {
+    uint64_t h = 0xcbf29ce484222325ULL ^ m.size();
+    for (const auto& row : m) {
+        h = (h ^ row.size()) * 0x100000001b3ULL;
+        for (double v : row) {
+            uint64_t u;
+            std::memcpy(&u, &v, sizeof u);
+            h = (h ^ u) * 0x100000001b3ULL;
+            h ^= h >> 31;
+        }
+    }
+    return h;
+}
+inline void note_source(const std::filesystem::path& file, size_t cols, const std::vector<std::vector<double>>& m) {
+    if (!on()) return;
+    Source s{file.string(), m.size(), cols, digest(m)};
+    auto& r = registry();
+    std::lock_guard<std::mutex> g(r.mu);
+    r.sources[s.digest] = s;
+}
+inline void note(const std::vector<std::vector<double>>& d, const std::vector<std::vector<double>>& w, Diagonals rc) {
+    if (!on()) return;
+    const uint64_t h = digest(w);
+    rc.values = digest(d);
+    auto& r = registry();
+    std::lock_guard<std::mutex> g(r.mu);
+    auto it = r.sources.find(h);
+    if (it != r.sources.end() && it->second.rows == w.size()) rc.source = it->second;
+    else rc.source = Source{"", w.size(), w.empty() ? 0 : w[0].size(), h};
+    rc.id = r.next_set++;
+    rc.outer = d.data();
+    rc.first = d.empty() ? nullptr : d[0].data();
+    rc.n = d.size();
+    for (auto& e : r.sets)
+        if (e.outer == rc.outer) { e = rc; return; }
+    r.sets.push_back(rc);
+}
+// The recipe of the set d, when d is still the set bsgs_diagonals returned:
+// the same storage and the same values (storage alone is not enough: a set
+// freed and another allocated in its place has the same addresses).
+inline const Diagonals* find(const std::vector<std::vector<double>>& d) {
+    if (!on() || d.empty()) return nullptr;
+    const Diagonals* hit = nullptr;
+    {
+        auto& r = registry();
+        std::lock_guard<std::mutex> g(r.mu);
+        for (auto it = r.sets.rbegin(); it != r.sets.rend(); ++it)
+            if (it->outer == d.data() && it->n == d.size() && it->first == d[0].data()) { hit = &*it; break; }
+    }
+    return hit && hit->values == digest(d) ? hit : nullptr;
+}
+inline void json_string(FILE* f, const std::string& s) {
+    std::fputc('"', f);
+    for (char c : s) {
+        if (c == '"' || c == '\\') std::fputc('\\', f);
+        if (static_cast<unsigned char>(c) < 0x20) { std::fprintf(f, "\\u%04x", c); continue; }
+        std::fputc(c, f);
+    }
+    std::fputc('"', f);
+}
+// one product: its recipe (or null), its diagonal count, the encoding
+inline void emit(const Diagonals* rc, size_t n, uint32_t level, uint32_t slots) {
+    FILE* f = manifest();
+    if (!f) return;
+    if (rc && !std::isfinite(rc->scale)) rc = nullptr;  // not a JSON number: no recipe
+    auto& r = registry();
+    std::lock_guard<std::mutex> g(r.mu);
+    std::fprintf(f, "{\"schema\": \"nb.data_transform_recipe\", \"version\": 1, \"product\": %llu, \"diagonals\": %zu, "
+                    "\"level\": %u, \"slots\": %u, \"noise_scale_deg\": 1, \"recipe\": ",
+                 static_cast<unsigned long long>(r.next_product++), n, level, slots);
+    if (!rc) {
+        std::fprintf(f, "null}\n");
+    } else {
+        std::fprintf(f, "{\"kind\": \"bsgs_diagonals\", \"set\": %llu, \"file\": ", static_cast<unsigned long long>(rc->id));
+        if (rc->source.file.empty()) std::fprintf(f, "null"); else json_string(f, rc->source.file);
+        std::fprintf(f, ", \"rows\": %llu, \"cols\": %llu, \"digest\": \"%016llx\", \"row0\": %u, \"col0\": %u, \"width\": %u, "
+                        "\"count\": %u, \"bstep\": %u, \"region\": %u, \"length\": %u, \"r_lo\": %u, \"r_hi\": %u, \"scale\": %.17g}}\n",
+                     static_cast<unsigned long long>(rc->source.rows), static_cast<unsigned long long>(rc->source.cols),
+                     static_cast<unsigned long long>(rc->source.digest), rc->row0, rc->col0, rc->width, rc->count, rc->bstep,
+                     rc->region, rc->length, rc->r_lo, rc->r_hi, rc->scale);
+    }
+    std::fflush(f);
+}
+inline void encoded(const Diagonals* rc, size_t k, uint32_t level, uint32_t slots, const void* pt,
+                    const std::vector<double>& values) {
+    if (Hook h = hook()) h(rc, k, level, slots, pt, values);
+}
+}  // namespace nb_recipe
+// bsgs_diagonals(w, row0, col0, width, count, bstep, region, length, r_lo, r_hi, s):
+// the diagonals of the width x width submatrix of w at (row0, col0) that
+// linear_transform takes with this bstep. Diagonal k (k < count) is a vector of
+// `length` slots; in each region r of r_lo .. r_hi, its slots
+// r * region + shift + i (i < width, shift = bstep * (k / bstep), the
+// counter-rotation of k's giant step) hold w[row0 + (i + k) % width][col0 + i] * s,
+// and every other slot holds 0 * s.
+inline std::vector<std::vector<double>> nb_bsgs_diagonals(const std::vector<std::vector<double>>& w, uint32_t row0,
+                                                          uint32_t col0, uint32_t width, uint32_t count, uint32_t bstep,
+                                                          uint32_t region, uint32_t length, uint32_t r_lo, uint32_t r_hi,
+                                                          double s) {
+    if (bstep == 0) throw std::runtime_error("bsgs_diagonals: bstep must be positive");
+    if (width > 0 && count > 0 && r_lo <= r_hi) {
+        if (uint64_t(row0) + width > w.size())
+            throw std::runtime_error("bsgs_diagonals: rows row0 .. row0 + width - 1 are not all in the matrix");
+        for (uint32_t i = 0; i < width; ++i)
+            if (uint64_t(col0) + width > w[row0 + i].size())
+                throw std::runtime_error("bsgs_diagonals: columns col0 .. col0 + width - 1 are not all in the matrix");
+        if (uint64_t(r_hi) * region + uint64_t(count - 1) / bstep * bstep + width > length)
+            throw std::runtime_error("bsgs_diagonals: region r_hi's last slot is past length");
+    }
+    std::vector<std::vector<double>> d(count);
+    for (uint32_t k = 0; k < count; ++k) {
+        const uint32_t shift = k / bstep * bstep;
+        std::vector<double>& m = d[k];
+        m.assign(length, 0.0 * s);
+        for (uint64_t r = r_lo; r <= r_hi; ++r)
+            for (uint32_t i = 0; i < width; ++i)
+                m[r * region + shift + i] = w[row0 + (i + k) % width][col0 + i] * s;
+    }
+    nb_recipe::Diagonals rc;
+    rc.row0 = row0; rc.col0 = col0; rc.width = width; rc.count = count; rc.bstep = bstep;
+    rc.region = region; rc.length = length; rc.r_lo = r_lo; rc.r_hi = r_hi; rc.scale = s;
+    nb_recipe::note(d, w, rc);
+    return d;
+}
+"""
+
+
 class CodeGenerator:
     """Generates OpenFHE C++ from a checked nb AST."""
 
@@ -1158,6 +1339,9 @@ endforeach()
         self.wl("                            const std::vector<std::vector<double>>& d, uint32_t bstep) {")
         self.indent()
         self.wl("CT y;")
+        # the set's recipe, when they are recorded (nb_recipe)
+        self.wl("const nb_recipe::Diagonals* rc = nb_recipe::find(d);")
+        self.wl("if (nb_recipe::on() && !baby.empty()) nb_recipe::emit(rc, d.size(), baby[0]->GetLevel(), baby[0]->GetSlots());")
         if chained:
             self.wl("std::vector<CT> parts;")
         self.wl("for (size_t g = 0; g * bstep < d.size(); ++g) {")
@@ -1166,6 +1350,7 @@ endforeach()
         host_loop = [
             "for (size_t b = 0; b < bstep && g * bstep + b < d.size(); ++b) {",
             "    auto pt = cc->MakeCKKSPackedPlaintext(d[g * bstep + b], 1, baby[b]->GetLevel(), nullptr, baby[b]->GetSlots());",
+            "    nb_recipe::encoded(rc, g * bstep + b, baby[b]->GetLevel(), baby[b]->GetSlots(), &pt, d[g * bstep + b]);",
             "    auto term = cc->EvalMult(baby[b], pt);",
             "    part = part ? cc->EvalAdd(part, term) : term;",
             "}",
@@ -1196,6 +1381,7 @@ endforeach()
             self.wl("const size_t m = std::min(nb, n - b0);")
             self.wl("std::vector<std::vector<double>> batch(d.begin() + g * bstep + b0, d.begin() + g * bstep + b0 + m);")
             self.wl("auto pts = cc->MakeCKKSPackedPlaintextDeviceMany(batch, 1, baby[0]->GetLevel(), baby[0]->GetSlots());")
+            self.wl("for (size_t b = 0; b < m; ++b) nb_recipe::encoded(rc, g * bstep + b0 + b, baby[0]->GetLevel(), baby[0]->GetSlots(), &pts[b], batch[b]);")
             self.wl("for (size_t b = 0; b < m; ++b) {")
             self.indent()
             self.wl("auto term = cc->EvalMult(baby[b0 + b], pts[b]);")
@@ -1313,10 +1499,14 @@ endforeach()
         self.wl("    if (fideslib::BackendFromEnv() == fideslib::Backend::HAZE || d.empty())")
         self.wl("        return nb_linear_transform_loop(cc, ct, d, bstep);")
         self.wl("    const size_t chunk = nb_lt_chunk(cc, ct, 1, d.size(), bstep);")
+        self.wl("    const nb_recipe::Diagonals* rc = nb_recipe::find(d);")
+        self.wl("    const uint32_t level = ct->GetLevel() + (ct->GetNoiseScaleDeg() == 2 ? 1 : 0);")
+        self.wl("    if (nb_recipe::on()) nb_recipe::emit(rc, d.size(), level, ct->GetSlots());")
         self.wl("    Ciphertext<DCRTPoly> y;")
         self.wl("    for (size_t k0 = 0; k0 < d.size(); k0 += chunk) {")
         self.wl("        auto part = nb_lt_slice(d, k0, chunk);")
         self.wl("        auto pts = nb_lt_encode(cc, ct, part);")
+        self.wl("        for (size_t i = 0; i < pts.size(); ++i) nb_recipe::encoded(rc, k0 + i, level, ct->GetSlots(), &pts[i], part[i]);")
         self.wl("        auto r = ct->Clone();")
         self.wl("        cc->LinearTransformInPlace(r, static_cast<int>(part.size()), static_cast<int>(bstep), pts, 1, static_cast<int>(k0));")
         self.wl("        y = y ? cc->EvalAdd(y, r) : r;")
@@ -1330,11 +1520,17 @@ endforeach()
         self.wl("    if (fideslib::BackendFromEnv() == fideslib::Backend::HAZE || !same)")
         self.wl("        return nb_linear_transforms_loop(cc, ct, sets, bstep);")
         self.wl("    const size_t n = sets[0].size(), chunk = nb_lt_chunk(cc, ct, sets.size(), n, bstep);")
+        self.wl("    const uint32_t level = ct->GetLevel() + (ct->GetNoiseScaleDeg() == 2 ? 1 : 0);")
+        self.wl("    std::vector<const nb_recipe::Diagonals*> rcs;")
+        self.wl("    for (auto& d : sets) { rcs.push_back(nb_recipe::find(d)); if (nb_recipe::on()) nb_recipe::emit(rcs.back(), d.size(), level, ct->GetSlots()); }")
         self.wl("    std::vector<Ciphertext<DCRTPoly>> ys(sets.size());")
         self.wl("    for (size_t k0 = 0; k0 < n; k0 += chunk) {")
         self.wl("        std::vector<std::vector<Plaintext>> pts;")
         self.wl("        size_t len = 0;")
-        self.wl("        for (auto& d : sets) { auto part = nb_lt_slice(d, k0, chunk); len = part.size(); pts.push_back(nb_lt_encode(cc, ct, part)); }")
+        self.wl("        for (size_t s = 0; s < sets.size(); ++s) {")
+        self.wl("            auto part = nb_lt_slice(sets[s], k0, chunk); len = part.size(); pts.push_back(nb_lt_encode(cc, ct, part));")
+        self.wl("            for (size_t i = 0; i < pts.back().size(); ++i) nb_recipe::encoded(rcs[s], k0 + i, level, ct->GetSlots(), &pts.back()[i], part[i]);")
+        self.wl("        }")
         self.wl("        auto rs = cc->LinearTransformMany(ct, static_cast<int>(len), static_cast<int>(bstep), pts, 1, static_cast<int>(k0));")
         self.wl("        for (size_t t = 0; t < rs.size(); ++t) ys[t] = ys[t] ? cc->EvalAdd(ys[t], rs[t]) : rs[t];")
         self.wl("    }")
@@ -1344,6 +1540,10 @@ endforeach()
 
     def _gen_utility_templates(self):
         """Generate utility template functions in the shared header."""
+        # bsgs_diagonals and the recipes of linear_transform's diagonals
+        for line in RECIPE_HELPERS.strip("\n").split("\n"):
+            self.wl(line)
+        self.blank()
         # read2vecs - binary file reader
         self.wl("// Utility: read a binary file into a vector of vectors")
         self.wl("template<typename T>")
@@ -1362,6 +1562,7 @@ endforeach()
         self.wl("file.read(reinterpret_cast<char*>(r.data()), record_dim * sizeof(T));")
         self.dedent()
         self.wl("}")
+        self.wl("if constexpr (std::is_same_v<T, double>) nb_recipe::note_source(fname, record_dim, result);")
         self.wl("return result;")
         self.dedent()
         self.wl("}")
@@ -4011,6 +4212,12 @@ endforeach()
                 return f"batch_rows({', '.join(args)})"
             if fname == "tile":
                 return f"tile({', '.join(args)})"
+            if fname == "bsgs_diagonals":
+                if len(args) != 11:
+                    raise CodegenError(
+                        "bsgs_diagonals(w, row0, col0, width, count, bstep, region, length, r_lo, r_hi, s) "
+                        f"takes eleven arguments, got {len(args)}")
+                return f"nb_bsgs_diagonals({', '.join(args)})"
             if fname == "str":
                 return f"std::to_string({args[0]})"
             if fname == "prepend_column":
