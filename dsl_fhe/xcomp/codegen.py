@@ -271,6 +271,50 @@ inline void encoded(const Diagonals* rc, size_t k, uint32_t level, uint32_t slot
                     const std::vector<double>& values) {
     if (Hook h = hook()) h(rc, k, level, slots, pt, values);
 }
+// Every other plaintext a ciphertext-vector operation encodes (ct + v, ct - v, ct * v):
+// the back end's Plaintext object just encoded from `values`, with noise scale
+// degree 1. Numbered in the order they are encoded, from 0: the n-th is the
+// plaintext vector "pv:<n>". With NB_PLAINTEXT_VECTORS=<dir>, its values go to
+// <dir>/pv_<n>.f64 (raw float64, little-endian, no header) and one JSON line to
+// <dir>/vectors.jsonl (schema nb.plaintext_vector), so that a run can encode it
+// again exactly as the program did; a hook (nb_recipe::plain_hook()) sees each.
+using PlainHook = void (*)(const void* plaintext, const std::vector<double>& values);
+inline PlainHook& plain_hook() { static PlainHook h = nullptr; return h; }
+inline const char* vectors_dir() {
+    static const char* d = [] { const char* e = std::getenv("NB_PLAINTEXT_VECTORS"); return e && *e ? e : nullptr; }();
+    return d;
+}
+struct Vectors {
+    std::mutex mu;
+    uint64_t next = 0;
+    FILE* index = nullptr;
+};
+inline Vectors& vectors() { static Vectors& v = *new Vectors; return v; }
+inline void write_vector(const char* dir, uint32_t level, uint32_t slots, const std::vector<double>& values) {
+    static_assert(sizeof(double) == 8, "pv_<n>.f64 holds float64 values");
+    auto& v = vectors();
+    std::lock_guard<std::mutex> g(v.mu);
+    const uint64_t n = v.next++;
+    if (!v.index) {
+        std::filesystem::create_directories(dir);
+        v.index = std::fopen((std::filesystem::path(dir) / "vectors.jsonl").c_str(), "a");
+        if (!v.index) throw std::runtime_error(std::string("nb_recipe: cannot append to ") + dir + "/vectors.jsonl");
+    }
+    const auto file = std::filesystem::path(dir) / ("pv_" + std::to_string(n) + ".f64");
+    FILE* f = std::fopen(file.c_str(), "wb");
+    if (!f || std::fwrite(values.data(), sizeof(double), values.size(), f) != values.size() || std::fclose(f) != 0)
+        throw std::runtime_error("nb_recipe: cannot write " + file.string());
+    std::fprintf(v.index, "{\"schema\": \"nb.plaintext_vector\", \"version\": 1, \"tag\": \"pv:%llu\", \"length\": %zu, "
+                          "\"level\": %u, \"slots\": %u, \"noise_scale_deg\": 1}\n",
+                 static_cast<unsigned long long>(n), values.size(), level, slots);
+    std::fflush(v.index);
+}
+template <typename P>
+inline void plaintext(const P* pt, const std::vector<double>& values) {
+    if (const char* dir = vectors_dir())
+        write_vector(dir, static_cast<uint32_t>((*pt)->GetLevel()), static_cast<uint32_t>((*pt)->GetSlots()), values);
+    if (PlainHook h = plain_hook()) h(pt, values);
+}
 }  // namespace nb_recipe
 // bsgs_diagonals(w, row0, col0, width, count, bstep, region, length, r_lo, r_hi, s):
 // the diagonals of the width x width submatrix of w at (row0, col0) that
@@ -977,7 +1021,20 @@ inline void queue_output(const std::string& path, const Cipher& ct) {
         throw std::runtime_error("nb_fideslib: writing a null ciphertext to " + path);
     }
     Cipher c = ct;
+#ifdef FIDESLIB_HAS_INPUT_TAGS
+    // the file names the value as a program output: a recording back end writes
+    // the name next to the output when it is marked, so that a runtime can hand
+    // the value to the program that reads the file. c shares the caller's
+    // ciphertext, which may also be a program input (read from a file and
+    // saved unchanged) or be saved to more than one file: its own tag is put
+    // back once the output is marked.
+    const std::string own_tag = c->tag;
+    c->tag = path;
+#endif
     context()->MarkOutput(c);
+#ifdef FIDESLIB_HAS_INPUT_TAGS
+    c->tag = own_tag;
+#endif
     if (fideslib::BackendFromEnv() == fideslib::Backend::HAZE) {
         pending_outputs().push_back({path, c, nullptr});
         return;
@@ -1032,6 +1089,11 @@ inline bool DeserializeFromFile(const std::string& filename, nb_fideslib::Cipher
         return false;
     }
     ct = fideslib::ImportCiphertext(nb_fideslib::context(), host);
+#ifdef FIDESLIB_HAS_INPUT_TAGS
+    // the file names the value as a program input: a recording back end
+    // writes the name next to the input, so that a runtime can bind it again
+    ct->tag = filename;
+#endif
     return true;
 }
 
@@ -3813,7 +3875,7 @@ endforeach()
                 vec_right = not right_enc and self._is_vector_expr(expr.right)
                 if vec_left or vec_right:
                     ct, vec = (right, left) if vec_left else (left, right)
-                    pt = (f"cc->MakeCKKSPackedPlaintext({vec}, 1, _ct->GetLevel(), "
+                    pt = (f"cc->MakeCKKSPackedPlaintext(_v, 1, _ct->GetLevel(), "
                           f"nullptr, _ct->GetSlots())")
                     if expr.op == "+":
                         call = f"cc->{FHE_ADD}(_ct, _pt)"
@@ -3822,7 +3884,9 @@ endforeach()
                                 else f"cc->{FHE_SUB}(_ct, _pt)")
                     else:
                         call = f"cc->{FHE_MUL}(_ct, _pt)"
-                    return f"[&]() {{ auto _ct = {ct}; auto _pt = {pt}; return {call}; }}()"
+                    # nb_recipe::plaintext: the hook sees every such plaintext
+                    return (f"[&]() {{ auto _ct = {ct}; const std::vector<double>& _v = {vec}; auto _pt = {pt}; "
+                            f"nb_recipe::plaintext(&_pt, _v); return {call}; }}()")
             l = _maybe_wrap_plaintext(left, left_enc, expr.left)
             r = _maybe_wrap_plaintext(right, right_enc, expr.right)
             # OpenFHE's EvalAdd/EvalSub(ct, Plaintext&) take a NON-const

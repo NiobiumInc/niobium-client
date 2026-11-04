@@ -272,8 +272,9 @@ def test_ct_minus_column_slice():
     """)
     impl = files["nb_shared.cpp"]
     # ... and encoded at the ciphertext's level, with the ciphertext bound once.
-    assert ("auto _ct = eqry[0]; auto _pt = cc->MakeCKKSPackedPlaintext(column, 1, "
-            "_ct->GetLevel(), nullptr, _ct->GetSlots()); return cc->EvalSub(_ct, _pt);") in impl
+    assert ("auto _ct = eqry[0]; const std::vector<double>& _v = column; auto _pt = cc->MakeCKKSPackedPlaintext(_v, 1, "
+            "_ct->GetLevel(), nullptr, _ct->GetSlots()); nb_recipe::plaintext(&_pt, _v); "
+            "return cc->EvalSub(_ct, _pt);") in impl
 
 
 def test_enc_flow_beats_name_heuristic():
@@ -910,13 +911,14 @@ def test_ct_plus_user_vector_materializes_plaintext():
     }
     """)
     body = files["nb_shared.cpp"]
-    pt = "cc->MakeCKKSPackedPlaintext(mask(inst), 1, _ct->GetLevel(), nullptr, _ct->GetSlots())"
-    assert (f"auto a = [&]() {{ auto _ct = g(cc, ct); auto _pt = {pt}; "
+    pt = ("const std::vector<double>& _v = mask(inst); auto _pt = cc->MakeCKKSPackedPlaintext(_v, 1, _ct->GetLevel(), nullptr, "
+          "_ct->GetSlots()); nb_recipe::plaintext(&_pt, _v);")
+    assert (f"auto a = [&]() {{ auto _ct = g(cc, ct); {pt} "
             "return cc->EvalAdd(_ct, _pt); }();") in body
-    assert (f"auto b = [&]() {{ auto _ct = g(cc, ct); auto _pt = {pt}; "
+    assert (f"auto b = [&]() {{ auto _ct = g(cc, ct); {pt} "
             "return cc->EvalAdd(_ct, _pt); }();") in body
-    assert ("[&]() { auto _ct = b; auto _pt = cc->MakeCKKSPackedPlaintext(m, 1, _ct->GetLevel(), "
-            "nullptr, _ct->GetSlots()); return cc->EvalMult(_ct, _pt); }()") in body
+    assert ("[&]() { auto _ct = b; const std::vector<double>& _v = m; auto _pt = cc->MakeCKKSPackedPlaintext(_v, 1, _ct->GetLevel(), "
+            "nullptr, _ct->GetSlots()); nb_recipe::plaintext(&_pt, _v); return cc->EvalMult(_ct, _pt); }()") in body
 
 
 
@@ -1164,11 +1166,13 @@ def test_linear_transform_fideslib_uses_the_fused_transform():
     # haze has no fused transform: the loop, the same result
     assert "fideslib::BackendFromEnv() == fideslib::Backend::HAZE" in header
     # the only environment reads: NB_DT_RECIPES (where the products' recipes
-    # go, off by default; NB_LT_RECIPES is its earlier name) and
+    # go, off by default; NB_LT_RECIPES is its earlier name),
+    # NB_PLAINTEXT_VECTORS (where the plaintext vectors go, off by default) and
     # NB_LT_MEMORY_GB, a run-time override of the
     # chunk budget (the mode itself is static: its rotation keys are keygen's)
     import re
-    assert re.findall(r'getenv\("([A-Z_]+)"\)', header) == ["NB_DT_RECIPES", "NB_LT_RECIPES", "NB_LT_MEMORY_GB"]
+    assert re.findall(r'getenv\("([A-Z_]+)"\)', header) == ["NB_DT_RECIPES", "NB_LT_RECIPES", "NB_PLAINTEXT_VECTORS",
+                                                           "NB_LT_MEMORY_GB"]
     # diagonals at the level the products happen at
     assert "ct->GetLevel() + (ct->GetNoiseScaleDeg() == 2 ? 1 : 0)" in header
     assert "cc->MakeCKKSPackedPlaintextDeviceMany(d, 1, level, ct->GetSlots())" in header
@@ -1276,7 +1280,7 @@ def test_vec_parameter_operand_is_encoded():
         shared = files["nb_shared.cpp"]
         body = shared[shared.find("affine("):]
         # the vec<f64> parameter becomes a packed plaintext at the ciphertext's level
-        assert "MakeCKKSPackedPlaintext(m, 1, _ct->GetLevel()" in body, body[:400]
+        assert "const std::vector<double>& _v = m; auto _pt = cc->MakeCKKSPackedPlaintext(_v, 1, _ct->GetLevel()" in body, body[:400]
         assert "EvalMult(x, m)" not in body
 
 
@@ -1569,6 +1573,35 @@ def test_linear_transform_reports_recipes():
     assert "nb_recipe::encoded(rcs[s], k0 + i, level" in fused
     chained = compile_fideslib(_lt_scheme(LT_SRC, "    linear_transform: chained\n"))["nb_shared.h"]
     assert "nb_recipe::encoded(rc, g * bstep + b0 + b, baby[0]->GetLevel(), baby[0]->GetSlots(), &pts[b], batch[b]);" in chained
+
+
+def test_fideslib_loaded_ciphertext_is_tagged_with_its_file():
+    files = compile_fideslib(FIDESLIB_SRC)
+    glue = files["nb_fideslib.h"]
+    assert "#ifdef FIDESLIB_HAS_INPUT_TAGS\n" in glue and "    ct->tag = filename;\n" in glue
+
+
+def test_ciphertext_vector_plaintexts_reach_the_hook():
+    for files in (compile_str(PLAIN_OPERAND_SRC), compile_fideslib(PLAIN_OPERAND_SRC)):
+        assert "nb_recipe::plaintext(&_pt, _v);" in files["nb_shared.cpp"]
+        header = files["nb_shared.h"]
+        assert "inline void plaintext(const P* pt, const std::vector<double>& values)" in header
+        # the sidecar is written only when its directory is named
+        assert 'std::getenv("NB_PLAINTEXT_VECTORS")' in header
+    # a literal is bound as the vector it encodes, not as an initializer_list
+    files = compile_str(PLAIN_OPERAND_SRC.replace("affine(b, [0.5, 0.25])", "b * [0.5, 0.25]"))
+    assert "const std::vector<double>& _v = {0.5, 0.25};" in files["compute.cpp"]
+
+
+def test_fideslib_saved_ciphertext_is_tagged_with_its_file():
+    glue = compile_fideslib(FIDESLIB_SRC)["nb_fideslib.h"]
+    queue = glue.split("inline void queue_output")[1].split("inline void flush_outputs")[0]
+    # the output's tag is the file while it is marked ...
+    assert "    c->tag = path;\n#endif\n    context()->MarkOutput(c);" in queue
+    # ... and the shared ciphertext gets its own tag back: an input saved
+    # unchanged, or a value saved to two files, keeps its own name
+    assert "    const std::string own_tag = c->tag;\n" in queue
+    assert "context()->MarkOutput(c);\n#ifdef FIDESLIB_HAS_INPUT_TAGS\n    c->tag = own_tag;\n#endif" in queue
 
 
 if __name__ == "__main__":
