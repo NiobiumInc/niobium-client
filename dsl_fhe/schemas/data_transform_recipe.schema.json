@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nb:schema:data_transform_recipe:1",
+  "title": "nb.data_transform_recipe, version 1",
+  "description": "One line of the file NB_DT_RECIPES names: one product of a ciphertext by a diagonal set (linear_transform, or one set of linear_transforms), appended when the product runs. See dsl_fhe/docs/RUN_METADATA.md.",
+  "type": "object",
+  "required": [
+    "schema",
+    "version",
+    "product",
+    "diagonals",
+    "level",
+    "slots",
+    "noise_scale_deg",
+    "recipe"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "nb.data_transform_recipe",
+      "description": "The record's schema."
+    },
+    "version": {
+      "const": 1,
+      "description": "The schema's version. A consumer rejects a version it does not know."
+    },
+    "product": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615,
+      "description": "The product's number in this process, from 0, in the order the products run; one more on every line of a run."
+    },
+    "diagonals": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 18446744073709551615,
+      "description": "The number of diagonals in the set (its outer length)."
+    },
+    "level": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295,
+      "description": "The level every diagonal of the product is encoded at (MakeCKKSPackedPlaintext's level argument)."
+    },
+    "slots": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295,
+      "description": "The slot count every diagonal is encoded with."
+    },
+    "noise_scale_deg": {
+      "const": 1,
+      "description": "The noise scale degree every diagonal is encoded with: always 1."
+    },
+    "recipe": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "How the diagonals are built from a matrix, or null: the set was built another way (or changed after bsgs_diagonals returned it), and only its values describe it.",
+      "required": [
+        "kind",
+        "set",
+        "file",
+        "rows",
+        "cols",
+        "digest",
+        "row0",
+        "col0",
+        "width",
+        "count",
+        "bstep",
+        "region",
+        "length",
+        "r_lo",
+        "r_hi",
+        "scale"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "bsgs_diagonals",
+          "description": "The builtin that built the set."
+        },
+        "set": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615,
+          "description": "The set's number in this process, from 0, in the order bsgs_diagonals returned the sets. Products of the same set share it."
+        },
+        "file": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The path load_matrix read the matrix w from, as the program spelled it (relative paths are relative to the run's working directory); null when w is not a loaded matrix, or was changed after it was loaded."
+        },
+        "rows": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615,
+          "description": "The matrix's row count."
+        },
+        "cols": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18446744073709551615,
+          "description": "The matrix's column count (the record length load_matrix was given; the first row's length when w is not a loaded matrix)."
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$",
+          "description": "The 64-bit digest of the matrix's values (dsl_fhe/docs/RUN_METADATA.md, 'Matrix digest'), 16 lowercase hexadecimal digits."
+        },
+        "row0": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "bsgs_diagonals' row0: the submatrix's first row."
+        },
+        "col0": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "bsgs_diagonals' col0: the submatrix's first column."
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "bsgs_diagonals' width: the submatrix is width x width."
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "bsgs_diagonals' count: the number of diagonals built."
+        },
+        "bstep": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295,
+          "description": "bsgs_diagonals' bstep: the baby step; diagonal k is counter-rotated by bstep * (k / bstep)."
+        },
+        "region": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "bsgs_diagonals' region: the slot distance between two regions."
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "bsgs_diagonals' length: the slot count of every diagonal vector."
+        },
+        "r_lo": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "bsgs_diagonals' r_lo: the first region filled."
+        },
+        "r_hi": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "bsgs_diagonals' r_hi: the last region filled (inclusive)."
+        },
+        "scale": {
+          "type": "number",
+          "description": "bsgs_diagonals' s: the factor every matrix element is multiplied by. Printed with 17 significant digits: it reads back to the same float64."
+        }
+      }
+    }
+  }
+}

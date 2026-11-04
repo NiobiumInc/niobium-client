@@ -33,6 +33,7 @@ make set-membership         # Build the private name-matching example
 | `HOWTO.md` | Step-by-step guide for adding a new example |
 | `NB_LANGUAGE.md` | Language reference — types, syntax, built-in functions, patterns |
 | `GRAMMAR.md` | Formal EBNF grammar |
+| `docs/RUN_METADATA.md` | What a run can write about itself (`NB_DT_RECIPES`, `NB_PLAINTEXT_VECTORS`, ciphertext tags); the schemas are in `schemas/` |
 | `README.md` | User-facing overview, build instructions, example walkthrough |
 
 ## Why a Domain-Specific Language for FHE?
@@ -608,6 +609,15 @@ iterations, and `scheme.override` rejects both fields like the budget
 `test_bootstrap_budget_defaults_to_three`, `test_bootstrap_call_requires_capability`,
 `test_bootstrap_iterations_scheme_and_call`, `test_bootstrap_iterations_rejected`.
 
+**Run metadata.** `RECIPE_HELPERS` in `codegen.py` is emitted verbatim into
+`nb_shared.h`: `nb_bsgs_diagonals`, the recipe registry (`nb_recipe`) that
+`read2vecs` and every `linear_transform` encode path report to, and the
+plaintext vector writer every ciphertext-vector operation calls. It needs
+only the standard library, which is how `test_run_metadata.py` compiles and
+runs it with g++ and validates what it writes against `schemas/`. The formats
+are in `docs/RUN_METADATA.md`; a change to a line's fields is a new schema
+version there, in `schemas/` and in `emit`/`write_vector`.
+
 ## File Structure
 
 ```
@@ -615,6 +625,8 @@ dsl_fhe/
   AGENTS.md                          # This file (CLAUDE.md imports it)
   NB_LANGUAGE.md                     # Language reference
   GRAMMAR.md                         # Formal grammar (EBNF)
+  docs/RUN_METADATA.md               # Run metadata: recipes, plaintext vectors, tags
+  schemas/                           # JSON Schemas of the run metadata
   README.md                          # User-facing docs
   Makefile                           # Build orchestration
   xcomp/                             # Cross-compiler
