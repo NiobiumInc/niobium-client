@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nb:schema:plaintext_vector:1",
+  "title": "nb.plaintext_vector, version 1",
+  "description": "One line of <dir>/vectors.jsonl, the directory NB_PLAINTEXT_VECTORS names: one plaintext a ciphertext-vector operation (ct + v, ct - v, ct * v) encoded, appended when it is encoded. Its values are in <dir>/pv_<n>.f64. See dsl_fhe/docs/RUN_METADATA.md.",
+  "type": "object",
+  "required": [
+    "schema",
+    "version",
+    "tag",
+    "length",
+    "level",
+    "slots",
+    "noise_scale_deg"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "nb.plaintext_vector",
+      "description": "The record's schema."
+    },
+    "version": {
+      "const": 1,
+      "description": "The schema's version. A consumer rejects a version it does not know."
+    },
+    "tag": {
+      "type": "string",
+      "pattern": "^pv:(0|[1-9][0-9]*)$",
+      "description": "pv:<n>: the n-th such plaintext of the process, from 0, in the order they are encoded. Its values are in pv_<n>.f64 next to this file."
+    },
+    "length": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615,
+      "description": "The number of values: pv_<n>.f64 holds length float64 values, 8 * length bytes."
+    },
+    "level": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295,
+      "description": "The level the plaintext is encoded at."
+    },
+    "slots": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295,
+      "description": "The slot count it is encoded with."
+    },
+    "noise_scale_deg": {
+      "const": 1,
+      "description": "The noise scale degree it is encoded with: always 1."
+    }
+  }
+}
