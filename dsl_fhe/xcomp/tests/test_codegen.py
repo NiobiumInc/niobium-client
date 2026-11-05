@@ -1604,6 +1604,74 @@ def test_fideslib_saved_ciphertext_is_tagged_with_its_file():
     assert "context()->MarkOutput(c);\n#ifdef FIDESLIB_HAS_INPUT_TAGS\n    c->tag = own_tag;\n#endif" in queue
 
 
+def test_named_arguments_of_a_user_function():
+    # passed in the order of its parameters, a skipped one taking its default
+    impl = compile_str("""
+    fn f(a: u32, b: u32 = 2, c: u32 = 3) -> u32 { a + b + c }
+    fn g() -> u32 { f(1, c: 5) + f(c: 7, a: 1) + f(4, b: 6) }
+    """)["nb_shared.cpp"]
+    assert "return ((f(1, 2, 5) + f(1, 2, 7)) + f(4, 6));" in impl
+    try:
+        compile_str("fn f(a: u32) -> u32 { a }\nfn g() -> u32 { f(b: 1) }")
+    except Exception as e:
+        assert "has no parameter 'b'" in str(e)
+    else:
+        raise AssertionError("an unknown parameter name was accepted")
+
+
+STAGE_CALLS = """
+struct Instance { size: u32 }
+fn instance(size: u32) -> Instance { Instance { size: size } }
+fn keydir(inst: Instance) -> path { root() / "keys" }
+fn encdir(inst: Instance) -> path { root() / "enc" }
+wire CryptoParams { context: CryptoContext, public_key: PublicKey }
+wire State { ciphertext: enc<vec<f64>> }
+scheme CKKS { depth: 4 }
+requires { add, mul }
+@server @stage("step")
+@hardware(cache_key: ["workload_size", "i"])
+fn step(inst: Instance, i: u32 = 0, k: u32 = 7) -> reads(CryptoParams, State) {
+    let params = load(CryptoParams, from: keydir(inst))
+    let s = load(State, from: encdir(inst) / "s.bin").ciphertext
+    save(State { ciphertext: s * s }, to: encdir(inst) / "s.bin")
+}
+@server @stage("all")
+fn all(inst: Instance) -> reads(CryptoParams) {
+    for i in 0..3 {
+        step(inst, i)
+    }
+    step(inst, k: 1)
+}
+"""
+
+
+def test_stage_calls_a_stage():
+    # the called stage is compiled into the caller's binary, called with the
+    # context, its defaults on a declaration; it is not recorded on its own
+    files = compile_str(STAGE_CALLS)
+    caller = files["all.cpp"]
+    assert "void step(CryptoContext<DCRTPoly> cc, Instance inst, uint32_t i = 0, uint32_t k = 7);" in caller
+    assert "void step(CryptoContext<DCRTPoly> cc, Instance inst, uint32_t i, uint32_t k) {" in caller
+    assert "step(cc, inst, i);" in caller and "step(cc, inst, 0, 1);" in caller
+    assert caller.index("void step(") < caller.index("void all(")
+    assert "niobium::compiler().start()" not in caller and "auto params = CryptoParams{};" in caller
+    assert "all_ref.cpp" not in files and "step_ref.cpp" in files
+    # the called stage's own binary is unchanged: recorded, with its main()
+    assert "niobium::compiler().start()" in files["step.cpp"]
+    assert files["step.cpp"].count("void step(") == 1
+
+
+def test_stage_calls_a_stage_of_another_domain():
+    src = STAGE_CALLS.replace('@server @stage("all")', '@client @stage("all")').replace(
+        "-> reads(CryptoParams) {\n    for", "{\n    for")
+    try:
+        compile_str(src)
+    except Exception as e:
+        assert "calls the server stage 'step'" in str(e), e
+    else:
+        raise AssertionError("a client stage calling a server stage was accepted")
+
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_")]
     passed = 0
