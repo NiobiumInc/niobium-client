@@ -307,6 +307,27 @@ def test_reference_twin_mirrors_modules():
     assert "nbref::app::compute(inst)" in ref
 
 
+def test_crypto_params_load_is_skipped_only_in_a_server_stage():
+    # A client stage loads the keys itself, even when it has the function
+    # name of another module's server stage (whose main() loads them).
+    client = """
+module app
+
+use lib
+
+@client @stage("encrypt")
+fn compute(inst: lib::Instance) -> writes(lib::EncOut) {
+    let params = load(lib::CryptoParams, from: lib::keydir(inst))
+    return lib::EncOut { ciphertext: encrypt(params.public_key, [1.5]) }
+}
+"""
+    d, p = _tree(**{"lib/shared.niob": LIB, "app/client.niob": client})
+    _, _, files = _compile([p["app/client.niob"]])
+    assert "auto params = lib::CryptoParams{};" not in files["encrypt.cpp"]
+    assert 'Serial::DeserializeFromFile(lib::keydir(inst) / "cc.bin"' in files["encrypt.cpp"]
+    assert "auto params = lib::CryptoParams{};" in files["lib_compute.cpp"]
+
+
 def test_unnamed_root_generates_exactly_as_before():
     """A program without `module` must not gain namespaces."""
     src = ("enum Size { Toy }\nstruct Instance { size: Size, ring_dim: u32 }\n"

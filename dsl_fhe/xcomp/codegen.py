@@ -115,6 +115,22 @@ FHE_SHARED_FNS = {
 }
 
 
+def stage_binary_name(fn: ast.FnDecl, root_module: str) -> str | None:
+    """The binary name of a @stage function, None for a function that is not
+    one: the @stage name, else the function's, prefixed with its module's
+    when an imported module declares it."""
+    name = None
+    for ann in fn.annotations:
+        if ann.name == "stage":
+            name = ann.args.get("name", fn.name)
+    if name is None:
+        return None
+    name = name if isinstance(name, str) else fn.name
+    if fn.module and fn.module != root_module:
+        name = f"{fn.module}_{name}"
+    return name
+
+
 @dataclass
 class StageInfo:
     """Metadata about a @stage function for code generation."""
@@ -557,12 +573,12 @@ class CodeGenerator:
             "without it")
 
     def _get_stage(self, fn: ast.FnDecl) -> StageInfo | None:
-        stage_name = None
+        # An imported module's stage keeps its own binary, named after the
+        # module so two modules' `compute` stages cannot collide.
+        stage_name = stage_binary_name(fn, self.root_module)
         domain = Domain.SHARED
         hardware = None
         for ann in fn.annotations:
-            if ann.name == "stage":
-                stage_name = ann.args.get("name", fn.name)
             if ann.name == "client":
                 domain = Domain.CLIENT
             if ann.name == "server":
@@ -571,11 +587,6 @@ class CodeGenerator:
                 hardware = ann.args
         if stage_name is None:
             return None
-        stage_name = stage_name if isinstance(stage_name, str) else fn.name
-        # An imported module's stage keeps its own binary, named after the
-        # module so two modules' `compute` stages cannot collide.
-        if fn.module and fn.module != self.root_module:
-            stage_name = f"{fn.module}_{stage_name}"
         return StageInfo(
             name=stage_name,
             fn=fn,
@@ -2018,6 +2029,30 @@ endforeach()
             self.wl("static bool _nb_hollow_record = false;")
             self.blank()
 
+        # The stages this stage calls (a schedule of stages, docs/STAGE_SCHEDULE.md)
+        # are compiled into its binary as ordinary functions: no recording
+        # bracket of their own, their defaults on a declaration.
+        for callee in self._called_stages(stage):
+            if callee.domain != stage.domain:
+                raise CodegenError(
+                    f"stage {stage.name!r} calls the {callee.domain.value} stage "
+                    f"{callee.name!r}: a stage calls only stages of its own domain")
+            self._current_fn = callee.fn
+            self._current_stage_hardware = False
+            self._current_stage_domain = callee.domain
+            self._local_var_cpp_types.clear()
+            self._declared_vars.clear()
+            self._enc_vars.clear()
+            self._plain_vars.clear()
+            self._wire_vars.clear()
+            self._open_namespace(callee.fn.module)
+            with_cc = callee.domain == Domain.SERVER
+            self._gen_fn_decl(callee.fn, with_cc=with_cc, emit_defaults=True)
+            self.w(";\n")
+            self._gen_fn_impl(callee.fn, with_cc=with_cc)
+            self.blank()
+            self._close_namespace(callee.fn.module)
+
         # Generate the stage function body. While the stage's own body is being
         # emitted, _current_stage_hardware drives tag_input() injection after
         # each input load() (see _gen_let_stmt).
@@ -2060,9 +2095,29 @@ endforeach()
                     acc[name] = target
                     self._collect_called_fns(target, acc)
 
+    def _called_stages(self, stage: StageInfo) -> list[StageInfo]:
+        """The other stages `stage` calls, directly or through a stage it
+        calls, every callee before its callers."""
+        by_name = {self._decl_name(s.fn): s for s in self.stages}
+        seen = {self._decl_name(stage.fn)}
+        order: list[StageInfo] = []
+
+        def visit(fn):
+            for node in self._walk_ast(fn.body) if fn.body else ():
+                if isinstance(node, ast.CallExpr) and isinstance(node.func, ast.Ident):
+                    callee = by_name.get(node.func.name)
+                    if callee is not None and node.func.name not in seen:
+                        seen.add(node.func.name)
+                        visit(callee.fn)
+                        order.append(callee)
+        visit(stage.fn)
+        return order
+
     def _stage_ref_supported(self, stage: StageInfo):
         """Can a cleartext reference twin be generated for this stage?
         Returns (ok, reason)."""
+        if self._called_stages(stage):
+            return False, "a call to a stage"
         fns = {stage.fn.name: stage.fn}
         self._collect_called_fns(stage.fn, fns)
         for fn in fns.values():
@@ -4017,9 +4072,46 @@ endforeach()
             return f"nb_plain::{fname}({ct}, {diags}, {bstep})"
         return f"nb_{fname}(cc, {ct}, {diags}, static_cast<uint32_t>({bstep}))"
 
+    def _user_call_args(self, target: ast.FnDecl, call_args: list[ast.Arg]) -> list[str]:
+        """The C++ arguments of a call of a user function with named
+        arguments: in the order of its parameters, a skipped parameter
+        before the last one given taking its default."""
+        params = [p.name for p in target.params]
+        given: dict = {}
+        positional = [a for a in call_args if not a.name]
+        if len(positional) > len(params):
+            raise CodegenError(f"{target.name}() takes {len(params)} arguments, "
+                               f"{len(positional)} given")
+        for name, a in zip(params, positional):
+            given[name] = a.value
+        for a in call_args:
+            if not a.name:
+                continue
+            if a.name not in params:
+                raise CodegenError(f"{target.name}() has no parameter {a.name!r}")
+            if a.name in given:
+                raise CodegenError(f"{target.name}(): parameter {a.name!r} given twice")
+            given[a.name] = a.value
+        last = max(i for i, n in enumerate(params) if n in given)
+        out = []
+        for p in target.params[:last + 1]:
+            if p.name in given:
+                out.append(self._expr_to_cpp(given[p.name]))
+            elif p.default is not None:
+                out.append(self._expr_to_cpp(p.default))
+            else:
+                raise CodegenError(f"{target.name}(): no value for its parameter {p.name!r}")
+        return out
+
     def _gen_call_expr_impl(self, expr: ast.CallExpr) -> str:
         func = self._expr_to_cpp(expr.func)
-        args = [self._expr_to_cpp(a.value) for a in expr.args]
+        target = (self._fn_sigs.get(expr.func.name)
+                  if isinstance(expr.func, ast.Ident) else None)
+        if target is not None and any(a.name for a in expr.args):
+            # A user function's parameters are C++ positional parameters.
+            args = self._user_call_args(target, expr.args)
+        else:
+            args = [self._expr_to_cpp(a.value) for a in expr.args]
         named = {a.name: self._expr_to_cpp(a.value) for a in expr.args if a.name}
 
         if isinstance(expr.func, ast.Ident):
@@ -4314,6 +4406,11 @@ endforeach()
                                and not self._is_extern_wrapper(f)), None)
                 if fhe_fn and self._fn_uses_fhe(fhe_fn):
                     return f"{fname}(cc, {', '.join(args)})"
+                # A server stage takes the context whatever its signature.
+                callee = next((s for s in self.stages
+                               if self._decl_name(s.fn) == fname), None)
+                if callee is not None and callee.domain == Domain.SERVER:
+                    return f"{func}({', '.join(['cc'] + args)})"
 
             # Extern wrapper functions: call the external C++ function with cc
             ext_fn = next((f for f in self.shared_fns
@@ -4716,7 +4813,7 @@ endforeach()
             if self._plain_mode:
                 return f"{type_name}{{}}"  # no crypto in the reference
             if self._current_fn and any(
-                si.fn.name == self._current_fn.name and si.domain == Domain.SERVER
+                si.fn is self._current_fn and si.domain == Domain.SERVER
                 for si in self.stages
             ):
                 return f"{type_name}{{}}"  # no-op: keys already loaded in main()
