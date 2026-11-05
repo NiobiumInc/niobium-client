@@ -13,7 +13,8 @@ environment variables writes nothing and behaves as before.
 
 Both files are [JSON Lines](https://jsonlines.org/): one JSON object per
 line, each ended by `\n`. The schemas (JSON Schema draft 2020-12) are in
-[`../schemas/`](../schemas/).
+[`../schemas/`](../schemas/). What nbc itself can write about a program's
+stages, at compile time, is in [STAGE_SCHEDULE.md](STAGE_SCHEDULE.md).
 
 ## `bsgs_diagonals`
 

@@ -121,21 +121,45 @@ int main(int argc, char** argv) {
 
 # ── a minimal JSON Schema (2020-12) validator: the keywords dsl_fhe/schemas use ──
 
-_ANNOTATIONS = {"$schema", "$id", "title", "description", "$comment"}
+_ANNOTATIONS = {"$schema", "$id", "title", "description", "$comment", "$defs"}
 _TYPES = {
     "object": lambda v: isinstance(v, dict),
+    "array": lambda v: isinstance(v, list),
     "string": lambda v: isinstance(v, str),
     "integer": lambda v: isinstance(v, int) and not isinstance(v, bool),
     "number": lambda v: isinstance(v, (int, float)) and not isinstance(v, bool),
+    "boolean": lambda v: isinstance(v, bool),
     "null": lambda v: v is None,
 }
 
 
-def validate(value, schema, where="$"):
+def validate(value, schema, where="$", root=None):
+    root = schema if root is None else root
     for key in schema:
-        if key not in _ANNOTATIONS | {"type", "const", "required", "properties", "additionalProperties",
-                                      "minimum", "maximum", "pattern"}:
+        if key not in _ANNOTATIONS | {"type", "const", "enum", "required", "properties", "additionalProperties",
+                                      "minimum", "maximum", "pattern", "items", "minItems", "maxItems",
+                                      "anyOf", "$ref"}:
             raise AssertionError(f"{where}: the test's validator does not know the keyword {key}")
+    if "$ref" in schema:
+        ref = schema["$ref"]
+        assert ref.startswith("#/"), f"{where}: only local references: {ref}"
+        target = root
+        for part in ref[2:].split("/"):
+            target = target[part]
+        validate(value, target, where, root)
+    if "anyOf" in schema:
+        errors = []
+        for i, sub in enumerate(schema["anyOf"]):
+            try:
+                validate(value, sub, where, root)
+                break
+            except AssertionError as e:
+                errors.append(str(e))
+        else:
+            raise AssertionError(f"{where}: matches none of anyOf: {'; '.join(errors)}")
+    if "enum" in schema:
+        assert any(value == v and type(value) is type(v) for v in schema["enum"]), \
+            f"{where}: {value!r} is not one of {schema['enum']}"
     if "type" in schema:
         types = schema["type"] if isinstance(schema["type"], list) else [schema["type"]]
         assert any(_TYPES[t](value) for t in types), f"{where}: {value!r} is not {types}"
@@ -146,11 +170,21 @@ def validate(value, schema, where="$"):
         for k in schema.get("required", []):
             assert k in value, f"{where}: {k} is missing"
         props = schema.get("properties", {})
+        extra = schema.get("additionalProperties", True)
         for k, v in value.items():
             if k in props:
-                validate(v, props[k], f"{where}.{k}")
+                validate(v, props[k], f"{where}.{k}", root)
             else:
-                assert schema.get("additionalProperties", True) is not False, f"{where}: unexpected {k}"
+                assert extra is not False, f"{where}: unexpected {k}"
+                if isinstance(extra, dict):
+                    validate(v, extra, f"{where}.{k}", root)
+    if isinstance(value, list):
+        assert len(value) >= schema.get("minItems", 0), f"{where}: fewer than {schema['minItems']} items"
+        assert "maxItems" not in schema or len(value) <= schema["maxItems"], \
+            f"{where}: more than {schema['maxItems']} items"
+        if "items" in schema:
+            for i, v in enumerate(value):
+                validate(v, schema["items"], f"{where}[{i}]", root)
     if _TYPES["number"](value):
         if "minimum" in schema:
             assert value >= schema["minimum"], f"{where}: {value} < {schema['minimum']}"

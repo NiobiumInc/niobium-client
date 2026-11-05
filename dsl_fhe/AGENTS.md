@@ -34,6 +34,7 @@ make set-membership         # Build the private name-matching example
 | `NB_LANGUAGE.md` | Language reference — types, syntax, built-in functions, patterns |
 | `GRAMMAR.md` | Formal EBNF grammar |
 | `docs/RUN_METADATA.md` | What a run can write about itself (`NB_DT_RECIPES`, `NB_PLAINTEXT_VECTORS`, ciphertext tags); the schemas are in `schemas/` |
+| `docs/STAGE_SCHEDULE.md` | The stage schedule `nbc compile --schedule` writes (`nb_schedule.json`): the stages a server entry point runs, as data |
 | `README.md` | User-facing overview, build instructions, example walkthrough |
 
 ## Why a Domain-Specific Language for FHE?
@@ -618,6 +619,15 @@ runs it with g++ and validates what it writes against `schemas/`. The formats
 are in `docs/RUN_METADATA.md`; a change to a line's fields is a new schema
 version there, in `schemas/` and in `emit`/`write_vector`.
 
+**Stage schedule.** `xcomp/schedule.py` builds `nb_schedule.json` from the
+AST after semantic analysis (`nbc compile --schedule`): for a server stage
+whose body only calls stages in `for` loops over ranges, the steps with
+symbolic arguments and the wire state each stage `load`s and `save`s, or one
+`NoSchedule` reason. The stages a stage calls are emitted into its own `.cpp`
+(`_called_stages`) and called with `cc`. The format is in
+`docs/STAGE_SCHEDULE.md` and `schemas/stage_schedule.schema.json`;
+`tests/test_schedule.py` checks both.
+
 ## File Structure
 
 ```
@@ -626,6 +636,7 @@ dsl_fhe/
   NB_LANGUAGE.md                     # Language reference
   GRAMMAR.md                         # Formal grammar (EBNF)
   docs/RUN_METADATA.md               # Run metadata: recipes, plaintext vectors, tags
+  docs/STAGE_SCHEDULE.md             # The stage schedule (nbc compile --schedule)
   schemas/                           # JSON Schemas of the run metadata
   README.md                          # User-facing docs
   Makefile                           # Build orchestration

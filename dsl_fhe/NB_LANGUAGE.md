@@ -448,6 +448,12 @@ The generated binary accepts CLI arguments:
 - Additional positional: non-bool params in declaration order
 - `--flag_name`: boolean parameters
 
+A server stage may call other server stages: they are compiled into its
+binary and run in order, through the files they `load` and `save`. A stage
+whose body only calls stages, in `for` loops over ranges, is a schedule:
+`nbc compile --schedule` describes it in `nb_schedule.json`
+([docs/STAGE_SCHEDULE.md](docs/STAGE_SCHEDULE.md)).
+
 ### Hardware Annotation
 
 Generates Niobium record/replay instrumentation for server stages:
