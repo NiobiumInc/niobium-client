@@ -1,0 +1,381 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nb:schema:stage_schedule:1",
+  "title": "nb.stage_schedule, version 1",
+  "description": "<outdir>/nb_schedule.json, written by nbc compile --schedule: for every server entry point that only calls stages (in for loops over ranges), the stages it runs, in order, as data. Loops are kept as loops; bounds, arguments and paths are symbolic expressions. See dsl_fhe/docs/STAGE_SCHEDULE.md.",
+  "type": "object",
+  "required": [
+    "schema",
+    "version",
+    "params",
+    "entries"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "nb.stage_schedule",
+      "description": "The document's schema."
+    },
+    "version": {
+      "const": 1,
+      "description": "The schema's version. A consumer rejects a version it does not know."
+    },
+    "params": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "integer",
+          "number",
+          "string",
+          "boolean"
+        ]
+      },
+      "description": "Every build parameter (top-level const) an expression of the document names, with its value in this build: the default, or the value nbc compile --set gave it."
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entry"
+      },
+      "description": "One per server entry point that has a schedule, in declaration order."
+    }
+  },
+  "$defs": {
+    "entry": {
+      "description": "A server entry point.",
+      "type": "object",
+      "required": [
+        "entry",
+        "args",
+        "steps"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "entry": {
+          "type": "string",
+          "description": "The entry point's stage name: the name of its binary."
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/param"
+          },
+          "description": "The entry point's parameters, in order: the values an {\"arg\": name} expression stands for."
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node"
+          },
+          "description": "The body: stage steps and loops, in program order."
+        }
+      }
+    },
+    "param": {
+      "type": "object",
+      "required": [
+        "name",
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$"
+        },
+        "type": {
+          "type": "string",
+          "description": "The declared type, as spelled in the program."
+        },
+        "default": {
+          "$ref": "#/$defs/expr",
+          "description": "The default value, when the parameter has one."
+        }
+      }
+    },
+    "node": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/step"
+        },
+        {
+          "$ref": "#/$defs/loop"
+        }
+      ]
+    },
+    "loop": {
+      "description": "for <for> in <from>..<to> { <body> }: the body once per value of the loop variable, in increasing order. Inside it, {\"var\": <for>} is that value.",
+      "type": "object",
+      "required": [
+        "for",
+        "from",
+        "to",
+        "body"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "for": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$"
+        },
+        "from": {
+          "$ref": "#/$defs/expr",
+          "description": "The first value of the loop variable."
+        },
+        "to": {
+          "$ref": "#/$defs/expr",
+          "description": "One past its last value (lo..hi runs lo .. hi - 1; lo..=hi is written with to = hi + 1). No iteration when to <= from."
+        },
+        "body": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        }
+      }
+    },
+    "step": {
+      "description": "One run of a stage.",
+      "type": "object",
+      "required": [
+        "stage",
+        "hardware",
+        "args",
+        "reads",
+        "writes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "stage": {
+          "type": "string",
+          "description": "The stage's name: the name of its binary."
+        },
+        "hardware": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "required": [
+                "cache_key"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "cache_key": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ],
+          "description": "The stage's @hardware annotation (its cache_key), or null when it has none."
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/expr"
+          },
+          "description": "One value per parameter of the stage, in its order: the argument of the call, or the parameter's default."
+        },
+        "reads": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/state"
+          },
+          "description": "The state the stage reads: its load() calls in program order, then the types of its reads(...) clause no load() names."
+        },
+        "writes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/state"
+          },
+          "description": "The state the stage writes: its save() calls in program order, then the types of its writes(...) clause no save() names."
+        }
+      }
+    },
+    "state": {
+      "type": "object",
+      "required": [
+        "wire",
+        "path"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "wire": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The wire type; null for a reads/writes clause entry that names only a path."
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/path"
+            }
+          ],
+          "description": "Where it is read or written; null when the program names no path (a clause entry, which the stage's main() places)."
+        },
+        "index": {
+          "$ref": "#/$defs/expr",
+          "description": "For an indexed wire (load(W[i], ...), reads(W[i])): the index; \"*\" for reads(W[*])."
+        }
+      }
+    },
+    "path": {
+      "type": "object",
+      "required": [
+        "text",
+        "expr",
+        "vars"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "The path in the language's spelling, the step's arguments substituted."
+        },
+        "expr": {
+          "$ref": "#/$defs/expr"
+        },
+        "vars": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$"
+          },
+          "description": "The loop variables it depends on, in order of appearance."
+        }
+      }
+    },
+    "expr": {
+      "description": "A symbolic expression: a literal, or an object of one of the forms below.",
+      "anyOf": [
+        {
+          "type": [
+            "integer",
+            "number",
+            "string",
+            "boolean"
+          ],
+          "description": "A literal."
+        },
+        {
+          "description": "The value of an enclosing loop's variable.",
+          "type": "object",
+          "required": [
+            "var"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "var": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$"
+            }
+          }
+        },
+        {
+          "description": "The value of the entry point's parameter of that name.",
+          "type": "object",
+          "required": [
+            "arg"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "arg": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$"
+            }
+          }
+        },
+        {
+          "description": "The build parameter of that name; its value is in params.",
+          "type": "object",
+          "required": [
+            "param"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "param": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$"
+            }
+          }
+        },
+        {
+          "description": "A field of a struct value: of.field.",
+          "type": "object",
+          "required": [
+            "field",
+            "of"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "field": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$"
+            },
+            "of": {
+              "$ref": "#/$defs/expr"
+            }
+          }
+        },
+        {
+          "description": "An operator on one (negation) or two operands, the language's: integer arithmetic, + on strings, / joining paths when its left operand is a path.",
+          "type": "object",
+          "required": [
+            "op",
+            "args"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "enum": [
+                "+",
+                "-",
+                "*",
+                "/",
+                "%"
+              ]
+            },
+            "args": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 2,
+              "items": {
+                "$ref": "#/$defs/expr"
+              }
+            }
+          }
+        },
+        {
+          "description": "A call of a function of the program (a path helper) or a builtin (root, str), by its name.",
+          "type": "object",
+          "required": [
+            "call",
+            "args"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "call": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$"
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/expr"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

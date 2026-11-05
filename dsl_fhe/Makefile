@@ -58,6 +58,9 @@ test-compiler:
 	@echo "=== Run metadata ==="
 	@python3 $(XCOMP)/tests/test_run_metadata.py
 	@echo ""
+	@echo "=== Stage schedule ==="
+	@python3 $(XCOMP)/tests/test_schedule.py
+	@echo ""
 	@echo "=== End-to-end: parse examples ==="
 	@cd $(XCOMP) && PYTHONPATH=.. python3 -m xcomp.nbc parse ../$(EXAMPLES)/fetch-by-similarity/shared.niob  > /dev/null
 	@cd $(XCOMP) && PYTHONPATH=.. python3 -m xcomp.nbc parse ../$(EXAMPLES)/fetch-by-similarity/client.niob  > /dev/null

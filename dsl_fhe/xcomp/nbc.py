@@ -2,7 +2,7 @@
 """nbc — the nb FHE language cross-compiler.
 
 Usage:
-    nbc compile file1.niob [file2.niob ...] [--outdir DIR] [--set NAME=VALUE ...]
+    nbc compile file1.niob [file2.niob ...] [--outdir DIR] [--set NAME=VALUE ...] [--schedule]
     nbc check   file1.niob [file2.niob ...] [--set NAME=VALUE ...]
     nbc lex     file1.niob
     nbc parse   file1.niob
@@ -19,6 +19,7 @@ from .lexer import lex, Token, TT
 from .parser import parse
 from .semantic import analyze as semantic_analyze
 from .codegen import generate
+from . import schedule
 from .errors import CompileError
 from .modules import load_program
 from .params import apply_overrides, apply_scheme_overrides
@@ -104,6 +105,16 @@ def cmd_compile(args):
             return 1
 
         files = generate(program, sa, backend=args.backend, params=params)
+        if args.schedule:
+            # The stage schedule (docs/STAGE_SCHEDULE.md): written only when
+            # asked, with one line for each entry point that has none.
+            doc, reasons = schedule.build(program, sa)
+            for r in reasons:
+                print(r, file=sys.stderr)
+            if doc is not None:
+                files[schedule.FILE] = json.dumps(doc, indent=2) + "\n"
+            elif not reasons:
+                print("nbc: no stage schedule: no server stage calls another stage", file=sys.stderr)
         for p in params:
             print(f"  param {p.name} = {p.text}")
 
@@ -241,6 +252,11 @@ def main():
                            help=set_help)
     p_compile.add_argument("--scheme", action="append", default=[], metavar="FIELD=VALUE",
                            help=scheme_help)
+    p_compile.add_argument(
+        "--schedule", action="store_true",
+        help=f"Also write {schedule.FILE}: the stages every server entry point that only "
+             "calls stages (in for loops over ranges) runs, as data (dsl_fhe/docs/STAGE_SCHEDULE.md); "
+             "print why an entry point that calls stages has none")
 
     args = parser.parse_args()
 
