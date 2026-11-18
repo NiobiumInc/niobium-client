@@ -341,6 +341,48 @@ def test_no_entry_point():
     assert doc is None and reasons == []
 
 
+
+DOC_PRELUDE = """
+struct Instance { size: u32 }
+fn keydir(inst: Instance) -> path { root() / "keys" }
+fn encdir(inst: Instance) -> path { root() / "enc" }
+fn block_scale(b: u32) -> f64 { 0.5 }
+wire CryptoParams { context: CryptoContext, public_key: PublicKey }
+wire State { ciphertext: enc<vec<f64>> }
+scheme CKKS {
+    security: not_set
+    depth: 4
+    precision: 50 bits
+    first_mod: 60 bits
+}
+requires { add, mul }
+
+@client @stage("key_generation")
+fn generate_keys(inst: Instance) -> writes(CryptoParams) {
+    let keys = keygen()
+    return CryptoParams { context: keys.context, public_key: keys.public }
+}
+"""
+
+
+def test_stage_partitioning_doc_example():
+    """docs/STAGE_PARTITIONING.md's example compiles as the page says: the
+    probe names it lists, and a schedule for `run` (open_slots, whose saves
+    sit in a loop, is no schedule step and is not called by it)."""
+    page = open(os.path.join(DSL, "docs", "STAGE_PARTITIONING.md")).read()
+    example = page.split("## Example", 1)[1].split("```nb", 1)[1].split("```", 1)[0]
+    source = DOC_PRELUDE + example
+    doc, reasons, program, sa, params = build(source)
+    assert [e["entry"] for e in doc["entries"]] == ["run"], reasons
+    files = generate(program, sa, params=params)
+    slots, refine = files["open_slots.cpp"], files["refine.cpp"]
+    looped = '(std::string("acc__2") + "__s" + std::to_string(s))'
+    assert 'probe("acc", ' in slots and f"probe({looped}, " in slots
+    assert f"result(cc, {looped}, _hw_ct)" in slots.split("} else {")[1]
+    assert 'probe("state", ' in refine and 'probe("state__2", ' in refine
+    for name in ("acc", "acc__2__s1", "acc__2__s2", "state", "state__2"):
+        assert f"`{name}`" in page
+
 if __name__ == "__main__":
     tests = [v for k, v in globals().items() if k.startswith("test_")]
     passed = 0
