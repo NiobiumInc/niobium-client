@@ -473,6 +473,18 @@ eval keys, and the crypto context are tagged automatically by the
 instrumented-OpenFHE deserialize hooks (cooperative auto-tagging) — no explicit
 `tag_input`/`tag_keys` calls are emitted.
 
+Every ciphertext an `@hardware` stage `save()`s is an output of the recording,
+and a cache-valid run writes the file again from it. Its output name is the
+file's stem (for a file name computed in the path, its literal pieces: `part`
+for `"part_" + str(i) + ".bin"`); a file name the stage already saved elsewhere takes `<stem>__2`,
+`<stem>__3`, ...; a `save()` inside `for` loops over ranges whose path uses a
+loop variable is one output per iteration (`<name>__<var><value>`), and the
+cache-valid run repeats those loops.
+The save path and those loops' bounds may use the stage's arguments, `const`s,
+helper functions and the range loops' variables, not values the body computes;
+a `save()` in a loop that is not over a range is rejected. How to cut a
+computation into stages: [docs/STAGE_PARTITIONING.md](docs/STAGE_PARTITIONING.md).
+
 ### `@encryptors(independent)`
 
 Declares the stage's encryption model (skill Stage 1, question 2). Default is

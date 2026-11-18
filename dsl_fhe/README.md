@@ -1,8 +1,19 @@
 # Niobium DSL for FHE
 
 A domain-specific language and cross-compiler for writing Fully Homomorphic Encryption
-applications. The DSL compiles `.niob` source files to C++ with openFHE, producing
-self-contained binaries for a client-server FHE pipeline.
+applications. The DSL compiles `.niob` source files to C++ for one of two libraries,
+producing self-contained binaries for a client-server FHE pipeline:
+
+- **OpenFHE** (the default): the client's instrumented OpenFHE. A server stage marked
+  `@hardware` is recorded once as a FHETCH program for the Niobium accelerator and
+  replayed from then on.
+- **FIDESlib** (`nbc compile --backend fideslib`): the same program against FIDESlib's
+  OpenFHE-compatible facade. Each server stage runs on the engine chosen at run time:
+  `cpu`, `cuda` (a GPU) or `haze` (the accelerator's FHETCH trace). See
+  [The FIDESlib backend](#the-fideslib-backend).
+
+Both read and write the same OpenFHE BINARY wire files, so the stages, the harnesses
+and the cleartext twins do not depend on the backend.
 
 > **Designing a new app? Install the design skill first.** Before writing
 > `.niob`, run `make sync-skill` at the repository root to install the
@@ -82,7 +93,8 @@ expert would enforce during code review.
   +----------+     +--------+     +----------+     +---------+
                                                        |
                                                        v
-                                               C++ with openFHE
+                                          C++ for OpenFHE (default)
+                                       or FIDESlib (--backend fideslib)
                                                (nb_shared.h/.cpp
                                                 + per-stage .cpp)
                                                        |
@@ -97,13 +109,16 @@ expert would enforce during code review.
 
 | Module | Lines | Purpose |
 |---|---|---|
-| `xcomp/lexer.py` | 470 | Tokenizer for `.niob` syntax |
-| `xcomp/parser.py` | 1,061 | Recursive-descent parser producing AST |
-| `xcomp/ast_nodes.py` | 462 | AST node definitions (dataclasses) |
-| `xcomp/nb_types.py` | 208 | Type system definitions |
-| `xcomp/semantic.py` | 549 | Semantic analysis and validation |
-| `xcomp/codegen.py` | 3,104 | C++ code generation targeting openFHE |
-| `xcomp/nbc.py` | 229 | CLI driver (`parse`, `check`, `compile`) |
+| `xcomp/lexer.py` | 474 | Tokenizer for `.niob` syntax |
+| `xcomp/parser.py` | 1,137 | Recursive-descent parser producing AST |
+| `xcomp/ast_nodes.py` | 496 | AST node definitions (dataclasses) |
+| `xcomp/nb_types.py` | 212 | Type system definitions |
+| `xcomp/semantic.py` | 856 | Semantic analysis and validation |
+| `xcomp/modules.py` | 496 | `use` / `module`: loading and merging imported files |
+| `xcomp/params.py` | 180 | Compile-time parameters (`nbc --set NAME=VALUE`) |
+| `xcomp/codegen.py` | 5,703 | C++ code generation for OpenFHE or FIDESlib |
+| `xcomp/schedule.py` | 472 | Stage schedules (`nbc compile --schedule`, [docs/STAGE_SCHEDULE.md](docs/STAGE_SCHEDULE.md)) |
+| `xcomp/nbc.py` | 277 | CLI driver (`parse`, `check`, `compile`) |
 
 ### Key Language Features
 
@@ -111,15 +126,16 @@ expert would enforce during code review.
   Server code cannot access `SecretKey` or call `decrypt()`.
 - **Stage functions**: Each `@stage("name")` function becomes a standalone binary with
   CLI argument parsing, serialization, and (for server stages) Niobium hardware
-  instrumentation.
+  instrumentation. How to cut a computation into stages:
+  [docs/STAGE_PARTITIONING.md](docs/STAGE_PARTITIONING.md).
 - **Wire types**: `wire CryptoParams { ... }` defines serialization boundaries. The
   compiler generates all file I/O code — including openFHE's two different serialization
   APIs (stream-based for eval keys, file-based for everything else).
 - **Scheme declarations**: `scheme CKKS { ... }` with `requires { add, mul, rotate, ... }`
   replaces manual `CCParams` setup and key generation.
 - **FHE operations**: `+`, `*`, `*_norelin`, `rotate()`, `chebyshev()`, `slot_sum()`,
-  `running_sums()` map directly to openFHE calls with automatic null-safe accumulation
-  and relinearization.
+  `running_sums()` map directly to OpenFHE calls (or the FIDESlib facade's) with
+  automatic null-safe accumulation and relinearization.
 
 ## Directory Structure
 
@@ -130,6 +146,10 @@ dsl_fhe/
   HOWTO.md                             # Step-by-step guide for adding new examples
   NB_LANGUAGE.md                       # Language reference (types, syntax, built-ins)
   GRAMMAR.md                           # Formal EBNF grammar
+  docs/
+    STAGE_PARTITIONING.md              # Cutting a computation into stages
+    STAGE_SCHEDULE.md                  # nbc compile --schedule: a stage sequence as data
+    RUN_METADATA.md                    # Recipes, plaintext vectors, ciphertext tags a run writes
   Makefile                             # Build orchestration
   xcomp/                               # Cross-compiler implementation
     nbc.py                             # CLI: parse, check, compile
