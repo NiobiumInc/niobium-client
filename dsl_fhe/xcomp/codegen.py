@@ -423,9 +423,15 @@ class CodeGenerator:
         # run executes zero FHE ops (the stage function is never called), so
         # every save()d ciphertext must be probe()d during recording and
         # reconstructed by main()'s replay branch via result(). Entries:
-        # {"stem": probe name, "path": C++ path expr, "field": optional
-        #  "{field}.bin" suffix for multi-field dir saves}.
+        # {"name": probe name, "path": C++ path expr, "field": optional
+        #  "{field}.bin" suffix for multi-field dir saves, "loops": the
+        #  enclosing range loops (outermost first) of a save() made in a loop}.
         self._hw_stage_saves: list[dict] = []
+        # The for-loops around the statement being generated, outermost first:
+        # {"var", "start", "end", "op", "start_ast", "end_ast"} for a loop over
+        # a range, {"vars": [...], "range": False} for any other loop. A save()
+        # in an @hardware stage reads it to probe once per iteration.
+        self._loop_frames: list[dict] = []
         # The module the program being compiled declares ("" = none: the
         # global namespace). Imported modules' declarations are emitted in
         # `namespace <module>` and their stages prefixed `<module>_`.
@@ -2415,14 +2421,21 @@ endforeach()
             # Reconstruct every save()d output: the stage body never runs on a
             # cache-valid run, so each recorded probe is fetched via result()
             # and written to the same file the record pass saved it to.
+            # A save() made in loops is rehydrated by the same loops: one
+            # result() per iteration, by the per-iteration probe name.
             for sv in self._hw_stage_saves:
                 self.wl("{")
                 self.indent()
+                for f in sv["loops"]:
+                    self.wl(f"for (auto {f['var']} = {f['start']}; "
+                            f"{f['var']} {f['op']} {f['end']}; {f['var']}++) {{")
+                    self.indent()
+                name = self._hw_probe_name_cpp(sv["name"], sv["loops"])
                 self.wl("Ciphertext<DCRTPoly> _hw_ct;")
-                self.wl(f'if (!niobium::compiler().result(cc, "{sv["stem"]}", _hw_ct)) {{')
+                self.wl(f"if (!niobium::compiler().result(cc, {name}, _hw_ct)) {{")
                 self.indent()
-                self.wl(f'std::cerr << "[ERROR] Result retrieval failed for '
-                        f'\'{sv["stem"]}\'!" << std::endl;')
+                self.wl(f'std::cerr << "[ERROR] Result retrieval failed for \'" '
+                        f'<< {name} << "\'!" << std::endl;')
                 self.wl("return 1;")
                 self.dedent()
                 self.wl("}")
@@ -2435,6 +2448,9 @@ endforeach()
                     self.wl(f"auto _dir = fs::path({sv['path']});")
                     self.wl("fs::create_directories(_dir.parent_path());")
                     self.wl("Serial::SerializeToFile(_dir, _hw_ct, SerType::BINARY);")
+                for _ in sv["loops"]:
+                    self.dedent()
+                    self.wl("}")
                 self.dedent()
                 self.wl("}")
             self.dedent()
@@ -3452,9 +3468,19 @@ endforeach()
 
     def _gen_for(self, stmt: ast.ForStmt):
         saved = self._push_loop_bindings(stmt.pattern.names, stmt.iterable)
+        it = stmt.iterable
+        if len(stmt.pattern.names) == 1 and isinstance(it, ast.RangeExpr):
+            self._loop_frames.append({
+                "var": stmt.pattern.names[0], "range": True,
+                "start": self._expr_to_cpp(it.start), "end": self._expr_to_cpp(it.end),
+                "op": "<=" if it.inclusive else "<",
+                "start_ast": it.start, "end_ast": it.end})
+        else:
+            self._loop_frames.append({"vars": list(stmt.pattern.names), "range": False})
         try:
             self._gen_for_impl(stmt)
         finally:
+            self._loop_frames.pop()
             self._pop_loop_bindings(saved)
 
     def _gen_for_impl(self, stmt: ast.ForStmt):
@@ -4926,50 +4952,142 @@ endforeach()
                 f"results.push_back(ct); "
                 f"}} return results; }}()")
 
-    def _hw_save_stem(self, to_ast) -> str | None:
-        """Static probe name for a save() destination: the .bin filename's stem
-        when the path expression ends in a string literal (`dir / "name.bin"`
-        or a bare "name.bin"). None when no literal filename is derivable."""
+    def _hw_save_stem(self, to_ast) -> str:
+        """A readable stem for a save() destination's output name: the last
+        path component's file name without its extension. A component built
+        by concatenation (`"part_" + str(i) + ".bin"`) gives its literal
+        pieces (`part`); one with no literal piece gives `save`. Distinct
+        sites get distinct names whatever their stems
+        (_hw_unique_probe_name), so the stem only has to be readable."""
+        import re
         node = to_ast
         while isinstance(node, ast.BinaryExpr) and node.op == "/":
             node = node.right
-        if isinstance(node, ast.StringLiteral) and node.value:
-            stem = node.value.rsplit("/", 1)[-1]
-            if "." in stem:
-                stem = stem[:stem.rindex(".")]
-            return stem or None
-        return None
+
+        def literals(n):
+            if isinstance(n, ast.StringLiteral):
+                return [n.value]
+            if isinstance(n, ast.BinaryExpr) and n.op == "+":
+                return literals(n.left) + literals(n.right)
+            return []
+
+        text = "".join(literals(node)).rsplit("/", 1)[-1]
+        if "." in text:
+            text = text[:text.rindex(".")]
+        if isinstance(node, ast.StringLiteral) and text:
+            return text  # a literal file name: its stem as it is, as before
+        stem = re.sub(r"[^A-Za-z0-9_]+", "_", text).strip("_")
+        return stem or "save"
+
+    @staticmethod
+    def _hw_probe_name_cpp(name: str, loops: list[dict]) -> str:
+        """The C++ expression of a save()'s probe name: the static name, and
+        for a save() in loops `<name>__<var><value>` per enclosing loop, so
+        every iteration probes its own live-out."""
+        if not loops:
+            return f'"{name}"'
+        parts = "".join(f' + "__{f["var"]}" + std::to_string({f["var"]})'
+                        for f in loops)
+        return f'(std::string("{name}"){parts})'
+
+    @staticmethod
+    def _hw_iteration_names(name: str, loops: list[dict]):
+        """The probe names a save() site can take, as a regex: the static name,
+        or `<name>__<var><value>` per enclosing loop."""
+        import re
+        return re.compile(re.escape(name) + "".join(
+            f"__{re.escape(f['var'])}-?[0-9]+" for f in loops))
+
+    @staticmethod
+    def _hw_sample_name(name: str, loops: list[dict]) -> str:
+        return name + "".join(f"__{f['var']}0" for f in loops)
+
+    def _hw_unique_probe_name(self, stem: str, loops: list[dict]) -> str:
+        """A probe name for a new save() site: the file's stem, or, when an
+        earlier site of the stage already takes it, `<stem>__<n>` with the
+        first free n from 2. The first site keeps the bare stem, so a stage
+        whose file names are distinct names its probes as before. A name is
+        taken when any name the new site can probe (one per iteration in
+        loops) is one an earlier site can probe."""
+        sites = [(s["name"], s["loops"]) for s in self._hw_stage_saves] + [("result", [])]
+        def clashes(name: str) -> bool:
+            mine = self._hw_iteration_names(name, loops)
+            for other, other_loops in sites:
+                theirs = self._hw_iteration_names(other, other_loops)
+                if (other == name
+                        or theirs.fullmatch(self._hw_sample_name(name, loops))
+                        or mine.fullmatch(self._hw_sample_name(other, other_loops))):
+                    return True
+            return False
+        name, n = stem, 2
+        while clashes(name):
+            name, n = f"{stem}__{n}", n + 1
+        return name
 
     def _register_hw_save(self, stem: str, path_cpp: str, to_ast,
-                          field: str | None = None):
+                          field: str | None = None) -> str:
         """Record a @hardware save() site for main()'s replay-branch
-        rehydration, validating that the probe name is unique and that the
-        path expression is re-evaluable from main() (stage args + consts)."""
+        rehydration and return the C++ expression of its probe name.
+
+        Each site gets its own probe name (_hw_unique_probe_name). A site in
+        for-loops over ranges probes once per iteration; main() repeats the
+        loops to rehydrate every file, so their bounds, like the path, must
+        be computable in main() (stage args, consts and the enclosing loops'
+        variables)."""
         if self._current_stage_domain != Domain.SERVER:
             raise CodegenError(
                 f"@hardware stage '{self._current_fn.name}': save() replay "
                 f"reconstruction needs the CryptoContext, which main() only "
                 f"loads for @server stages — mark the stage @server")
-        taken = {s["stem"] for s in self._hw_stage_saves} | {"result"}
-        if stem in taken:
-            raise CodegenError(
-                f"@hardware stage '{self._current_fn.name}': save() probe name "
-                f"'{stem}' is not unique (each save() needs a distinct .bin "
-                f"filename, and 'result' is reserved for the wire result)")
         allowed = {p.name for p in self._current_fn.params} | {"inst"}
         allowed |= {c.name for c in self.consts}
-        callees = {n.func.name for n in self._walk_ast(to_ast)
-                   if isinstance(n, ast.CallExpr) and isinstance(n.func, ast.Ident)}
-        unknown = {n.name for n in self._walk_ast(to_ast)
-                   if isinstance(n, ast.Ident)} - allowed - callees
+
+        def unknown_idents(node, known):
+            callees = {n.func.name for n in self._walk_ast(node)
+                       if isinstance(n, ast.CallExpr) and isinstance(n.func, ast.Ident)}
+            return {n.name for n in self._walk_ast(node)
+                    if isinstance(n, ast.Ident)} - known - callees
+
+        # Only a save() whose path uses a loop variable is one output per
+        # iteration: one whose path ignores its loops writes the same file
+        # each time and keeps a single name, as before.
+        path_idents = {n.name for n in self._walk_ast(to_ast) if isinstance(n, ast.Ident)}
+        loop_vars = {f["var"] for f in self._loop_frames if f["range"]}
+        for f in self._loop_frames:
+            if not f["range"]:
+                loop_vars |= set(f["vars"])
+        loops = list(self._loop_frames) if path_idents & loop_vars else []
+        for f in loops:
+            if not f["range"]:
+                raise CodegenError(
+                    f"@hardware stage '{self._current_fn.name}': save() inside a "
+                    f"loop over {f['vars']}, which is not a range — main() must "
+                    f"repeat the loop to rehydrate each file on a cache-valid run; "
+                    f"loop over a range (for i in a..b) or return the value via "
+                    f"the wire result instead")
+        known = set(allowed)
+        for f in loops:
+            bad = unknown_idents(f["start_ast"], known) | unknown_idents(f["end_ast"], known)
+            if bad:
+                raise CodegenError(
+                    f"@hardware stage '{self._current_fn.name}': save() inside "
+                    f"'for {f['var']} in ...' whose bounds use stage-local "
+                    f"variable(s) {sorted(bad)} — main() repeats the loop on a "
+                    f"cache-valid run, so its bounds must be computable there "
+                    f"(stage args, consts and outer loop variables only)")
+            known.add(f["var"])
+        unknown = unknown_idents(to_ast, known)
         if unknown:
             raise CodegenError(
                 f"@hardware stage '{self._current_fn.name}': save() path uses "
                 f"stage-local variable(s) {sorted(unknown)} — the path must be "
-                f"computable in main() on a cache-valid run (stage args and "
-                f"consts only), or return the value via the wire result instead")
-        self._hw_stage_saves.append({"stem": stem, "path": path_cpp,
-                                     "field": field})
+                f"computable in main() on a cache-valid run (stage args, consts "
+                f"and enclosing range-loop variables only), or return the value "
+                f"via the wire result instead")
+        name = self._hw_unique_probe_name(stem, loops)
+        self._hw_stage_saves.append({"name": name, "path": path_cpp,
+                                     "field": field, "loops": loops})
+        return self._hw_probe_name_cpp(name, loops)
 
     def _gen_save(self, args: list[ast.Arg]) -> str:
         """Generate serialization for wire types: save(WireType{...}, to: path).
@@ -4987,16 +5105,6 @@ endforeach()
 
         to_ast = next((a.value for a in args if a.name == "to"), None)
         hw = self._current_stage_hardware and not self._plain_mode
-
-        def hw_stem_or_raise() -> str:
-            stem = self._hw_save_stem(to_ast)
-            if stem is None:
-                raise CodegenError(
-                    f"@hardware stage '{self._current_fn.name}': cannot derive "
-                    f"a probe name from the save() path — end the 'to:' path "
-                    f"with a literal filename (e.g. dir / \"out.bin\"), or "
-                    f"return the value via the wire result instead")
-            return stem
 
         # Determine wire type from the first positional argument
         type_name = None
@@ -5018,22 +5126,21 @@ endforeach()
                                 f'fs::path({to_path}).string() + ".ref", '
                                 f"{data_expr}.{field})")
                     if hw:
-                        stem = hw_stem_or_raise()
-                        self._register_hw_save(stem, to_path, to_ast)
+                        name = self._register_hw_save(self._hw_save_stem(to_ast), to_path, to_ast)
                         return (f"[&]() {{ auto _dir = {to_path}; "
                                 f"fs::create_directories(_dir.parent_path()); "
                                 f"auto&& _w = {data_expr}; "
                                 f"Serial::SerializeToFile(_dir, _w.{field}, SerType::BINARY); "
-                                f'niobium::compiler().probe("{stem}", _w.{field}); }}()')
+                                f"niobium::compiler().probe({name}, _w.{field}); }}()")
                     return (f"[&]() {{ auto _dir = {to_path}; "
                             f"fs::create_directories(_dir.parent_path()); "
                             f"Serial::SerializeToFile(_dir, {data_expr}.{field}, SerType::BINARY); }}()")
                 if len(ct_fields) > 1:
                     # Multi-field enc wire type — save each field to {dir}/{field_name}.bin
                     if hw:
-                        for f in ct_fields:
-                            self._register_hw_save(f.name, to_path, to_ast,
-                                                   field=f"{f.name}.bin")
+                        names = {f.name: self._register_hw_save(f.name, to_path, to_ast,
+                                                                field=f"{f.name}.bin")
+                                 for f in ct_fields}
                         parts = [f"[&]() {{ auto _dir = fs::path({to_path}); "
                                  f"fs::create_directories(_dir); "
                                  f"auto&& _w = {data_expr}; "]
@@ -5042,7 +5149,7 @@ endforeach()
                                 f'Serial::SerializeToFile(_dir / "{f.name}.bin", '
                                 f"_w.{f.name}, SerType::BINARY); ")
                             parts.append(
-                                f'niobium::compiler().probe("{f.name}", _w.{f.name}); ')
+                                f"niobium::compiler().probe({names[f.name]}, _w.{f.name}); ")
                         parts.append("}()")
                         return "".join(parts)
                     parts = [f"[&]() {{ auto _dir = fs::path({to_path}); "
@@ -5054,11 +5161,10 @@ endforeach()
                     parts.append("}()")
                     return "".join(parts)
         if hw and positional and self._is_encrypted_expr(positional[0].value):
-            stem = hw_stem_or_raise()
-            self._register_hw_save(stem, to_path, to_ast)
+            name = self._register_hw_save(self._hw_save_stem(to_ast), to_path, to_ast)
             return (f"[&]() {{ auto&& _ct = {data_expr}; "
                     f"Serial::SerializeToFile({to_path}, _ct, SerType::BINARY); "
-                    f'niobium::compiler().probe("{stem}", _ct); }}()')
+                    f"niobium::compiler().probe({name}, _ct); }}()")
         return f"Serial::SerializeToFile({to_path}, {data_expr}, SerType::BINARY)"
 
     def _gen_save_secret_key(self, args: list[ast.Arg]) -> str:

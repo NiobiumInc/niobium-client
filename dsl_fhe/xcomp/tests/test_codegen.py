@@ -562,23 +562,153 @@ def test_hardware_save_probe_and_rehydrate():
     assert replay_branch.count("SerializeToFile") >= 2
 
 
-def test_hardware_save_duplicate_stem_rejected():
+def test_hardware_save_same_file_name_distinct_probes():
+    """Two save()s of the same file name in different directories get
+    distinct probe names: the first keeps the stem (so stages whose file
+    names already differ name their probes as before), the next takes
+    `<stem>__2`. Each is rehydrated under its own name."""
+    files = compile_str("""
+    struct Instance { ring_dim: u32 }
+    wire EncOut { ciphertext: enc<f64> }
+    fn encdir(inst: Instance) -> path { "io" / "encrypted" }
+    @server @stage(name: "compute") @hardware(cache_key: ["wl"])
+    fn compute(inst: Instance) {
+        let ct: enc<f64> = zero()
+        save(EncOut { ciphertext: ct }, to: encdir(inst) / "out.bin")
+        save(EncOut { ciphertext: ct }, to: encdir(inst) / "sub" / "out.bin")
+    }
+    """)
+    cpp = files["compute.cpp"]
+    assert 'niobium::compiler().probe("out", ' in cpp
+    assert 'niobium::compiler().probe("out__2", ' in cpp
+    replay_branch = cpp.split("} else {")[1]
+    assert 'result(cc, "out", _hw_ct)' in replay_branch
+    assert 'result(cc, "out__2", _hw_ct)' in replay_branch
+    assert '"sub"' in replay_branch
+
+
+def test_hardware_save_in_range_loop_probes_each_iteration():
+    """A save() in a loop over a range, its path using the loop variable,
+    probes once per iteration (`<name>__<var><value>`) and main() rehydrates
+    with the same loop, its bounds re-evaluated from the stage args."""
+    files = compile_str("""
+    struct Instance { ring_dim: u32, slots: u32 }
+    wire EncOut { ciphertext: enc<f64> }
+    fn slotdir(inst: Instance, i: u32) -> path { "io" / "slots" / i }
+    @server @stage(name: "compute") @hardware(cache_key: ["wl"])
+    fn compute(inst: Instance, layer: u32 = 0) {
+        let ct: enc<f64> = zero()
+        save(EncOut { ciphertext: ct }, to: slotdir(inst, 0) / "state.bin")
+        for i in 1..inst.slots {
+            for j in 0..=layer {
+                save(EncOut { ciphertext: ct }, to: slotdir(inst, i + j) / "state.bin")
+            }
+        }
+    }
+    """)
+    cpp = files["compute.cpp"]
+    record = cpp.split("} else {")[0]
+    replay_branch = cpp.split("} else {")[1]
+    looped = '(std::string("state__2") + "__i" + std::to_string(i) + "__j" + std::to_string(j))'
+    assert 'niobium::compiler().probe("state", ' in cpp
+    assert f"niobium::compiler().probe({looped}, " in cpp
+    assert 'result(cc, "state", _hw_ct)' in replay_branch
+    assert f"result(cc, {looped}, _hw_ct)" in replay_branch
+    # the loops, outermost first, inclusive bound kept
+    i_loop = replay_branch.index("for (auto i = 1; i < inst.slots; i++) {")
+    j_loop = replay_branch.index("for (auto j = 0; j <= layer; j++) {")
+    assert i_loop < j_loop < replay_branch.index(f"result(cc, {looped}")
+    assert record  # the record pass is untouched apart from the names
+
+
+def test_hardware_save_loop_name_never_shadows_a_later_file():
+    """A later save() whose file stem looks like a loop's per-iteration name
+    (`state__i1`) is renamed rather than colliding with it."""
+    files = compile_str("""
+    struct Instance { ring_dim: u32 }
+    wire EncOut { ciphertext: enc<f64> }
+    fn d(inst: Instance) -> path { "io" }
+    @server @stage(name: "compute") @hardware(cache_key: ["wl"])
+    fn compute(inst: Instance) {
+        let ct: enc<f64> = zero()
+        for i in 0..2 {
+            save(EncOut { ciphertext: ct }, to: d(inst) / i / "state.bin")
+        }
+        save(EncOut { ciphertext: ct }, to: d(inst) / "state__i1.bin")
+    }
+    """)
+    cpp = files["compute.cpp"]
+    assert '(std::string("state") + "__i" + std::to_string(i))' in cpp
+    assert 'probe("state__i1", ' not in cpp
+    assert 'probe("state__i1__2", ' in cpp
+
+
+def test_hardware_save_computed_file_name():
+    """A file name computed in the path (`"part_" + str(c) + ".bin"`) names
+    its output by its literal pieces (`part`), or `save` when it has none;
+    in a loop over a range it is one output per iteration."""
+    files = compile_str("""
+    struct Instance { ring_dim: u32, parts: u32 }
+    wire EncOut { ciphertext: enc<f64> }
+    fn d(inst: Instance) -> path { "io" }
+    fn slot_file(inst: Instance, i: u32) -> path { d(inst) / ("slot_" + str(i)) }
+    @server @stage(name: "compute") @hardware(cache_key: ["wl"])
+    fn compute(inst: Instance, k: u32 = 0) {
+        let ct: enc<f64> = zero()
+        for c in 0..inst.parts {
+            save(EncOut { ciphertext: ct }, to: d(inst) / ("part_" + str(c) + ".bin"))
+        }
+        save(EncOut { ciphertext: ct }, to: slot_file(inst, k))
+    }
+    """)
+    cpp = files["compute.cpp"]
+    looped = '(std::string("part") + "__c" + std::to_string(c))'
+    assert f"probe({looped}, " in cpp
+    assert 'probe("save", ' in cpp
+    replay_branch = cpp.split("} else {")[1]
+    assert f"result(cc, {looped}, _hw_ct)" in replay_branch
+    assert 'result(cc, "save", _hw_ct)' in replay_branch
+
+
+def test_hardware_save_in_non_range_loop_rejected():
     from xcomp.codegen import CodegenError
     try:
         compile_str("""
         struct Instance { ring_dim: u32 }
         wire EncOut { ciphertext: enc<f64> }
-        fn encdir(inst: Instance) -> path { "io" / "encrypted" }
+        fn d(inst: Instance) -> path { "io" }
+        @server @stage(name: "compute") @hardware(cache_key: ["wl"])
+        fn compute(inst: Instance) {
+            let cts: vec<enc<f64>> = [zero(), zero()]
+            for (i, ct) in enumerate(cts) {
+                save(EncOut { ciphertext: ct }, to: d(inst) / i / "x.bin")
+            }
+        }
+        """)
+        assert False, "expected CodegenError for save() in a non-range loop"
+    except CodegenError as e:
+        assert "not a range" in str(e)
+
+
+def test_hardware_save_loop_bound_must_be_computable_in_main():
+    from xcomp.codegen import CodegenError
+    try:
+        compile_str("""
+        struct Instance { ring_dim: u32 }
+        wire EncOut { ciphertext: enc<f64> }
+        fn d(inst: Instance) -> path { "io" }
         @server @stage(name: "compute") @hardware(cache_key: ["wl"])
         fn compute(inst: Instance) {
             let ct: enc<f64> = zero()
-            save(EncOut { ciphertext: ct }, to: encdir(inst) / "out.bin")
-            save(EncOut { ciphertext: ct }, to: encdir(inst) / "sub" / "out.bin")
+            let n = 3
+            for i in 0..n {
+                save(EncOut { ciphertext: ct }, to: d(inst) / i / "x.bin")
+            }
         }
         """)
-        assert False, "expected CodegenError for duplicate save() stem"
+        assert False, "expected CodegenError for a stage-local loop bound"
     except CodegenError as e:
-        assert "not unique" in str(e)
+        assert "bounds use stage-local" in str(e) and "'n'" in str(e)
 
 
 def test_save_field_detection_is_structural():
@@ -1497,13 +1627,14 @@ def test_hardware_save_in_dead_const_branch_is_not_generated():
     cpp = compile_str(src)["compute.cpp"]
     assert "block_" not in cpp
     assert 'probe("kept"' in cpp
-    # With MODE=2 the stage-local path IS generated, and is refused as before.
-    from xcomp.codegen import CodegenError
-    try:
-        compile_str(src.replace("const MODE: u32 = 1", "const MODE: u32 = 2"))
-        assert False, "expected CodegenError for the stage-local save() path"
-    except CodegenError as e:
-        assert "stage-local" in str(e)
+    # kept.bin's path ignores the loop: one output, its name unchanged.
+    assert 'probe("kept", ' in cpp and "__l" not in cpp
+    # With MODE=2 the branch whose path uses the loop variable is generated:
+    # one output per iteration, rehydrated by the same loop.
+    cpp2 = compile_str(src.replace("const MODE: u32 = 1", "const MODE: u32 = 2"))["compute.cpp"]
+    looped = '(std::string("entry") + "__l" + std::to_string(l))'
+    assert f"probe({looped}, " in cpp2
+    assert "for (auto l = 0; l < 2; l++) {" in cpp2.split("} else {")[1]
 
 
 def test_fideslib_outputs_leave_the_device_when_queued():
