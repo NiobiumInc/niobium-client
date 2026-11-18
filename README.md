@@ -359,7 +359,9 @@ The combination is designed so an AI coding agent can take an application from
   spec — and its Stage 7 "Track A" targets the DSL below.
 
 - **The nb DSL** ([`dsl_fhe/`](dsl_fhe/README.md)) compiles `.niob` source to
-  OpenFHE C++ that links this client. Trust boundaries (`@client`/`@server`,
+  C++ for OpenFHE, linking this client, or, with `--backend fideslib`, for
+  FIDESlib (its server stages run on CPU, GPU or the accelerator's trace
+  engine, chosen at run time). Trust boundaries (`@client`/`@server`,
   `@encryptors(independent)`) are compiler-enforced; serialization, key
   generation, and record/replay instrumentation are generated; encrypted-ness
   is fully structural in the type flow; every stage gets a generated
