@@ -149,7 +149,7 @@ dsl_fhe/
   docs/
     STAGE_PARTITIONING.md              # Cutting a computation into stages
     STAGE_SCHEDULE.md                  # nbc compile --schedule: a stage sequence as data
-    RUN_METADATA.md                    # Recipes, plaintext vectors, ciphertext tags a run writes
+    RUN_METADATA.md                    # Build and run metadata: parameters, recipes, vectors, tags, FIDESlib sidecar and roles
   Makefile                             # Build orchestration
   xcomp/                               # Cross-compiler implementation
     nbc.py                             # CLI: parse, check, compile
