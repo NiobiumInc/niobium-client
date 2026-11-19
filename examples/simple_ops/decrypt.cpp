@@ -19,6 +19,13 @@ using namespace lbcrypto;
 
 constexpr uint32_t kDefaultSlotPeriod = 64;
 
+// C++'s % keeps the sign of its left operand; slot indices need the
+// mathematical, always-non-negative result (e.g. mod_floor(-5, 16) == 11).
+static int mod_floor(int value, int period) {
+    int r = value % period;
+    return r < 0 ? r + period : r;
+}
+
 int main(int argc, char* argv[]) {
     std::string keyDir = "simple_ops_keys";
     std::string operation = "ADD";
