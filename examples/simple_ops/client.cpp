@@ -21,6 +21,22 @@
 
 using namespace lbcrypto;
 
+static std::vector<double> slot_ramp(double base, uint32_t num_slots, uint32_t period) {
+    std::vector<double> values(num_slots, 0.0);
+    for (uint32_t i = 0; i < num_slots; ++i) {
+        values[i] = base + static_cast<double>(i % period);
+    }
+    return values;
+}
+
+static Ciphertext<DCRTPoly> encrypt_ramp(const CryptoContext<DCRTPoly>& cc,
+                                         const PublicKey<DCRTPoly>& pk,
+                                         double base, uint32_t num_slots, uint32_t period) {
+    Plaintext pt = cc->MakeCKKSPackedPlaintext(slot_ramp(base, num_slots, period),
+                                               1, 0, nullptr, num_slots);
+    return cc->Encrypt(pk, pt);
+}
+
 int main(int argc, char* argv[]) {
     std::string outputDir = "simple_ops_keys";
     double a = 5.0, b = 6.0;
