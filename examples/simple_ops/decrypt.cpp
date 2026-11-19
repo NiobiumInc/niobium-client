@@ -76,17 +76,49 @@ int main(int argc, char* argv[]) {
     else if (operation == "SUB")     expected = a - b;
     else if (operation == "MUL")     expected = a * b;
     else if (operation == "NEG")     expected = -a;
-    else if (operation == "ADDI")    expected = a + 3.0;
-    else if (operation == "SUBI")    expected = a - 2.0;
-    else if (operation == "MULI")    expected = a * 4.0;
+    else if (operation == "ADDI")    expected = a + immediate.value_or(3.0);
+    else if (operation == "SUBI")    expected = a - immediate.value_or(2.0);
+    else if (operation == "MULI")    expected = a * immediate.value_or(4.0);
     else if (operation == "ADD_ADD") expected = 2 * a + b;
     else if (operation == "ADD_SUB") expected = b;
+    else if (operation == "ADD_NEG") expected = b;
     else if (operation == "MUL_ADD") expected = a * b + a;
     else if (operation == "ADD_MUL") expected = (a + b) * a;
     else if (operation == "MUL_MUL") expected = a * b * a;
+    else if (operation == "NEG_MUL_ADD") expected = (-a) * b + a + b;
+    else if (operation == "ADD_NEG_MUL_ADD") expected = (a + b) * (-a) + b;
+    else if (operation == "MAT_PATTERN") expected = (a + b) * (a - b);
     else if (operation == "ALL_NO_MUL") expected = (b + 1.0) * 4.0;
-    else if (operation == "MORPH")   expected = b;  // EvalRotate(ct_a={a,b}, 1)[0]
-    else {
+    else if (operation == "MULI_ADDI") {
+        double imm = immediate.value_or(4.0);
+        expected = a * imm + imm;
+    } else if (operation == "ADDI_MULI") {
+        double imm = immediate.value_or(4.0);
+        expected = (a + imm) * imm;
+    } else if (operation == "MULI_ADD") {
+        expected = a * immediate.value_or(4.0) + b;
+    } else if (operation == "ROTATE_ADD") {
+        int rot = static_cast<int>(immediate.value_or(1.0));
+        expected = (a + mod_floor(rot, static_cast<int>(slot_period))) + b;
+    } else if (operation == "ADD_ROTATE") {
+        int rot = static_cast<int>(immediate.value_or(1.0));
+        expected = a + b + mod_floor(rot, static_cast<int>(slot_period));
+    } else if (operation == "ROTATE_MUL") {
+        int rot = static_cast<int>(immediate.value_or(1.0));
+        expected = (a + mod_floor(rot, static_cast<int>(slot_period))) * b;
+    } else if (operation == "ROTATE_ROTATE") {
+        int rot = static_cast<int>(immediate.value_or(1.0));
+        int period = static_cast<int>(slot_period);
+        expected = (a + mod_floor(rot, period)) + (b + mod_floor(-rot, period));
+    } else if (operation == "MULI_ROT_ADD_MUL_SUBI") {
+        double imm = immediate.value_or(1.0);
+        int rot = static_cast<int>(imm);
+        double rotated = a * imm + mod_floor(rot, static_cast<int>(slot_period));
+        expected = (rotated + b) * b - imm;
+    } else if (operation == "MORPH") {
+        // ct_a holds the slot ramp (client.cpp): slot i = a + (i % slot_period).
+        expected = a + mod_floor(1, static_cast<int>(slot_period));
+    } else {
         std::cerr << "Unknown operation: " << operation << std::endl;
         return 1;
     }
