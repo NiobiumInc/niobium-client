@@ -152,13 +152,70 @@ int main(int argc, char* argv[]) {
             auto t5 = cc->EvalMult(t4, 4.0);         // (b + 1) * 4
             auto t6 = cc->EvalNegate(t5);             // -(b + 1) * 4
             result = cc->EvalNegate(t6);              // (b + 1) * 4
+        } else if (operation == "ADD_NEG") {
+            auto tmp = cc->EvalAdd(ct_a, ct_b);
+            result = cc->EvalAdd(tmp, cc->EvalNegate(ct_a));  // (a + b) + (-a) = b
+        } else if (operation == "NEG_MUL_ADD") {
+            auto tmp = cc->EvalMult(cc->EvalNegate(ct_a), ct_b);  // (-a) * b
+            tmp = cc->EvalAdd(tmp, ct_a);
+            result = cc->EvalAdd(tmp, ct_b);
+        } else if (operation == "ADD_NEG_MUL_ADD") {
+            auto tmp = cc->EvalAdd(ct_a, ct_b);                       // a + b
+            tmp = cc->EvalMult(tmp, cc->EvalNegate(ct_a));            // (a + b) * (-a)
+            result = cc->EvalAdd(tmp, ct_b);
+        } else if (operation == "MAT_PATTERN") {
+            auto sum = cc->EvalAdd(ct_a, ct_b);
+            auto diff = cc->EvalSub(ct_a, ct_b);
+            result = cc->EvalMult(sum, diff);        // (a + b) * (a - b)
+        } else if (operation == "MULI_ADDI") {
+            double imm = immediate.value_or(4.0);
+            result = cc->EvalMult(ct_a, imm);
+            result = cc->EvalAdd(result, imm);       // (a * imm) + imm
+        } else if (operation == "ADDI_MULI") {
+            double imm = immediate.value_or(4.0);
+            result = cc->EvalAdd(ct_a, imm);
+            result = cc->EvalMult(result, imm);      // (a + imm) * imm
+        } else if (operation == "MULI_ADD") {
+            double imm = immediate.value_or(4.0);
+            result = cc->EvalMult(ct_a, imm);
+            result = cc->EvalAdd(result, ct_b);      // (a * imm) + b
+        } else if (operation == "MUL_MONOMIAL") {
+            int power = static_cast<int>(immediate.value_or(1.0));
+            result = cc->GetScheme()->MultByMonomial(ct_a, power);
+        } else if (operation == "ROTATE_ADD") {
+            int rot = static_cast<int>(immediate.value_or(1.0));
+            auto rotated = cc->EvalRotate(ct_a, rot);
+            result = cc->EvalAdd(rotated, ct_b);     // rotate(a, rot) + b
+        } else if (operation == "ADD_ROTATE") {
+            int rot = static_cast<int>(immediate.value_or(1.0));
+            result = cc->EvalAdd(ct_a, ct_b);
+            result = cc->EvalRotate(result, rot);    // rotate(a + b, rot)
+        } else if (operation == "ROTATE_MUL") {
+            int rot = static_cast<int>(immediate.value_or(1.0));
+            auto rotated = cc->EvalRotate(ct_a, rot);
+            result = cc->EvalMult(rotated, ct_b);    // rotate(a, rot) * b
+        } else if (operation == "ROTATE_ROTATE") {
+            int rot = static_cast<int>(immediate.value_or(1.0));
+            auto rot1 = cc->EvalRotate(ct_a, rot);
+            auto rot2 = cc->EvalRotate(ct_b, -rot);
+            result = cc->EvalAdd(rot1, rot2);        // rotate(a, rot) + rotate(b, -rot)
+        } else if (operation == "MULI_ROT_ADD_MUL_SUBI") {
+            double imm = immediate.value_or(1.0);
+            result = cc->EvalMult(ct_a, imm);
+            result = cc->EvalRotate(result, static_cast<int>(imm));
+            result = cc->EvalAdd(result, ct_b);
+            result = cc->EvalMult(result, ct_b);
+            result = cc->EvalSub(result, imm);       // ((rotate(a*imm, imm) + b) * b) - imm
         } else if (operation == "MORPH") {
-            // Rotate ct_a left by 1 slot. ct_a packs (a, b) so slot 0 of
-            // the rotated result equals b.
+            // ct_a holds the slot ramp (see client.cpp): slot i = a + (i %
+            // slot_period). Rotating left by 1 brings a + 1 into slot 0.
             result = cc->EvalRotate(ct_a, 1);
         } else {
             std::cerr << "Unknown operation: " << operation << std::endl;
-            std::cerr << "Valid: ADD SUB MUL NEG ADDI SUBI MULI ADD_ADD ADD_SUB MUL_ADD ADD_MUL MUL_MUL ALL_NO_MUL MORPH" << std::endl;
+            std::cerr << "Valid: ADD SUB MUL NEG ADDI SUBI MULI ADD_ADD ADD_SUB ADD_NEG MUL_ADD "
+                      << "ADD_MUL MUL_MUL NEG_MUL_ADD ADD_NEG_MUL_ADD MAT_PATTERN ALL_NO_MUL "
+                      << "MULI_ADDI ADDI_MULI MULI_ADD MUL_MONOMIAL ROTATE_ADD ADD_ROTATE "
+                      << "ROTATE_MUL ROTATE_ROTATE MULI_ROT_ADD_MUL_SUBI MORPH" << std::endl;
             return 1;
         }
 
