@@ -8,6 +8,7 @@
 #include "openfhe.h"
 
 #include <cmath>
+#include <optional>
 
 #include "ciphertext-ser.h"
 #include "cryptocontext-ser.h"
@@ -16,12 +17,25 @@
 
 using namespace lbcrypto;
 
+constexpr uint32_t kDefaultSlotPeriod = 64;
+
 int main(int argc, char* argv[]) {
     std::string keyDir = "simple_ops_keys";
     std::string operation = "ADD";
+    std::optional<double> immediate;
+    uint32_t slot_period = kDefaultSlotPeriod;
 
     if (argc > 1) keyDir = argv[1];
     if (argc > 2) operation = argv[2];
+    for (int i = 3; i < argc; ++i) {
+        const std::string arg = argv[i];
+        const std::string imm_flag = "--immediate=";
+        const std::string period_flag = "--slot-period=";
+        if (arg.rfind(imm_flag, 0) == 0)
+            immediate = std::stod(arg.substr(imm_flag.size()));
+        else if (arg.rfind(period_flag, 0) == 0)
+            slot_period = static_cast<uint32_t>(std::stoul(arg.substr(period_flag.size())));
+    }
 
     std::cout << "=== Simple Ops — Decrypt (" << operation << ") ===" << std::endl;
 
