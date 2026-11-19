@@ -29,7 +29,6 @@
 //   MULI_ADDI              (a * immediate) + immediate         (default 4)
 //   ADDI_MULI              (a + immediate) * immediate         (default 4)
 //   MULI_ADD               (a * immediate) + b                 (default 4)
-//   MUL_MONOMIAL           a * x^immediate                     (default 1)
 //
 //   rotation ops, default rotation shown, overridable via --immediate=N:
 //   ROTATE_ADD             rotate(a, immediate) + b                                  (default 1)
@@ -204,9 +203,6 @@ int main(int argc, char* argv[]) {
             double imm = immediate.value_or(4.0);
             result = cc->EvalMult(ct_a, imm);
             result = cc->EvalAdd(result, ct_b);      // (a * imm) + b
-        } else if (operation == "MUL_MONOMIAL") {
-            int power = static_cast<int>(immediate.value_or(1.0));
-            result = cc->GetScheme()->MultByMonomial(ct_a, power);
         } else if (operation == "ROTATE_ADD") {
             int rot = static_cast<int>(immediate.value_or(1.0));
             auto rotated = cc->EvalRotate(ct_a, rot);
@@ -239,7 +235,7 @@ int main(int argc, char* argv[]) {
             std::cerr << "Unknown operation: " << operation << std::endl;
             std::cerr << "Valid: ADD SUB MUL NEG ADDI SUBI MULI ADD_ADD ADD_SUB ADD_NEG MUL_ADD "
                       << "ADD_MUL MUL_MUL NEG_MUL_ADD ADD_NEG_MUL_ADD MAT_PATTERN ALL_NO_MUL "
-                      << "MULI_ADDI ADDI_MULI MULI_ADD MUL_MONOMIAL ROTATE_ADD ADD_ROTATE "
+                      << "MULI_ADDI ADDI_MULI MULI_ADD ROTATE_ADD ADD_ROTATE "
                       << "ROTATE_MUL ROTATE_ROTATE MULI_ROT_ADD_MUL_SUBI MORPH" << std::endl;
             return 1;
         }
