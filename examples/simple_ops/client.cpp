@@ -7,8 +7,10 @@
 // Matching compiler's TOY defaults: qi=42, firstMod=57, depth=2 (TOY's N=2048
 // is what the Makefile test targets pass; the default is the hardware's 2^16).
 //
-// Usage: ./simple_ops_client [output_dir [a [b [ring_dim]]]]
+// Usage: ./simple_ops_client [output_dir [a [b [ring_dim]]]] [--slot-period=N]
 //   Defaults: output_dir=simple_ops_keys, a=5.0, b=6.0, ring_dim=65536 (2^16)
+//   --slot-period=N: slot i holds value + (i % N) (default 64); must divide
+//   ring_dim/2. Needed so rotation ops have something to rotate.
 
 #include "openfhe.h"
 
