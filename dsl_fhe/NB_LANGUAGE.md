@@ -344,6 +344,32 @@ Run time against device memory, from the most memory to the least:
 special modulus P, which can let a deep chain fit a security level at a
 given ring, and enlarge every key-switching key by about the same factor.
 
+`data_type: complex` (default `real`) keeps the imaginary part of every slot
+(`SetCKKSDataType(COMPLEX)`). A circuit that works on a plaintext's
+polynomial coefficients needs it: see the coefficient-domain builtins below.
+
+### Coefficient-domain plaintexts
+
+A CKKS plaintext is a polynomial with `ring_dim` real coefficients; the slot
+values are its evaluations. Most circuits work on the slots. A circuit can
+work on the coefficients instead: the product of two ciphertexts' polynomials
+is a convolution of their coefficients, a monomial multiplication
+(`mul_monomial`) shifts them, and an automorphism (`rotate`) permutes them
+with signs. Three builtins take or return a `vec<f64>` of exactly `ring_dim`
+coefficients, and need `data_type: complex`:
+
+```nb
+let ct = encrypt_coeffs(pk, coeffs, level: 0)   // the polynomial with these coefficients
+let p = mul_coeffs(ct, block)                   // times the plaintext polynomial `block`
+let c = decrypt_coeffs(sk, p)                   // the result's ring_dim coefficients
+```
+
+`compress(ct, towers)` (default 1) drops a ciphertext to the towers it still
+needs: a result that is only added, shifted and rotated from then on needs
+one, and every later operation costs one tower's work. A stage that calls
+any of these, or `mul_monomial`, has no cleartext twin (the twin holds slot
+values).
+
 ---
 
 ## Type System
@@ -747,7 +773,11 @@ scheme.override(security: not_set, ring_dim: 2048)
 | `reduce(+, vec)` | Reduce vector with add | `EvalAddInPlace` accumulation |
 | `clone(vec)` | Deep-copy ciphertext vector | `.Clone()` each element |
 | `zero()` | Null ciphertext (for accumulation) | `Ciphertext<DCRTPoly>()` |
-| `mul_monomial(ct, n)` | Low-level monomial multiply | `cc->GetScheme()->MultByMonomial(ct, n)` |
+| `mul_monomial(ct, n)` | Multiply by the monomial `X^n`: shifts the coefficients by `n`, with the sign of `X^ring_dim = -1` | `cc->GetScheme()->MultByMonomial(ct, n)`; fideslib: `cc->MultByMonomial(ct, n)` |
+| `compress(ct, towers)` | Keep `towers` towers (default 1) of a ciphertext | `cc->Compress(ct, towers)` |
+| `encrypt_coeffs(pk, coeffs, level: n)` | Encrypt the polynomial whose `ring_dim` real coefficients are `coeffs` (needs `data_type: complex`) | `MakeCKKSPackedPlaintext` of the coefficients' slot values + `Encrypt` |
+| `decrypt_coeffs(sk, ct)` | Decrypt to the polynomial's `ring_dim` coefficients (client only) | `Decrypt` + `GetCKKSPackedValue`, back to coefficients |
+| `mul_coeffs(ct, coeffs)` | Multiply by the plaintext polynomial with these coefficients, encoded at the ciphertext's level; reported as a `pv:<n>` plaintext of schema `nb.plaintext_coefficients` | `MakeCKKSPackedPlaintext` + `EvalMult` |
 
 ### Data I/O
 

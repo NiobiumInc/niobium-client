@@ -228,7 +228,8 @@ def bsgs(w, row0, col0, width, count, bstep, region, length, r_lo, r_hi, s):
 # ── tests ────────────────────────────────────────────────────────────────────
 
 def test_schemas_are_well_formed():
-    for name, sid in (("data_transform_recipe", "nb.data_transform_recipe"), ("plaintext_vector", "nb.plaintext_vector")):
+    for name, sid in (("data_transform_recipe", "nb.data_transform_recipe"), ("plaintext_vector", "nb.plaintext_vector"),
+                      ("plaintext_coefficients", "nb.plaintext_coefficients")):
         s = load_schema(name)
         assert s["properties"]["schema"]["const"] == sid
         assert s["properties"]["version"]["const"] == 1

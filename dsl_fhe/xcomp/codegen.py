@@ -148,11 +148,14 @@ class CodegenError(Exception):
 
 RECIPE_HELPERS = r"""
 #include <cmath>
+#include <complex>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <deque>
 #include <mutex>
+#include <stdexcept>
+#include <string>
 #include <type_traits>
 #include <unordered_map>
 // nb_recipe: what a data transform's diagonals are made of (dsl_fhe/docs/RUN_METADATA.md).
@@ -306,7 +309,8 @@ struct Vectors {
     FILE* index = nullptr;
 };
 inline Vectors& vectors() { static Vectors& v = *new Vectors; return v; }
-inline void write_vector(const char* dir, uint32_t level, uint32_t slots, const std::vector<double>& values) {
+inline void write_vector(const char* dir, uint32_t level, uint32_t slots, const std::vector<double>& values,
+                         bool coefficients = false) {
     static_assert(sizeof(double) == 8, "pv_<n>.f64 holds float64 values");
     auto& v = vectors();
     std::lock_guard<std::mutex> g(v.mu);
@@ -320,8 +324,9 @@ inline void write_vector(const char* dir, uint32_t level, uint32_t slots, const 
     FILE* f = std::fopen(file.c_str(), "wb");
     if (!f || std::fwrite(values.data(), sizeof(double), values.size(), f) != values.size() || std::fclose(f) != 0)
         throw std::runtime_error("nb_recipe: cannot write " + file.string());
-    std::fprintf(v.index, "{\"schema\": \"nb.plaintext_vector\", \"version\": 1, \"tag\": \"pv:%llu\", \"length\": %zu, "
+    std::fprintf(v.index, "{\"schema\": \"%s\", \"version\": 1, \"tag\": \"pv:%llu\", \"length\": %zu, "
                           "\"level\": %u, \"slots\": %u, \"noise_scale_deg\": 1}\n",
+                 coefficients ? "nb.plaintext_coefficients" : "nb.plaintext_vector",
                  static_cast<unsigned long long>(n), values.size(), level, slots);
     std::fflush(v.index);
 }
@@ -331,7 +336,92 @@ inline void plaintext(const P* pt, const std::vector<double>& values) {
         write_vector(dir, static_cast<uint32_t>((*pt)->GetLevel()), static_cast<uint32_t>((*pt)->GetSlots()), values);
     if (PlainHook h = plain_hook()) h(pt, values);
 }
+// The plaintext mul_coeffs encodes: `values` are its polynomial's ring_dim real
+// coefficients, not slot values. It is numbered with the plaintext vectors
+// ("pv:<n>") and written the same way, under its own schema
+// (nb.plaintext_coefficients), so that a run can rebuild it without the
+// embedding: the encoded polynomial is round(values[k] * scale) at coefficient k.
+template <typename P>
+inline void coefficients(const P* pt, const std::vector<double>& values) {
+    if (const char* dir = vectors_dir())
+        write_vector(dir, static_cast<uint32_t>((*pt)->GetLevel()), static_cast<uint32_t>((*pt)->GetSlots()), values, true);
+    if (PlainHook h = plain_hook()) h(pt, values);
+}
 }  // namespace nb_recipe
+// Coefficient-domain plaintexts (encrypt_coeffs, decrypt_coeffs, mul_coeffs).
+// A CKKS plaintext of ring dimension N packs N/2 complex slots; slot j is the
+// polynomial evaluated at zeta^(5^j), zeta = exp(i * pi / N). to_slots gives the
+// slot values of the polynomial with real coefficients c[0 .. N), from_slots the
+// coefficients back: with X^(N/2) = i at every such point, the N/2 values
+// z[k] = c[k] + i * c[k + N/2] are evaluated by one FFT of size N/2.
+namespace nb_coeffs {
+inline void fft(std::vector<std::complex<double>>& a, bool inverse) {
+    const size_t n = a.size();
+    for (size_t i = 1, j = 0; i < n; ++i) {
+        size_t bit = n >> 1;
+        for (; j & bit; bit >>= 1) j ^= bit;
+        j ^= bit;
+        if (i < j) std::swap(a[i], a[j]);
+    }
+    const double pi = std::acos(-1.0);
+    for (size_t len = 2; len <= n; len <<= 1) {
+        const double ang = 2.0 * pi / static_cast<double>(len) * (inverse ? -1.0 : 1.0);
+        std::vector<std::complex<double>> w(len / 2);
+        for (size_t k = 0; k < len / 2; ++k) w[k] = std::polar(1.0, ang * static_cast<double>(k));
+        for (size_t i = 0; i < n; i += len)
+            for (size_t k = 0; k < len / 2; ++k) {
+                const auto u = a[i + k], v = a[i + k + len / 2] * w[k];
+                a[i + k] = u + v;
+                a[i + k + len / 2] = u - v;
+            }
+    }
+    if (inverse)
+        for (auto& x : a) x /= static_cast<double>(n);
+}
+// m[j] = (5^j mod 2N - 1) / 4: slot j is entry m[j] of the size-N/2 transform
+inline std::vector<uint32_t> slot_index(uint32_t ring) {
+    std::vector<uint32_t> m(ring / 2);
+    uint64_t p = 1;
+    for (uint32_t j = 0; j < ring / 2; ++j) {
+        m[j] = static_cast<uint32_t>((p - 1) / 4);
+        p = p * 5 % (2ULL * ring);
+    }
+    return m;
+}
+inline void check_ring(uint32_t ring, size_t length, const char* what) {
+    if (ring < 4 || (ring & (ring - 1)) != 0 || length != ring)
+        throw std::runtime_error(std::string(what) + ": " + std::to_string(length) + " coefficients for a ring of dimension " +
+                                 std::to_string(ring) + " (one per coefficient)");
+}
+inline std::vector<std::complex<double>> to_slots(const std::vector<double>& c, uint32_t ring) {
+    check_ring(ring, c.size(), "coefficient plaintext");
+    const uint32_t h = ring / 2;
+    const double pi = std::acos(-1.0);
+    std::vector<std::complex<double>> a(h);
+    for (uint32_t k = 0; k < h; ++k) a[k] = std::complex<double>(c[k], c[k + h]) * std::polar(1.0, pi * k / ring);
+    fft(a, false);
+    const auto m = slot_index(ring);
+    std::vector<std::complex<double>> u(h);
+    for (uint32_t j = 0; j < h; ++j) u[j] = a[m[j]];
+    return u;
+}
+inline std::vector<double> from_slots(const std::vector<std::complex<double>>& u, uint32_t ring) {
+    const uint32_t h = ring / 2;
+    if (u.size() < h) throw std::runtime_error("decrypt_coeffs: " + std::to_string(u.size()) + " slots, expected " + std::to_string(h));
+    const double pi = std::acos(-1.0);
+    const auto m = slot_index(ring);
+    std::vector<std::complex<double>> a(h);
+    for (uint32_t j = 0; j < h; ++j) a[m[j]] = u[j];
+    fft(a, true);
+    std::vector<double> c(ring);
+    for (uint32_t k = 0; k < h; ++k) {
+        const auto z = a[k] * std::polar(1.0, -pi * k / ring);
+        c[k] = z.real();
+        c[k + h] = z.imag();
+    }
+    return c;
+}
+}  // namespace nb_coeffs
 // bsgs_diagonals(w, row0, col0, width, count, bstep, region, length, r_lo, r_hi, s):
 // the diagonals of the width x width submatrix of w at (row0, col0) that
 // linear_transform takes with this bstep. Diagonal k (k < count) is a vector of
@@ -2088,7 +2178,8 @@ endforeach()
     # Constructs whose cleartext twin we cannot generate (external C++,
     # stateful helpers without plain equivalents, key generation).
     REF_FORBIDDEN_FNS = {"extern_call", "slot_replicator", "running_sums",
-                         "load_model", "mul_monomial", "load_all", "keygen"}
+                         "load_model", "mul_monomial", "load_all", "keygen",
+                         "compress", "mul_coeffs", "encrypt_coeffs", "decrypt_coeffs"}
 
     def _collect_called_fns(self, fn, acc: dict):
         if not fn.body:
@@ -4264,8 +4355,25 @@ endforeach()
                 return f"cc->EvalNegate({args[0]})"
             if fname == "mul_monomial":
                 if self._fideslib:
-                    self._fideslib_unsupported("mul_monomial (MultByMonomial)")
+                    return f"cc->MultByMonomial({args[0]}, {args[1]})"
                 return f"cc->GetScheme()->MultByMonomial({args[0]}, {args[1]})"
+            if fname == "compress":
+                # keep `towers` towers (default 1): the modulus a result that
+                # is only added and rotated from here on needs
+                towers = args[1] if len(args) > 1 else "1"
+                return f"cc->Compress({args[0]}, {towers})"
+            if fname == "mul_coeffs":
+                # ct * the plaintext whose polynomial has these coefficients,
+                # encoded at the ciphertext's level like a plaintext vector
+                return (f"[&]() {{ auto _ct = {args[0]}; const std::vector<double>& _v = {args[1]}; "
+                        f"const uint32_t _n = cc->GetRingDimension(); "
+                        f"auto _pt = cc->MakeCKKSPackedPlaintext(nb_coeffs::to_slots(_v, _n), 1, "
+                        f"_ct->GetLevel(), nullptr, _n / 2); "
+                        f"nb_recipe::coefficients(&_pt, _v); return cc->{FHE_MUL}(_ct, _pt); }}()")
+            if fname == "encrypt_coeffs":
+                return self._gen_encrypt(expr.args, coefficients=True)
+            if fname == "decrypt_coeffs":
+                return self._gen_decrypt(expr.args, coefficients=True)
 
             # Type-parameterized functions
             if fname == "load_matrix":
@@ -4744,7 +4852,7 @@ endforeach()
                     f"return cc->EvalChebyshevSeries({ct}, _coef, {lower}, {upper}); }}()")
         return f"cc->EvalChebyshevFunction({func}, {ct}, {lower}, {upper}, {degree})"
 
-    def _gen_encrypt(self, args: list[ast.Arg]) -> str:
+    def _gen_encrypt(self, args: list[ast.Arg], coefficients: bool = False) -> str:
         named = {a.name: self._expr_to_cpp(a.value) for a in args if a.name}
         positional_args = [a for a in args if not a.name]
         positional = [self._expr_to_cpp(a.value) for a in positional_args]
@@ -4767,30 +4875,43 @@ endforeach()
             if data_bind:
                 return f"[&]() {{ {data_bind}return {data_init}; }}()"
             return data_init  # the slot vector IS the "ciphertext"
+        # encrypt_coeffs: `data` holds the polynomial's ring_dim coefficients;
+        # the plaintext packs their ring_dim / 2 complex slot values
+        if coefficients:
+            encode = (f"MakeCKKSPackedPlaintext(nb_coeffs::to_slots(_data, _cc->GetRingDimension()), 1, {level}, "
+                      f"nullptr, _cc->GetRingDimension() / 2)")
+        else:
+            encode = f"MakeCKKSPackedPlaintext(_data, 1, {level})"
         if self._fideslib:
             # The facade's Encrypt takes the plaintext by non-const reference.
             return (f"[&]() {{ auto _cc = nb_fideslib::context(); "
                     f"{data_bind}auto _data = {data_init}; "
-                    f"auto _pt = _cc->MakeCKKSPackedPlaintext(_data, 1, {level}); "
+                    f"auto _pt = _cc->{encode}; "
                     f"return _cc->Encrypt({pk}, _pt); }}()")
         return (f"[&]() {{ auto _cc = {pk}->GetCryptoContext(); "
                 f"{data_bind}auto _data = {data_init}; "
                 f"return _cc->Encrypt({pk}, "
-                f"_cc->MakeCKKSPackedPlaintext(_data, 1, {level})); }}()")
+                f"_cc->{encode}); }}()")
 
-    def _gen_decrypt(self, args: list[ast.Arg]) -> str:
+    def _gen_decrypt(self, args: list[ast.Arg], coefficients: bool = False) -> str:
         positional = [self._expr_to_cpp(a.value) for a in args if not a.name]
         sk = positional[0] if positional else "sk"
         ct = positional[1] if len(positional) > 1 else "ct"
         if self._plain_mode:
             return f"({ct})"  # already a slot vector
+        # decrypt_coeffs: the decrypted polynomial's ring_dim coefficients,
+        # from every slot's complex value (the scheme's data_type: complex)
         if self._fideslib:
+            value = ("nb_coeffs::from_slots(pt->GetCKKSPackedValue(), nb_fideslib::context()->GetRingDimension())"
+                     if coefficients else "pt->GetRealPackedValue()")
             return (f"[&]() {{ Plaintext pt; auto _ct = {ct}; "
                     f"nb_fideslib::context()->Decrypt({sk}, _ct, &pt); "
-                    f"return pt->GetRealPackedValue(); }}()")
+                    f"return {value}; }}()")
+        value = (f"nb_coeffs::from_slots(pt->GetCKKSPackedValue(), {sk}->GetCryptoContext()->GetRingDimension())"
+                 if coefficients else "pt->GetRealPackedValue()")
         return (f"[&]() {{ Plaintext pt; "
                 f"{sk}->GetCryptoContext()->Decrypt({sk}, {ct}, &pt); "
-                f"return pt->GetRealPackedValue(); }}()")
+                f"return {value}; }}()")
 
     def _gen_reduce(self, args: list[ast.Arg]) -> str:
         positional = [self._expr_to_cpp(a.value) for a in args if not a.name]
@@ -5304,6 +5425,14 @@ endforeach()
             f"    parameters.SetScalingTechnique({scaling});",
             "    parameters.SetKeySwitchTechnique(HYBRID);",
         ]
+        # data_type: complex keeps the imaginary part of every slot (CKKS's
+        # default, real, discards it at decryption): a coefficient-domain
+        # plaintext (encrypt_coeffs, mul_coeffs, decrypt_coeffs) uses both.
+        data_type = str(scheme_cfg.get("data_type", "real"))
+        if data_type not in ("real", "complex"):
+            raise CodegenError(f"scheme data_type: {data_type}: real or complex")
+        if data_type == "complex":
+            lines.append("    parameters.SetCKKSDataType(COMPLEX);")
         # key_switch_digits: HYBRID key switching's digit count (OpenFHE's
         # dnum, SetNumLargeDigits; its default 0 lets OpenFHE choose, 3 for a
         # deep chain). More digits shrink the special modulus P, which is
