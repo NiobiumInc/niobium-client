@@ -1247,6 +1247,117 @@ def test_fideslib_backend_rejects_what_the_facade_lacks():
     assert "cc->EvalSum(" in files["compute.cpp"]
 
 
+# ── coefficient-domain plaintexts, compress, mul_monomial ────────────────────
+
+COEFFS_SRC = """
+enum Size { Toy }
+struct Instance { size: Size, ring_dim: u32 }
+fn instance(size: Size) -> Instance { Instance { size, ring_dim: 4096 } }
+fn instance_name(size: Size) -> string { "toy" }
+fn iodir(inst: Instance) -> path { root() / "io" }
+fn keydir(inst: Instance) -> path { iodir(inst) / "keys" }
+fn encdir(inst: Instance) -> path { iodir(inst) / "encrypted" }
+fn poly(inst: Instance, v: f64) -> vec<f64> {
+    let c = vec_zeros<f64>(inst.ring_dim)
+    c[1] = v
+    return c
+}
+
+wire CryptoParams { context: CryptoContext, public_key: PublicKey, eval_rot_keys: EvalAutomorphismKeys }
+wire Input { x: enc<vec<f64>> }
+wire Output { y: enc<vec<f64>> }
+
+scheme CKKS {
+    security: not_set
+    scaling: fixed_auto
+    precision: 50 bits
+    first_mod: 60 bits
+    depth: 1
+    data_type: complex
+}
+
+requires { add, mul, rotate }
+
+@client @stage("key_generation")
+fn generate_keys(inst: Instance) -> writes(CryptoParams) {
+    let keys = keygen()
+    save_secret_key(keys.secret, keydir(inst) / "sk.bin")
+    return CryptoParams { context: keys.context, public_key: keys.public, eval_rot_keys: keys.eval_rot }
+}
+
+@client @stage("encrypt")
+fn encrypt_input(inst: Instance, v: f64) -> writes(Input) {
+    let p = load(CryptoParams, from: keydir(inst))
+    return Input { x: encrypt_coeffs(p.public_key, poly(inst, v), level: 0) }
+}
+
+@server @stage("compute")
+@hardware(cache_key: ["size"])
+fn compute(inst: Instance) -> reads(Input) writes(Output) {
+    let i = load(Input, from: encdir(inst))
+    let a = compress(mul_coeffs(i.x, poly(inst, 2.0)), 1)
+    return Output { y: a + mul_monomial(a, 3) }
+}
+
+@client @stage("decrypt")
+fn decrypt_output(inst: Instance) -> reads(Output) {
+    let sk = load_secret_key(keydir(inst) / "sk.bin")
+    let o = load(Output, from: encdir(inst))
+    let c = decrypt_coeffs(sk, o.y)
+    print(str(c[2]))
+}
+"""
+
+
+def test_coefficient_plaintexts_fideslib():
+    files = compile_fideslib(COEFFS_SRC)
+    assert "parameters.SetCKKSDataType(COMPLEX);" in files["key_generation.cpp"]
+    enc = files["encrypt.cpp"]
+    assert ("_cc->MakeCKKSPackedPlaintext(nb_coeffs::to_slots(_data, _cc->GetRingDimension()), 1, 0, "
+            "nullptr, _cc->GetRingDimension() / 2)") in enc
+    server = files["compute.cpp"]
+    # the product's plaintext: every coefficient, at the ciphertext's level,
+    # reported as a coefficient-domain vector
+    assert ("cc->MakeCKKSPackedPlaintext(nb_coeffs::to_slots(_v, _n), 1, _ct->GetLevel(), nullptr, _n / 2)") in server
+    assert "nb_recipe::coefficients(&_pt, _v); return cc->EvalMult(_ct, _pt);" in server
+    assert "cc->Compress(" in server and ", 1)" in server
+    # the facade's own MultByMonomial, not the scheme's
+    assert "cc->MultByMonomial(a, 3)" in server
+    assert "GetScheme()" not in server
+    dec = files["decrypt.cpp"]
+    assert "nb_coeffs::from_slots(pt->GetCKKSPackedValue(), nb_fideslib::context()->GetRingDimension())" in dec
+    header = files["nb_shared.h"]
+    assert "namespace nb_coeffs {" in header
+    assert '"nb.plaintext_coefficients"' in header   # its own line in vectors.jsonl
+
+
+def test_coefficient_plaintexts_openfhe():
+    files = compile_str(COEFFS_SRC)
+    assert "parameters.SetCKKSDataType(COMPLEX);" in files["key_generation.cpp"]
+    server = files["compute.cpp"]
+    assert "cc->GetScheme()->MultByMonomial(a, 3)" in server
+    assert "cc->Compress(" in server
+    assert "nb_coeffs::from_slots(pt->GetCKKSPackedValue(), sk->GetCryptoContext()->GetRingDimension())" in files["decrypt.cpp"]
+
+
+def test_scheme_data_type_default_is_real_and_checked():
+    import xcomp.codegen as cg
+    files = compile_fideslib(COEFFS_SRC.replace("    data_type: complex\n", ""))
+    assert "SetCKKSDataType" not in files["key_generation.cpp"]
+    try:
+        compile_fideslib(COEFFS_SRC.replace("data_type: complex", "data_type: quaternion"))
+        assert False, "an unknown data_type must be rejected"
+    except cg.CodegenError as e:
+        assert "data_type" in str(e)
+
+
+def test_coefficient_stage_has_no_cleartext_twin():
+    """The twin holds slot vectors: a stage on coefficient plaintexts has none."""
+    import xcomp.codegen as cg
+    for fn in ("compress", "mul_coeffs", "encrypt_coeffs", "decrypt_coeffs", "mul_monomial"):
+        assert fn in cg.CodeGenerator.REF_FORBIDDEN_FNS
+
+
 def test_fideslib_backend_openfhe_default_unchanged():
     files = compile_str(FIDESLIB_SRC)
     assert "nb_fideslib.h" not in files

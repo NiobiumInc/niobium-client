@@ -175,7 +175,7 @@ class Domain(Enum):
 
 
 # Capabilities restricted by domain
-CLIENT_ONLY_FNS = {"decrypt", "keygen", "save_secret_key", "load_secret_key"}
+CLIENT_ONLY_FNS = {"decrypt", "decrypt_coeffs", "keygen", "save_secret_key", "load_secret_key"}
 SERVER_FORBIDDEN_TYPES = {"SecretKey"}
 
 

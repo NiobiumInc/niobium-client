@@ -122,6 +122,24 @@ encoded from, as IEEE-754 binary64, little-endian, with no header: exactly
 `8 * length` bytes. Encoding them with `MakeCKKSPackedPlaintext(values,
 noise_scale_deg, level, nullptr, slots)` gives the program's plaintext.
 
+## `nb.plaintext_coefficients`, version 1
+
+Schema: [`plaintext_coefficients.schema.json`](../schemas/plaintext_coefficients.schema.json).
+One line per coefficient-domain plaintext (`mul_coeffs`), in the same
+`vectors.jsonl`, written when it is encoded:
+
+```
+{"schema": "nb.plaintext_coefficients", "version": 1, "tag": "pv:1", "length": 65536, "level": 0, "slots": 32768, "noise_scale_deg": 1}
+```
+
+The fields are `nb.plaintext_vector`'s. `pv_<n>.f64` holds the polynomial's
+`length` = `ring_dim` real coefficients, in order, and `slots` is
+`ring_dim / 2`. The program's plaintext holds `round(value * scale)` at each
+coefficient (`scale` the scaling factor at `level`), so a consumer can build
+it without the canonical embedding. It shares the `pv:<n>` numbering with the
+plaintext vectors: one count per process over both schemas. A consumer that
+reads only `nb.plaintext_vector` rejects the line by its schema.
+
 ## Input and output tags
 
 With a FIDESlib that has input tags (`FIDESLIB_HAS_INPUT_TAGS`), every

@@ -65,6 +65,13 @@ BUILTINS: list[Builtin] = [
     Builtin("bootstrap", "enc"),            # refresh; needs `requires { bootstrap }`
     Builtin("negate", "enc"),
     Builtin("mul_monomial", "enc"),
+    # Keep the towers a ciphertext still needs (default 1): Compress.
+    Builtin("compress", "enc"),
+    # Coefficient-domain plaintexts: a vector holds a polynomial's ring_dim
+    # real coefficients instead of slot values (scheme data_type: complex).
+    Builtin("mul_coeffs", "enc"),
+    Builtin("encrypt_coeffs", "enc"),
+    Builtin("decrypt_coeffs", "plain"),     # the ring_dim coefficients
     Builtin("chebyshev", "enc", depth_opaque=True),
     # The baby-step giant-step diagonal product sum_g Rot(sum_b Rot(ct, b) *
     # d[g*bstep + b], g*bstep), one plaintext multiplication deep; the plural
