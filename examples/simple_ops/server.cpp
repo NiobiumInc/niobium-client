@@ -7,19 +7,44 @@
 // replays through the FHETCH simulator, and serializes the result.
 //
 // Supported operations:
-//   ADD        a + b
-//   SUB        a - b
-//   MUL        a * b  (requires relinearization key)
-//   NEG        -a
-//   ADD_ADD    (a + b) + a  = 2a + b
-//   ADD_SUB    (a + b) - a  = b
-//   MUL_ADD    (a * b) + a
-//   ADD_MUL    (a + b) * a
+//   ADD                    a + b
+//   SUB                    a - b
+//   MUL                    a * b  (requires relinearization key)
+//   NEG                    -a
+//   ADD_ADD                (a + b) + a                             = 2a + b
+//   ADD_SUB                (a + b) - a                             = b
+//   ADD_NEG                (a + b) + (-a)                          = b
+//   MUL_ADD                (a * b) + a
+//   ADD_MUL                (a + b) * a
+//   MUL_MUL                (a * b) * a
+//   NEG_MUL_ADD            ((-a) * b) + a + b
+//   ADD_NEG_MUL_ADD        ((a + b) * (-a)) + b
+//   MAT_PATTERN            (a + b) * (a - b)
+//   ALL_NO_MUL             (a + b - a + 3 - 2) * 4  = (b + 1) * 4
 //
-// Usage: ./simple_ops_server [key_dir [operation]]
+//   immediate ops, default immediate shown, overridable via --immediate=N:
+//   ADDI                   a + immediate                       (default 3)
+//   SUBI                   a - immediate                       (default 2)
+//   MULI                   a * immediate                       (default 4)
+//   MULI_ADDI              (a * immediate) + immediate         (default 4)
+//   ADDI_MULI              (a + immediate) * immediate         (default 4)
+//   MULI_ADD               (a * immediate) + b                 (default 4)
+//   MUL_MONOMIAL           a * x^immediate                     (default 1)
+//
+//   rotation ops, default rotation shown, overridable via --immediate=N:
+//   ROTATE_ADD             rotate(a, immediate) + b                                  (default 1)
+//   ADD_ROTATE             rotate(a + b, immediate)                                  (default 1)
+//   ROTATE_MUL             rotate(a, immediate) * b                                  (default 1)
+//   ROTATE_ROTATE          rotate(a, immediate) + rotate(b, -immediate)              (default 1)
+//   MULI_ROT_ADD_MUL_SUBI  ((rotate(a * immediate, immediate) + b) * b) - immediate  (default 1)
+//   MORPH                  rotate(a, 1)  -- slot i of a holds a + (i % slot_period)
+//
+// Usage: ./simple_ops_server [key_dir [operation]] [--immediate=N]
 
 #include "openfhe.h"
 #include "niobium/compiler.h"
+
+#include <optional>
 
 #include "ciphertext-ser.h"
 #include "cryptocontext-ser.h"
