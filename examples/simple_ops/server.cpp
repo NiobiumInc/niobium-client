@@ -31,9 +31,16 @@ using namespace lbcrypto;
 int main(int argc, char* argv[]) {
     std::string keyDir = "simple_ops_keys";
     std::string operation = "ADD";
+    std::optional<double> immediate;
 
     if (argc > 1) keyDir = argv[1];
     if (argc > 2) operation = argv[2];
+    for (int i = 3; i < argc; ++i) {
+        const std::string arg = argv[i];
+        const std::string flag = "--immediate=";
+        if (arg.rfind(flag, 0) == 0)
+            immediate = std::stod(arg.substr(flag.size()));
+    }
 
     // ---- Niobium compiler setup ----
     niobium::compiler().init(argc, argv);
