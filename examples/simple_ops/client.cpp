@@ -21,6 +21,12 @@
 
 using namespace lbcrypto;
 
+constexpr uint32_t kDefaultSlotPeriod = 64;
+
+// Every rotation amount the simple_ops ROTATE_* tests use, both signs
+// (op_rotate_rotate rotates ct1 by +k and ct2 by -k).
+const std::vector<int32_t> kRotationKeyIndices = {1, -1, 2, -2, 5, -5, 8, -8};
+
 static std::vector<double> slot_ramp(double base, uint32_t num_slots, uint32_t period) {
     std::vector<double> values(num_slots, 0.0);
     for (uint32_t i = 0; i < num_slots; ++i) {
