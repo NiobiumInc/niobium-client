@@ -83,8 +83,7 @@ int main(int argc, char* argv[]) {
 
     auto keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
-    // Rotation keys needed for the MORPH test (EvalRotate by ±1).
-    cc->EvalRotateKeyGen(keyPair.secretKey, {1, -1});
+    cc->EvalRotateKeyGen(keyPair.secretKey, kRotationKeyIndices);
 
     // Serialize
     if (!Serial::SerializeToFile(outputDir + "/cc.bin", cc, SerType::BINARY))
