@@ -9,8 +9,7 @@
 //
 // Usage: ./simple_ops_client [output_dir [a [b [ring_dim]]]] [--slot-period=N]
 //   Defaults: output_dir=simple_ops_keys, a=5.0, b=6.0, ring_dim=65536 (2^16)
-//   --slot-period=N: slot i holds value + (i % N) (default 64); must divide
-//   ring_dim/2. Needed so rotation ops have something to rotate.
+//             slot-period=N: slot i holds value + (i % N) (default 64)
 
 #include "openfhe.h"
 
