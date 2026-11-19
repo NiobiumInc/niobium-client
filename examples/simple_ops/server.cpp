@@ -122,11 +122,11 @@ int main(int argc, char* argv[]) {
         } else if (operation == "NEG") {
             result = cc->EvalNegate(ct_a);
         } else if (operation == "ADDI") {
-            result = cc->EvalAdd(ct_a, 3.0);       // a + 3
+            result = cc->EvalAdd(ct_a, immediate.value_or(3.0));
         } else if (operation == "SUBI") {
-            result = cc->EvalSub(ct_a, 2.0);       // a - 2
+            result = cc->EvalSub(ct_a, immediate.value_or(2.0));
         } else if (operation == "MULI") {
-            result = cc->EvalMult(ct_a, 4.0);      // a * 4
+            result = cc->EvalMult(ct_a, immediate.value_or(4.0));
         } else if (operation == "ADD_ADD") {
             auto tmp = cc->EvalAdd(ct_a, ct_b);
             result = cc->EvalAdd(tmp, ct_a);
