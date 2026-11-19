@@ -73,8 +73,13 @@ int main(int argc, char* argv[]) {
     // Only ct*ct multiplies need the relinearization key; scalar EvalMult
     // (MULI, ALL_NO_MUL) does not.
     const bool needs_mult_key = operation == "MUL" || operation == "MUL_ADD" ||
-                                operation == "ADD_MUL" || operation == "MUL_MUL";
-    const bool needs_rotation_key = operation == "MORPH";
+                                operation == "ADD_MUL" || operation == "MUL_MUL" ||
+                                operation == "NEG_MUL_ADD" || operation == "ADD_NEG_MUL_ADD" ||
+                                operation == "MAT_PATTERN" || operation == "ROTATE_MUL" ||
+                                operation == "MULI_ROT_ADD_MUL_SUBI";
+    const bool needs_rotation_key = operation == "MORPH" || operation == "ROTATE_ADD" ||
+                                    operation == "ADD_ROTATE" || operation == "ROTATE_MUL" ||
+                                    operation == "ROTATE_ROTATE" || operation == "MULI_ROT_ADD_MUL_SUBI";
     if (needs_mult_key) {
         std::ifstream mkStream(keyDir + "/mk.bin", std::ios::binary);
         if (mkStream.is_open())
