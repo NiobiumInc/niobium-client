@@ -3,7 +3,9 @@
 //
 // Simple ops example — decrypt and verify (CKKS)
 //
-// Usage: ./simple_ops_decrypt [key_dir [operation]]
+// Usage: ./simple_ops_decrypt [key_dir [operation]] [--immediate=N] [--slot-period=N]
+//   --immediate=N: must match what server.cpp used for this operation.
+//   --slot-period=N: must match what client.cpp used to encrypt (default 64).
 
 #include "openfhe.h"
 
