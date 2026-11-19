@@ -101,12 +101,13 @@ int main(int argc, char* argv[]) {
         throw std::runtime_error("Failed to serialize eval automorphism key");
     rkStream.close();
 
-    // Pack two slots in ct_a so rotations produce a non-trivial result:
-    //   slot 0 = a, slot 1 = b  →  EvalRotate(ct_a, 1)[0] = b
-    std::vector<double> va = {a, b};
-    std::vector<double> vb = {b};
-    auto ct_a = cc->Encrypt(keyPair.publicKey, cc->MakeCKKSPackedPlaintext(va));
-    auto ct_b = cc->Encrypt(keyPair.publicKey, cc->MakeCKKSPackedPlaintext(vb));
+    const uint32_t num_slots = ring_dim / 2;
+    if (num_slots % slot_period != 0)
+        throw std::runtime_error("slot-period " + std::to_string(slot_period) +
+                                  " does not divide the slot count " + std::to_string(num_slots));
+
+    auto ct_a = encrypt_ramp(cc, keyPair.publicKey, a, num_slots, slot_period);
+    auto ct_b = encrypt_ramp(cc, keyPair.publicKey, b, num_slots, slot_period);
 
     if (!Serial::SerializeToFile(outputDir + "/ct_a.bin", ct_a, SerType::BINARY))
         throw std::runtime_error("Failed to serialize ciphertext a");
