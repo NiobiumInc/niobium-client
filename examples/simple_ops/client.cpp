@@ -49,11 +49,18 @@ int main(int argc, char* argv[]) {
     std::string outputDir = "simple_ops_keys";
     double a = 5.0, b = 6.0;
     uint32_t ring_dim = 65536;                  // 2^16: the ring dimension Niobium hardware runs
+    uint32_t slot_period = kDefaultSlotPeriod;
 
     if (argc > 1) outputDir = argv[1];
     if (argc > 2) a = std::stod(argv[2]);
     if (argc > 3) b = std::stod(argv[3]);
     if (argc > 4) ring_dim = static_cast<uint32_t>(std::stoul(argv[4]));
+    for (int i = 5; i < argc; ++i) {
+        const std::string arg = argv[i];
+        const std::string flag = "--slot-period=";
+        if (arg.rfind(flag, 0) == 0)
+            slot_period = static_cast<uint32_t>(std::stoul(arg.substr(flag.size())));
+    }
 
     std::cout << "=== Simple Ops — Client ===" << std::endl;
     std::cout << "a = " << a << ", b = " << b << std::endl;
