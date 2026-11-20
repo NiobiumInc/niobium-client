@@ -19,7 +19,7 @@
 
 using namespace lbcrypto;
 
-constexpr uint32_t kDefaultSlotPeriod = 64;
+constexpr uint32_t kDefaultSlotPeriod = 16;  // must match client.cpp's default
 
 // C++'s % keeps the sign of its left operand; slot indices need the
 // mathematical, always-non-negative result (e.g. mod_floor(-5, 16) == 11).
