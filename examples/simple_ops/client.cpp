@@ -8,8 +8,8 @@
 // is what the Makefile test targets pass; the default is the hardware's 2^16).
 //
 // Usage: ./simple_ops_client [output_dir [a [b [ring_dim]]]] [--slot-period=N]
-//   Defaults: output_dir=simple_ops_keys, a=5.0, b=6.0, ring_dim=65536 (2^16)
-//             slot-period=N: slot i holds value + (i % N) (default 64)
+//   Defaults: output_dir=simple_ops_keys, a=5.0, b=6.0, ring_dim=65536 (2^16),
+//             slot-period=N: slot i holds value + (i % N) (default 16)
 
 #include "openfhe.h"
 
@@ -22,7 +22,7 @@
 
 using namespace lbcrypto;
 
-constexpr uint32_t kDefaultSlotPeriod = 64;
+constexpr uint32_t kDefaultSlotPeriod = 16;
 
 // Every rotation amount the simple_ops ROTATE_* tests use, both signs
 // (op_rotate_rotate rotates ct1 by +k and ct2 by -k).
