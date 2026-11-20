@@ -103,8 +103,10 @@ int main(int argc, char* argv[]) {
         int rot = static_cast<int>(immediate.value_or(1.0));
         expected = (a + mod_floor(rot, static_cast<int>(slot_period))) + b;
     } else if (operation == "ADD_ROTATE") {
+        // ct_a and ct_b both carry the ramp offset at slot i, so summing
+        // them before rotating doubles it: slot 0 = (a+b) + 2*mod_floor(rot, period).
         int rot = static_cast<int>(immediate.value_or(1.0));
-        expected = a + b + mod_floor(rot, static_cast<int>(slot_period));
+        expected = a + b + 2 * mod_floor(rot, static_cast<int>(slot_period));
     } else if (operation == "ROTATE_MUL") {
         int rot = static_cast<int>(immediate.value_or(1.0));
         expected = (a + mod_floor(rot, static_cast<int>(slot_period))) * b;
@@ -113,9 +115,11 @@ int main(int argc, char* argv[]) {
         int period = static_cast<int>(slot_period);
         expected = (a + mod_floor(rot, period)) + (b + mod_floor(-rot, period));
     } else if (operation == "MULI_ROT_ADD_MUL_SUBI") {
+        // ct_a * imm scales the ramp offset too, before the rotation moves
+        // it: slot 0 of rotate(ct_a * imm, rot) = imm * (a + mod_floor(rot, period)).
         double imm = immediate.value_or(1.0);
         int rot = static_cast<int>(imm);
-        double rotated = a * imm + mod_floor(rot, static_cast<int>(slot_period));
+        double rotated = imm * (a + mod_floor(rot, static_cast<int>(slot_period)));
         expected = (rotated + b) * b - imm;
     } else if (operation == "MORPH") {
         // ct_a holds the slot ramp (client.cpp): slot i = a + (i % slot_period).
