@@ -656,6 +656,38 @@ test-op-release: build-release ## Run a single simple_ops test: make test-op-rel
 	$(call set-build-config,Release,build)
 	$(call run-simple-op,$(OP),$(A),$(B))
 
+# ==============================================================================
+# test-simple-ops-rotation-matrix-release — ROTATE_* ops x slot-period x
+# rotation amount
+#
+# run-simple-op expands each call at Make's parse time, so it can't loop over
+# a shell variable; this target shells the sweep out directly instead.
+#
+# Covers the 5 ops whose rotation amount comes from --immediate (ROTATE_ADD,
+# ADD_ROTATE, ROTATE_MUL, ROTATE_ROTATE, MULI_ROT_ADD_MUL_SUBI) against both
+# slot-periods (16, 64) and every rotation amount in use (1,-1,2,-2,5,-5,8,-8
+# — all under 16, so neither period aliases a rotation to 0). 80/80 passed
+# by hand before this target existed.
+# ==============================================================================
+
+test-simple-ops-rotation-matrix-release: build-release ## Rotation op matrix: slot-period x rotation amount (Release)
+	$(call set-build-config,Release,build)
+	@fail=0; \
+	for period in 16 64; do \
+	  rm -rf simple_ops_keys simple_ops_server_*; \
+	  $(BUILD_DIR)/examples/simple_ops_client simple_ops_keys 5 6 $(TEST_RING_DIM) --slot-period=$$period >/dev/null; \
+	  for op in ROTATE_ADD ADD_ROTATE ROTATE_MUL ROTATE_ROTATE MULI_ROT_ADD_MUL_SUBI; do \
+	    for rot in 1 -1 2 -2 5 -5 8 -8; do \
+	      $(BUILD_DIR)/examples/simple_ops_server simple_ops_keys $$op --no-ring-dim-check --immediate=$$rot >/dev/null; \
+	      out=$$($(BUILD_DIR)/examples/simple_ops_decrypt simple_ops_keys $$op --immediate=$$rot --slot-period=$$period | tail -1); \
+	      echo "period=$$period $$op rot=$$rot: $$out"; \
+	      echo "$$out" | grep -q '^\[PASS\]' || fail=$$((fail+1)); \
+	    done; \
+	  done; \
+	done; \
+	echo "=== rotation matrix failures: $$fail ==="; \
+	[ $$fail -eq 0 ]
+
 # Negative test for the Niobium hardware parameter checks: keygen at a ring
 # dimension the hardware does not run (anything but 2^16), then run mult_server
 # WITHOUT --no-ring-dim-check; it must abort with the compatibility error. Pinned
