@@ -75,6 +75,8 @@ int main(int argc, char* argv[]) {
     niobium::Compiler::CacheParameters params;
     params.push_back({"workload", "simple_ops"});
     params.push_back({"op", operation});
+    if (immediate)
+        params.push_back({"immediate", std::to_string(*immediate)});
     niobium::compiler().cache_parameters(params);
 
     std::cout << "=== Simple Ops — Server ===" << std::endl;
