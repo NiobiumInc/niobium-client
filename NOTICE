@@ -2,9 +2,9 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 ============================================================
 
 Project: niobium-client
-Generated: 2026-11-05
+Generated: 2026-11-21
 Tool: SCANOSS (snippet detection with License dataset)
-Components: 72
+Components: 71
 
 This file lists all third-party software components detected
 in this repository, along with their licenses and copyright
@@ -21,7 +21,7 @@ These require manual review to determine licensing terms.
 
 LICENSE SUMMARY
 
-  Apache-2.0: 17 component(s)
+  Apache-2.0: 16 component(s)
   Apache-2.0 WITH LLVM-exception: 2 component(s)
   Apache-2.0 WITH LLVM-exception AND NCSA: 1 component(s)
   Apache-2.0 WITH LLVM-exception AND NCSA AND NCSA OR MIT AND NCSA AND MIT: 1 component(s)
@@ -251,11 +251,10 @@ COMPONENT ATTRIBUTIONS
   License: Apache-2.0, BSD-3-Clause, MIT
 
   doctest
-  Version: v2.4.11
+  Version: 2.4.7
   Source: https://github.com/doctest/doctest
   PURL: pkg:github/doctest/doctest
   Copyright:
-    Copyright 2016-2023 Viktor Kirilov
     Copyright (c) 2016-2021 Viktor Kirilov
   License: MIT
 
@@ -266,6 +265,18 @@ COMPONENT ATTRIBUTIONS
   Copyright:
     Copyright (c) 2016-2023 Viktor Kirilov
   License: MPL-2.0
+
+  enterprise-firefox
+  Version: FIREFOX_123_0_RELEASE
+  Source: https://github.com/mozilla/enterprise-firefox
+  PURL: pkg:github/mozilla/enterprise-firefox
+  Copyright:
+    Copyright 2005; Google Inc.
+    Copyright 2008; Google Inc.
+    Copyright 2009; Google Inc.
+    Copyright 2015; Google Inc.
+    Copyright 2018; Google Inc.
+  License: BSD-3-Clause
 
   Fall_Semester_programing
   Version: 32-Linux
@@ -524,7 +535,6 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2007; Google Inc.
     Copyright (c) 2008-2009; Google Inc.
     Copyright (c) 2011; Google Inc.
-    Copyright (c) 2013; Google Inc.
     Copyright (c) 2014; 2024; gperftools Contributors
     Copyright (c) 2014; gperftools Contributors
     Copyright (c) 2024; gperftools Contributors
@@ -535,7 +545,7 @@ COMPONENT ATTRIBUTIONS
   License: BSD-3-Clause
 
   gperftools
-  Version: a81b2eb
+  Version: gperftools-2.16.90
   Source: https://github.com/gperftools/gperftools
   PURL: pkg:github/gperftools/gperftools
   Copyright:
@@ -543,9 +553,7 @@ COMPONENT ATTRIBUTIONS
     Copyright 2008 ; Google Inc.
     Copyright 2012-2016 Free Software Foundation Inc
     Copyright 2014 gperftools Contributors
-    Copyright 2023 gperftools Contributors
     Copyright 2026 gperftools Contributors
-    Copyright (c) 2000; Google Inc.
     Copyright (c) 2003; Google Inc.
     Copyright (c) 2004; Google Inc.
     Copyright (c) 2006; Google Inc.
@@ -555,9 +563,8 @@ COMPONENT ATTRIBUTIONS
     Copyright (c) 2013; Google Inc.
     Copyright (c) 2021; IBM Ltd.
     Copyright (c) 2021; gperftools Contributors
+    Copyright (c) 2023; gperftools Contributors
     Copyright (c) 2024; gperftools Contributors
-    Copyright 1994; 1995; 1996; 1999; 2000; 2001; 2002 Free Software
-    Copyright 1994; 1995; 1996; 1999; 2000; 2001; 2002 Free Software Foundation; Inc.
   License: BSD-3-Clause
 
   gperftools
@@ -846,10 +853,18 @@ COMPONENT ATTRIBUTIONS
   Source: https://github.com/llvm/llvm-project-legacy-branches
   PURL: pkg:github/llvm/llvm-project-legacy-branches
   Copyright:
+    Copyright 1984 Sun Microsystems Inc
+    Copyright 1991 Carnegie Mellon University
+    Copyright 1991 Free Software Foundation Inc
+    Copyright 1991 Regents of the University of California
     Copyright 1991 by the Massachusetts Institute of Technology
     Copyright 1992 Henry Spencer. All rights reserved
+    Copyright 1993 by Digital Equipment Corporation
+    Copyright 1995 96 97 Free Software Foundation Inc
     Copyright 1997-2014 Intel Corporation
     Copyright 1997-2016 Intel Corporation
+    Copyright 2000 Intel Corporation
+    Copyright 2003-2007 University of Illinois at Urbana-Champaign
     Copyright 2003-2009 Jonathan  Wolf  Rentzsch:  http:  rentzsch.com
     Copyright 2003-2012 University of Illinois at Urbana-Champaign
     Copyright 2003-2014 University of Illinois at Urbana-Champaign.
@@ -905,15 +920,6 @@ COMPONENT ATTRIBUTIONS
   Version: 0.1.0a14.post0
   Source: https://pypi.org/project/nurikit
   PURL: pkg:pypi/nurikit
-  Copyright:
-    Copyright 2017 Google Inc
-    Copyright 2007; Google Inc.
-  License: Apache-2.0
-
-  nurikit
-  Version: v0.1.0a14.post0
-  Source: https://github.com/seoklab/nurikit
-  PURL: pkg:github/seoklab/nurikit
   Copyright:
     Copyright 2017 Google Inc
     Copyright 2007; Google Inc.
@@ -1023,14 +1029,6 @@ COMPONENT ATTRIBUTIONS
   Copyright:
     Copyright 2007; Google Inc.
   License: MIT
-
-  rk2
-  Version: 1.0.5
-  Source: https://github.com/1gadji/rk2
-  PURL: pkg:github/1gadji/rk2
-  Copyright:
-    Copyright 2020; Google Inc.
-  License: BSD-3-Clause
 
   slowfuzz
   Version: e124345
