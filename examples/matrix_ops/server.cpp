@@ -123,7 +123,10 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             std::string filename = keyDir + "/matrix_c_" + std::to_string(i) + "_" + std::to_string(j) + ".bin";
-            Serial::SerializeToFile(filename, result, SerType::BINARY);
+            if (!Serial::SerializeToFile(filename, result, SerType::BINARY)) {
+                std::cerr << "[ERROR] Failed to serialize " << filename << std::endl;
+                return 1;
+            }
         }
     }
 
