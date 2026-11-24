@@ -3,11 +3,14 @@
 //
 // Simple ops example — decrypt and verify (CKKS)
 //
-// Usage: ./simple_ops_decrypt [key_dir [operation]]
+// Usage: ./simple_ops_decrypt [key_dir [operation]] [--immediate=N] [--slot-period=N]
+//   --immediate=N: must match what server.cpp used for this operation.
+//   --slot-period=N: must match what client.cpp used to encrypt (default 16).
 
 #include "openfhe.h"
 
 #include <cmath>
+#include <optional>
 
 #include "ciphertext-ser.h"
 #include "cryptocontext-ser.h"
@@ -16,12 +19,32 @@
 
 using namespace lbcrypto;
 
+constexpr uint32_t kDefaultSlotPeriod = 16;  // must match client.cpp's default
+
+// C++'s % keeps the sign of its left operand; slot indices need the
+// mathematical, always-non-negative result (e.g. mod_floor(-5, 16) == 11).
+static int mod_floor(int value, int period) {
+    int r = value % period;
+    return r < 0 ? r + period : r;
+}
+
 int main(int argc, char* argv[]) {
     std::string keyDir = "simple_ops_keys";
     std::string operation = "ADD";
+    std::optional<double> immediate;
+    uint32_t slot_period = kDefaultSlotPeriod;
 
     if (argc > 1) keyDir = argv[1];
     if (argc > 2) operation = argv[2];
+    for (int i = 3; i < argc; ++i) {
+        const std::string arg = argv[i];
+        const std::string imm_flag = "--immediate=";
+        const std::string period_flag = "--slot-period=";
+        if (arg.rfind(imm_flag, 0) == 0)
+            immediate = std::stod(arg.substr(imm_flag.size()));
+        else if (arg.rfind(period_flag, 0) == 0)
+            slot_period = static_cast<uint32_t>(std::stoul(arg.substr(period_flag.size())));
+    }
 
     std::cout << "=== Simple Ops — Decrypt (" << operation << ") ===" << std::endl;
 
@@ -55,17 +78,53 @@ int main(int argc, char* argv[]) {
     else if (operation == "SUB")     expected = a - b;
     else if (operation == "MUL")     expected = a * b;
     else if (operation == "NEG")     expected = -a;
-    else if (operation == "ADDI")    expected = a + 3.0;
-    else if (operation == "SUBI")    expected = a - 2.0;
-    else if (operation == "MULI")    expected = a * 4.0;
+    else if (operation == "ADDI")    expected = a + immediate.value_or(3.0);
+    else if (operation == "SUBI")    expected = a - immediate.value_or(2.0);
+    else if (operation == "MULI")    expected = a * immediate.value_or(4.0);
     else if (operation == "ADD_ADD") expected = 2 * a + b;
     else if (operation == "ADD_SUB") expected = b;
+    else if (operation == "ADD_NEG") expected = b;
     else if (operation == "MUL_ADD") expected = a * b + a;
     else if (operation == "ADD_MUL") expected = (a + b) * a;
     else if (operation == "MUL_MUL") expected = a * b * a;
+    else if (operation == "NEG_MUL_ADD") expected = (-a) * b + a + b;
+    else if (operation == "ADD_NEG_MUL_ADD") expected = (a + b) * (-a) + b;
+    else if (operation == "MAT_PATTERN") expected = (a + b) * (a - b);
     else if (operation == "ALL_NO_MUL") expected = (b + 1.0) * 4.0;
-    else if (operation == "MORPH")   expected = b;  // EvalRotate(ct_a={a,b}, 1)[0]
-    else {
+    else if (operation == "MULI_ADDI") {
+        double imm = immediate.value_or(4.0);
+        expected = a * imm + imm;
+    } else if (operation == "ADDI_MULI") {
+        double imm = immediate.value_or(4.0);
+        expected = (a + imm) * imm;
+    } else if (operation == "MULI_ADD") {
+        expected = a * immediate.value_or(4.0) + b;
+    } else if (operation == "ROTATE_ADD") {
+        int rot = static_cast<int>(immediate.value_or(1.0));
+        expected = (a + mod_floor(rot, static_cast<int>(slot_period))) + b;
+    } else if (operation == "ADD_ROTATE") {
+        // ct_a and ct_b both carry the ramp offset at slot i, so summing
+        // them before rotating doubles it: slot 0 = (a+b) + 2*mod_floor(rot, period).
+        int rot = static_cast<int>(immediate.value_or(1.0));
+        expected = a + b + 2 * mod_floor(rot, static_cast<int>(slot_period));
+    } else if (operation == "ROTATE_MUL") {
+        int rot = static_cast<int>(immediate.value_or(1.0));
+        expected = (a + mod_floor(rot, static_cast<int>(slot_period))) * b;
+    } else if (operation == "ROTATE_ROTATE") {
+        int rot = static_cast<int>(immediate.value_or(1.0));
+        int period = static_cast<int>(slot_period);
+        expected = (a + mod_floor(rot, period)) + (b + mod_floor(-rot, period));
+    } else if (operation == "MULI_ROT_ADD_MUL_SUBI") {
+        // ct_a * imm scales the ramp offset too, before the rotation moves
+        // it: slot 0 of rotate(ct_a * imm, rot) = imm * (a + mod_floor(rot, period)).
+        double imm = immediate.value_or(1.0);
+        int rot = static_cast<int>(imm);
+        double rotated = imm * (a + mod_floor(rot, static_cast<int>(slot_period)));
+        expected = (rotated + b) * b - imm;
+    } else if (operation == "MORPH") {
+        // ct_a holds the slot ramp (client.cpp): slot i = a + (i % slot_period).
+        expected = a + mod_floor(1, static_cast<int>(slot_period));
+    } else {
         std::cerr << "Unknown operation: " << operation << std::endl;
         return 1;
     }

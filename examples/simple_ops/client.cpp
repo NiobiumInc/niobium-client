@@ -7,8 +7,9 @@
 // Matching compiler's TOY defaults: qi=42, firstMod=57, depth=2 (TOY's N=2048
 // is what the Makefile test targets pass; the default is the hardware's 2^16).
 //
-// Usage: ./simple_ops_client [output_dir [a [b [ring_dim]]]]
-//   Defaults: output_dir=simple_ops_keys, a=5.0, b=6.0, ring_dim=65536 (2^16)
+// Usage: ./simple_ops_client [output_dir [a [b [ring_dim]]]] [--slot-period=N]
+//   Defaults: output_dir=simple_ops_keys, a=5.0, b=6.0, ring_dim=65536 (2^16),
+//             slot-period=N: slot i holds value + (i % N) (default 16)
 
 #include "openfhe.h"
 
@@ -21,15 +22,44 @@
 
 using namespace lbcrypto;
 
+constexpr uint32_t kDefaultSlotPeriod = 16;
+
+// Every rotation amount the simple_ops ROTATE_* tests use, both signs
+// (op_rotate_rotate rotates ct1 by +k and ct2 by -k).
+const std::vector<int32_t> kRotationKeyIndices = {1, -1, 2, -2, 5, -5, 8, -8};
+
+static std::vector<double> slot_ramp(double base, uint32_t num_slots, uint32_t period) {
+    std::vector<double> values(num_slots, 0.0);
+    for (uint32_t i = 0; i < num_slots; ++i) {
+        values[i] = base + static_cast<double>(i % period);
+    }
+    return values;
+}
+
+static Ciphertext<DCRTPoly> encrypt_ramp(const CryptoContext<DCRTPoly>& cc,
+                                         const PublicKey<DCRTPoly>& pk,
+                                         double base, uint32_t num_slots, uint32_t period) {
+    Plaintext pt = cc->MakeCKKSPackedPlaintext(slot_ramp(base, num_slots, period),
+                                               1, 0, nullptr, num_slots);
+    return cc->Encrypt(pk, pt);
+}
+
 int main(int argc, char* argv[]) {
     std::string outputDir = "simple_ops_keys";
     double a = 5.0, b = 6.0;
     uint32_t ring_dim = 65536;                  // 2^16: the ring dimension Niobium hardware runs
+    uint32_t slot_period = kDefaultSlotPeriod;
 
     if (argc > 1) outputDir = argv[1];
     if (argc > 2) a = std::stod(argv[2]);
     if (argc > 3) b = std::stod(argv[3]);
     if (argc > 4) ring_dim = static_cast<uint32_t>(std::stoul(argv[4]));
+    for (int i = 5; i < argc; ++i) {
+        const std::string arg = argv[i];
+        const std::string flag = "--slot-period=";
+        if (arg.rfind(flag, 0) == 0)
+            slot_period = static_cast<uint32_t>(std::stoul(arg.substr(flag.size())));
+    }
 
     std::cout << "=== Simple Ops — Client ===" << std::endl;
     std::cout << "a = " << a << ", b = " << b << std::endl;
@@ -52,8 +82,7 @@ int main(int argc, char* argv[]) {
 
     auto keyPair = cc->KeyGen();
     cc->EvalMultKeyGen(keyPair.secretKey);
-    // Rotation keys needed for the MORPH test (EvalRotate by ±1).
-    cc->EvalRotateKeyGen(keyPair.secretKey, {1, -1});
+    cc->EvalRotateKeyGen(keyPair.secretKey, kRotationKeyIndices);
 
     // Serialize
     if (!Serial::SerializeToFile(outputDir + "/cc.bin", cc, SerType::BINARY))
@@ -71,12 +100,13 @@ int main(int argc, char* argv[]) {
         throw std::runtime_error("Failed to serialize eval automorphism key");
     rkStream.close();
 
-    // Pack two slots in ct_a so rotations produce a non-trivial result:
-    //   slot 0 = a, slot 1 = b  →  EvalRotate(ct_a, 1)[0] = b
-    std::vector<double> va = {a, b};
-    std::vector<double> vb = {b};
-    auto ct_a = cc->Encrypt(keyPair.publicKey, cc->MakeCKKSPackedPlaintext(va));
-    auto ct_b = cc->Encrypt(keyPair.publicKey, cc->MakeCKKSPackedPlaintext(vb));
+    const uint32_t num_slots = ring_dim / 2;
+    if (num_slots % slot_period != 0)
+        throw std::runtime_error("slot-period " + std::to_string(slot_period) +
+                                  " does not divide the slot count " + std::to_string(num_slots));
+
+    auto ct_a = encrypt_ramp(cc, keyPair.publicKey, a, num_slots, slot_period);
+    auto ct_b = encrypt_ramp(cc, keyPair.publicKey, b, num_slots, slot_period);
 
     if (!Serial::SerializeToFile(outputDir + "/ct_a.bin", ct_a, SerType::BINARY))
         throw std::runtime_error("Failed to serialize ciphertext a");

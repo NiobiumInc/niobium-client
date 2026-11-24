@@ -7,19 +7,43 @@
 // replays through the FHETCH simulator, and serializes the result.
 //
 // Supported operations:
-//   ADD        a + b
-//   SUB        a - b
-//   MUL        a * b  (requires relinearization key)
-//   NEG        -a
-//   ADD_ADD    (a + b) + a  = 2a + b
-//   ADD_SUB    (a + b) - a  = b
-//   MUL_ADD    (a * b) + a
-//   ADD_MUL    (a + b) * a
+//   ADD                    a + b
+//   SUB                    a - b
+//   MUL                    a * b  (requires relinearization key)
+//   NEG                    -a
+//   ADD_ADD                (a + b) + a                             = 2a + b
+//   ADD_SUB                (a + b) - a                             = b
+//   ADD_NEG                (a + b) + (-a)                          = b
+//   MUL_ADD                (a * b) + a
+//   ADD_MUL                (a + b) * a
+//   MUL_MUL                (a * b) * a
+//   NEG_MUL_ADD            ((-a) * b) + a + b
+//   ADD_NEG_MUL_ADD        ((a + b) * (-a)) + b
+//   MAT_PATTERN            (a + b) * (a - b)
+//   ALL_NO_MUL             (a + b - a + 3 - 2) * 4  = (b + 1) * 4
 //
-// Usage: ./simple_ops_server [key_dir [operation]]
+//   immediate ops, default immediate shown, overridable via --immediate=N:
+//   ADDI                   a + immediate                       (default 3)
+//   SUBI                   a - immediate                       (default 2)
+//   MULI                   a * immediate                       (default 4)
+//   MULI_ADDI              (a * immediate) + immediate         (default 4)
+//   ADDI_MULI              (a + immediate) * immediate         (default 4)
+//   MULI_ADD               (a * immediate) + b                 (default 4)
+//
+//   rotation ops, default rotation shown, overridable via --immediate=N:
+//   ROTATE_ADD             rotate(a, immediate) + b                                  (default 1)
+//   ADD_ROTATE             rotate(a + b, immediate)                                  (default 1)
+//   ROTATE_MUL             rotate(a, immediate) * b                                  (default 1)
+//   ROTATE_ROTATE          rotate(a, immediate) + rotate(b, -immediate)              (default 1)
+//   MULI_ROT_ADD_MUL_SUBI  ((rotate(a * immediate, immediate) + b) * b) - immediate  (default 1)
+//   MORPH                  rotate(a, 1)  -- slot i of a holds a + (i % slot_period)
+//
+// Usage: ./simple_ops_server [key_dir [operation]] [--immediate=N]
 
 #include "openfhe.h"
 #include "niobium/compiler.h"
+
+#include <optional>
 
 #include "ciphertext-ser.h"
 #include "cryptocontext-ser.h"
@@ -31,9 +55,16 @@ using namespace lbcrypto;
 int main(int argc, char* argv[]) {
     std::string keyDir = "simple_ops_keys";
     std::string operation = "ADD";
+    std::optional<double> immediate;
 
     if (argc > 1) keyDir = argv[1];
     if (argc > 2) operation = argv[2];
+    for (int i = 3; i < argc; ++i) {
+        const std::string arg = argv[i];
+        const std::string flag = "--immediate=";
+        if (arg.rfind(flag, 0) == 0)
+            immediate = std::stod(arg.substr(flag.size()));
+    }
 
     // ---- Niobium compiler setup ----
     niobium::compiler().init(argc, argv);
@@ -44,6 +75,8 @@ int main(int argc, char* argv[]) {
     niobium::Compiler::CacheParameters params;
     params.push_back({"workload", "simple_ops"});
     params.push_back({"op", operation});
+    if (immediate)
+        params.push_back({"immediate", std::to_string(*immediate)});
     niobium::compiler().cache_parameters(params);
 
     std::cout << "=== Simple Ops — Server ===" << std::endl;
@@ -66,8 +99,13 @@ int main(int argc, char* argv[]) {
     // Only ct*ct multiplies need the relinearization key; scalar EvalMult
     // (MULI, ALL_NO_MUL) does not.
     const bool needs_mult_key = operation == "MUL" || operation == "MUL_ADD" ||
-                                operation == "ADD_MUL" || operation == "MUL_MUL";
-    const bool needs_rotation_key = operation == "MORPH";
+                                operation == "ADD_MUL" || operation == "MUL_MUL" ||
+                                operation == "NEG_MUL_ADD" || operation == "ADD_NEG_MUL_ADD" ||
+                                operation == "MAT_PATTERN" || operation == "ROTATE_MUL" ||
+                                operation == "MULI_ROT_ADD_MUL_SUBI";
+    const bool needs_rotation_key = operation == "MORPH" || operation == "ROTATE_ADD" ||
+                                    operation == "ADD_ROTATE" || operation == "ROTATE_MUL" ||
+                                    operation == "ROTATE_ROTATE" || operation == "MULI_ROT_ADD_MUL_SUBI";
     if (needs_mult_key) {
         std::ifstream mkStream(keyDir + "/mk.bin", std::ios::binary);
         if (mkStream.is_open())
@@ -110,11 +148,11 @@ int main(int argc, char* argv[]) {
         } else if (operation == "NEG") {
             result = cc->EvalNegate(ct_a);
         } else if (operation == "ADDI") {
-            result = cc->EvalAdd(ct_a, 3.0);       // a + 3
+            result = cc->EvalAdd(ct_a, immediate.value_or(3.0));
         } else if (operation == "SUBI") {
-            result = cc->EvalSub(ct_a, 2.0);       // a - 2
+            result = cc->EvalSub(ct_a, immediate.value_or(2.0));
         } else if (operation == "MULI") {
-            result = cc->EvalMult(ct_a, 4.0);      // a * 4
+            result = cc->EvalMult(ct_a, immediate.value_or(4.0));
         } else if (operation == "ADD_ADD") {
             auto tmp = cc->EvalAdd(ct_a, ct_b);
             result = cc->EvalAdd(tmp, ct_a);
@@ -140,13 +178,67 @@ int main(int argc, char* argv[]) {
             auto t5 = cc->EvalMult(t4, 4.0);         // (b + 1) * 4
             auto t6 = cc->EvalNegate(t5);             // -(b + 1) * 4
             result = cc->EvalNegate(t6);              // (b + 1) * 4
+        } else if (operation == "ADD_NEG") {
+            auto tmp = cc->EvalAdd(ct_a, ct_b);
+            result = cc->EvalAdd(tmp, cc->EvalNegate(ct_a));  // (a + b) + (-a) = b
+        } else if (operation == "NEG_MUL_ADD") {
+            auto tmp = cc->EvalMult(cc->EvalNegate(ct_a), ct_b);  // (-a) * b
+            tmp = cc->EvalAdd(tmp, ct_a);
+            result = cc->EvalAdd(tmp, ct_b);
+        } else if (operation == "ADD_NEG_MUL_ADD") {
+            auto tmp = cc->EvalAdd(ct_a, ct_b);                       // a + b
+            tmp = cc->EvalMult(tmp, cc->EvalNegate(ct_a));            // (a + b) * (-a)
+            result = cc->EvalAdd(tmp, ct_b);
+        } else if (operation == "MAT_PATTERN") {
+            auto sum = cc->EvalAdd(ct_a, ct_b);
+            auto diff = cc->EvalSub(ct_a, ct_b);
+            result = cc->EvalMult(sum, diff);        // (a + b) * (a - b)
+        } else if (operation == "MULI_ADDI") {
+            double imm = immediate.value_or(4.0);
+            result = cc->EvalMult(ct_a, imm);
+            result = cc->EvalAdd(result, imm);       // (a * imm) + imm
+        } else if (operation == "ADDI_MULI") {
+            double imm = immediate.value_or(4.0);
+            result = cc->EvalAdd(ct_a, imm);
+            result = cc->EvalMult(result, imm);      // (a + imm) * imm
+        } else if (operation == "MULI_ADD") {
+            double imm = immediate.value_or(4.0);
+            result = cc->EvalMult(ct_a, imm);
+            result = cc->EvalAdd(result, ct_b);      // (a * imm) + b
+        } else if (operation == "ROTATE_ADD") {
+            int rot = static_cast<int>(immediate.value_or(1.0));
+            auto rotated = cc->EvalRotate(ct_a, rot);
+            result = cc->EvalAdd(rotated, ct_b);     // rotate(a, rot) + b
+        } else if (operation == "ADD_ROTATE") {
+            int rot = static_cast<int>(immediate.value_or(1.0));
+            result = cc->EvalAdd(ct_a, ct_b);
+            result = cc->EvalRotate(result, rot);    // rotate(a + b, rot)
+        } else if (operation == "ROTATE_MUL") {
+            int rot = static_cast<int>(immediate.value_or(1.0));
+            auto rotated = cc->EvalRotate(ct_a, rot);
+            result = cc->EvalMult(rotated, ct_b);    // rotate(a, rot) * b
+        } else if (operation == "ROTATE_ROTATE") {
+            int rot = static_cast<int>(immediate.value_or(1.0));
+            auto rot1 = cc->EvalRotate(ct_a, rot);
+            auto rot2 = cc->EvalRotate(ct_b, -rot);
+            result = cc->EvalAdd(rot1, rot2);        // rotate(a, rot) + rotate(b, -rot)
+        } else if (operation == "MULI_ROT_ADD_MUL_SUBI") {
+            double imm = immediate.value_or(1.0);
+            result = cc->EvalMult(ct_a, imm);
+            result = cc->EvalRotate(result, static_cast<int>(imm));
+            result = cc->EvalAdd(result, ct_b);
+            result = cc->EvalMult(result, ct_b);
+            result = cc->EvalSub(result, imm);       // ((rotate(a*imm, imm) + b) * b) - imm
         } else if (operation == "MORPH") {
-            // Rotate ct_a left by 1 slot. ct_a packs (a, b) so slot 0 of
-            // the rotated result equals b.
+            // ct_a holds the slot ramp (see client.cpp): slot i = a + (i %
+            // slot_period). Rotating left by 1 brings a + 1 into slot 0.
             result = cc->EvalRotate(ct_a, 1);
         } else {
             std::cerr << "Unknown operation: " << operation << std::endl;
-            std::cerr << "Valid: ADD SUB MUL NEG ADDI SUBI MULI ADD_ADD ADD_SUB MUL_ADD ADD_MUL MUL_MUL ALL_NO_MUL MORPH" << std::endl;
+            std::cerr << "Valid: ADD SUB MUL NEG ADDI SUBI MULI ADD_ADD ADD_SUB ADD_NEG MUL_ADD "
+                      << "ADD_MUL MUL_MUL NEG_MUL_ADD ADD_NEG_MUL_ADD MAT_PATTERN ALL_NO_MUL "
+                      << "MULI_ADDI ADDI_MULI MULI_ADD ROTATE_ADD ADD_ROTATE "
+                      << "ROTATE_MUL ROTATE_ROTATE MULI_ROT_ADD_MUL_SUBI MORPH" << std::endl;
             return 1;
         }
 
@@ -211,7 +303,10 @@ int main(int argc, char* argv[]) {
             }
             std::cout << std::endl;
         }
-        Serial::SerializeToFile(keyDir + "/ct_result.bin", ct_result, SerType::BINARY);
+        if (!Serial::SerializeToFile(keyDir + "/ct_result.bin", ct_result, SerType::BINARY)) {
+            std::cerr << "[ERROR] Failed to serialize result ciphertext" << std::endl;
+            return 1;
+        }
         std::cout << "Result written to " << keyDir << "/ct_result.bin" << std::endl;
     } else {
         std::cerr << "[ERROR] Could not retrieve result" << std::endl;
