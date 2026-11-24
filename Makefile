@@ -612,6 +612,8 @@ define run-simple-op
 endef
 
 test-simple-ops: build ## Run all simple_ops tests (Debug)
+	# Intentionally a small smoke subset, not the full sweep -- Debug just
+	# needs a quick build-works check; test-simple-ops-release is the gate.
 	$(call set-build-config,Debug,dbuild)
 	$(call run-simple-op,ADD,5,6)
 	$(call run-simple-op,SUB,5,6)
@@ -638,6 +640,7 @@ test-simple-ops-release: build-release ## Run all simple_ops tests (Release)
 	$(call run-simple-op,MUL_ADD,5,6)
 	$(call run-simple-op,ADD_MUL,5,6)
 	$(call run-simple-op,MUL_MUL,5,6)
+	$(call run-simple-op,ALL_NO_MUL,5,6)
 	$(call run-simple-op,ADD_NEG,5,6)
 	$(call run-simple-op,NEG_MUL_ADD,5,6)
 	$(call run-simple-op,ADD_NEG_MUL_ADD,5,6)
@@ -771,7 +774,7 @@ test-transport-hardening-release: build-release ## Security regressions for the 
 	    $(if $(PROJECT),--project $(PROJECT),)
 
 ## Run all client-level Release tests (CI target — no fhetch submodule)
-test-client-release: test-simple-ops-release test-mult-release test-auto-ciphers-release test-auto-trace-format-release test-bootstrap-release test-plaintext-add-release test-ring-dim-check-release test-transport-hardening-release
+test-client-release: test-simple-ops-release test-simple-ops-rotation-matrix-release test-mult-release test-auto-ciphers-release test-auto-trace-format-release test-bootstrap-release test-plaintext-add-release test-ring-dim-check-release test-transport-hardening-release
 
 ## Run all currently-passing Release tests (client + fhetch submodule) — internal server only, do not run in CI
 test-release: test-client-release test-fhetch-release
