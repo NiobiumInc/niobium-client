@@ -691,6 +691,20 @@ test-simple-ops-rotation-matrix-release: build-release ## Rotation op matrix: sl
 	echo "=== rotation matrix failures: $$fail ==="; \
 	[ $$fail -eq 0 ]
 
+test-matrix-ops-release: build-release ## Matrix multiply: C = A x B, one ciphertext per cell (Release)
+	$(call set-build-config,Release,build)
+	@fail=0; \
+	for dims in "2 2 2 2" "4 2 2 3"; do \
+	  rm -rf matrix_ops_keys matrix_ops_server_*; \
+	  $(BUILD_DIR)/examples/matrix_ops_client matrix_ops_keys $$dims $(TEST_RING_DIM) >/dev/null; \
+	  $(BUILD_DIR)/examples/matrix_ops_server matrix_ops_keys $$dims --no-ring-dim-check >/dev/null; \
+	  out=$$($(BUILD_DIR)/examples/matrix_ops_decrypt matrix_ops_keys $$dims | tail -1); \
+	  echo "dims=$$dims: $$out"; \
+	  echo "$$out" | grep -q '^\[PASS\]' || fail=$$((fail+1)); \
+	done; \
+	echo "=== matrix ops failures: $$fail ==="; \
+	[ $$fail -eq 0 ]
+
 # Negative test for the Niobium hardware parameter checks: keygen at a ring
 # dimension the hardware does not run (anything but 2^16), then run mult_server
 # WITHOUT --no-ring-dim-check; it must abort with the compatibility error. Pinned

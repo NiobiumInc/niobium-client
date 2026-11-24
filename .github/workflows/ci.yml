@@ -135,7 +135,7 @@ jobs:
       # Tests — client-level aggregate only.
       #
       # test-client-release covers all client-level Release tests
-      # (simple_ops, mult, auto-ciphers, bootstrap) without delegating
+      # (simple_ops, matrix_ops, mult, auto-ciphers, bootstrap) without delegating
       # to the niobium-fhetch submodule. The fhetch submodule tests
       # (test-fhetch-release) are resource-intensive and run separately
       # on the internal server via test-release.

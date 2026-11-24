@@ -60,6 +60,22 @@ set_openfhe_rpath(simple_ops_server)
 set_openfhe_rpath(simple_ops_decrypt)
 
 # ==============================================================================
+# Matrix ops example — client / server / decrypt
+# ==============================================================================
+
+add_executable(matrix_ops_client  matrix_ops/client.cpp)
+add_executable(matrix_ops_server  matrix_ops/server.cpp)
+add_executable(matrix_ops_decrypt matrix_ops/decrypt.cpp)
+
+target_link_libraries(matrix_ops_client  PRIVATE niobium_fhetch)
+target_link_libraries(matrix_ops_server  PRIVATE niobium_fhetch)
+target_link_libraries(matrix_ops_decrypt PRIVATE niobium_fhetch)
+
+set_openfhe_rpath(matrix_ops_client)
+set_openfhe_rpath(matrix_ops_server)
+set_openfhe_rpath(matrix_ops_decrypt)
+
+# ==============================================================================
 # Plaintext-add example — client / server / decrypt
 # ==============================================================================
 
