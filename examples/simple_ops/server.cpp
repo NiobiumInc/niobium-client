@@ -303,7 +303,10 @@ int main(int argc, char* argv[]) {
             }
             std::cout << std::endl;
         }
-        Serial::SerializeToFile(keyDir + "/ct_result.bin", ct_result, SerType::BINARY);
+        if (!Serial::SerializeToFile(keyDir + "/ct_result.bin", ct_result, SerType::BINARY)) {
+            std::cerr << "[ERROR] Failed to serialize result ciphertext" << std::endl;
+            return 1;
+        }
         std::cout << "Result written to " << keyDir << "/ct_result.bin" << std::endl;
     } else {
         std::cerr << "[ERROR] Could not retrieve result" << std::endl;
