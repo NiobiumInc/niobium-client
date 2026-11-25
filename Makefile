@@ -602,12 +602,17 @@ test-sim-bootstrap-release: test-bootstrap-release ## Record bootstrap trace the
 	$(BUILD_DIR)/vendor/niobium-fhetch/fhetch_sim bootstrap_server_workload_ckks_bootstrap/bootstrap_server_workload_ckks_bootstrap.fhex --ring-dim $(TEST_RING_DIM)
 
 # Helper: run a single simple_ops test
+#
+# pipefail: each line's status is the example's, not the filter's. Without it a
+# decrypt that printed [FAIL] still passed (grep matched "FAIL" and exited 0),
+# and so did a server that crashed. The server's filter only trims the log, so
+# a run that prints none of those lines is not a failure by itself.
 define run-simple-op
 	@echo "=== Testing $(1): $(2) ==="
 	@rm -rf simple_ops_keys simple_ops_server_*
-	@$(BUILD_DIR)/examples/simple_ops_client simple_ops_keys $(2) $(3) $(TEST_RING_DIM) 2>&1 | tail -1
-	@$(BUILD_DIR)/examples/simple_ops_server simple_ops_keys $(1) --no-ring-dim-check 2>&1 | grep -E "Live-in|Complete|ERROR"
-	@$(BUILD_DIR)/examples/simple_ops_decrypt simple_ops_keys $(1) 2>&1 | grep -E "PASS|FAIL"
+	@set -o pipefail; $(BUILD_DIR)/examples/simple_ops_client simple_ops_keys $(2) $(3) $(TEST_RING_DIM) 2>&1 | tail -1
+	@set -o pipefail; $(BUILD_DIR)/examples/simple_ops_server simple_ops_keys $(1) --no-ring-dim-check 2>&1 | { grep -E "Live-in|Complete|ERROR" || true; }
+	@set -o pipefail; $(BUILD_DIR)/examples/simple_ops_decrypt simple_ops_keys $(1) 2>&1 | grep -E "PASS|FAIL"
 	@echo ""
 endef
 
@@ -681,7 +686,9 @@ test-simple-ops-rotation-matrix-release: build-release ## Rotation op matrix: sl
 	  $(BUILD_DIR)/examples/simple_ops_client simple_ops_keys 5 6 $(TEST_RING_DIM) --slot-period=$$period >/dev/null; \
 	  for op in ROTATE_ADD ADD_ROTATE ROTATE_MUL ROTATE_ROTATE MULI_ROT_ADD_MUL_SUBI; do \
 	    for rot in 1 -1 2 -2 5 -5 8 -8; do \
-	      $(BUILD_DIR)/examples/simple_ops_server simple_ops_keys $$op --no-ring-dim-check --immediate=$$rot >/dev/null; \
+	      if ! $(BUILD_DIR)/examples/simple_ops_server simple_ops_keys $$op --no-ring-dim-check --immediate=$$rot >/dev/null 2>&1; then \
+	        echo "period=$$period $$op rot=$$rot: [FAIL] server exited non-zero"; fail=$$((fail+1)); continue; \
+	      fi; \
 	      out=$$($(BUILD_DIR)/examples/simple_ops_decrypt simple_ops_keys $$op --immediate=$$rot --slot-period=$$period | tail -1); \
 	      echo "period=$$period $$op rot=$$rot: $$out"; \
 	      echo "$$out" | grep -q '^\[PASS\]' || fail=$$((fail+1)); \
@@ -697,7 +704,9 @@ test-matrix-ops-release: build-release ## Matrix multiply: C = A x B, one cipher
 	for dims in "2 2 2 2" "4 2 2 3"; do \
 	  rm -rf matrix_ops_keys matrix_ops_server_*; \
 	  $(BUILD_DIR)/examples/matrix_ops_client matrix_ops_keys $$dims $(TEST_RING_DIM) >/dev/null; \
-	  $(BUILD_DIR)/examples/matrix_ops_server matrix_ops_keys $$dims --no-ring-dim-check >/dev/null; \
+	  if ! $(BUILD_DIR)/examples/matrix_ops_server matrix_ops_keys $$dims --no-ring-dim-check >/dev/null 2>&1; then \
+	    echo "dims=$$dims: [FAIL] server exited non-zero"; fail=$$((fail+1)); continue; \
+	  fi; \
 	  out=$$($(BUILD_DIR)/examples/matrix_ops_decrypt matrix_ops_keys $$dims | tail -1); \
 	  echo "dims=$$dims: $$out"; \
 	  echo "$$out" | grep -q '^\[PASS\]' || fail=$$((fail+1)); \
