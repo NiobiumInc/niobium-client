@@ -160,24 +160,23 @@ jobs:
           exit $rc
 
   # ===========================================================================
-  # compiler-ops-tests — plaintext_add, simple_ops and matrix_ops, each server
-  # replaying its trace through the compiler (--target=FUNC_SIM), as the job
-  # above does for mult. scripts/ci/compiler_ops.sh drives the examples and
-  # prints one PASS/FAIL line per case; the same no-compiler-output policy
-  # applies (see the header of this file).
+  # compiler-ops-tests — plaintext_add, simple_ops (incl. the rotation matrix)
+  # and matrix_ops, each server replaying its trace through the compiler
+  # (--target=FUNC_SIM), as the job above does for mult. A case passes only if
+  # nbcc_fhetch_replay left its output. scripts/ci/compiler_ops.sh drives the
+  # examples and prints one PASS/FAIL line per case; the same no-compiler-output
+  # policy applies (see the header of this file).
   #
-  # Provisional: it sits in this file, beside the mult smoke test, because the
-  # gcp-ephemeral runner group admits only this workflow path. It also measures
-  # what each phase costs the VM (scripts/ci/measure.sh, summary table on the
-  # run page) so a runner can be sized for it. continue-on-error until those
-  # numbers and its runtime are known: a failure here does not fail the run.
+  # It sits in this file, beside the mult smoke test, because the gcp-ephemeral
+  # runner group admits only this workflow path; each job gets its own VM. It
+  # keeps measuring what each phase costs the VM (scripts/ci/measure.sh, summary
+  # table on the run page) to size a runner.
   # ===========================================================================
   compiler-ops-tests:
     name: Compiler ops tests (self-hosted, GCP)
     runs-on: [self-hosted, gcp-ephemeral, "run-${{ github.run_id }}"]
-    continue-on-error: true
-    # Measured 2026-11-27 (8 CPUs / 32 GB): ~6.5 min, of which the build is
-    # 5.5 and the suites under a minute. The rest of the budget is the .sdk-pin
+    # Measured 2026-11-27 (8 CPUs / 32 GB, two runs): ~7 min, of which the build
+    # is ~5.5 and the suites under 1.5. The rest of the budget is the .sdk-pin
     # step, which may wait up to 30 min for a branch SDK to reach the mirror.
     timeout-minutes: 45
     env:
