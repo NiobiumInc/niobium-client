@@ -176,7 +176,10 @@ jobs:
     name: Compiler ops tests (self-hosted, GCP)
     runs-on: [self-hosted, gcp-ephemeral, "run-${{ github.run_id }}"]
     continue-on-error: true
-    timeout-minutes: 120  # generous while measuring; tighten from the numbers
+    # Measured 2026-11-27 (8 CPUs / 32 GB): ~6.5 min, of which the build is
+    # 5.5 and the suites under a minute. The rest of the budget is the .sdk-pin
+    # step, which may wait up to 30 min for a branch SDK to reach the mirror.
+    timeout-minutes: 45
     env:
       SDK: /mnt/niobium-sdk/sdk   # mounted RO at boot by runner-startup.sh
     steps:
@@ -301,6 +304,10 @@ jobs:
       - name: simple_ops via compiler (PASS/FAIL only)
         if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.sdk.outcome == 'success' }}
         run: scripts/ci/measure.sh simple_ops -- scripts/ci/compiler_ops.sh simple_ops
+
+      - name: simple_ops rotation matrix via compiler (PASS/FAIL only)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.sdk.outcome == 'success' }}
+        run: scripts/ci/measure.sh simple_ops_rotation -- scripts/ci/compiler_ops.sh simple_ops_rotation
 
       - name: matrix_ops via compiler (PASS/FAIL only)
         if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.sdk.outcome == 'success' }}

@@ -47,6 +47,8 @@ echo "$(used_mib) $(cut -d' ' -f1 /proc/loadavg)" >> "$tmp/samples"
 # GNU time prepends "Command exited with non-zero status N" on failure; the
 # numbers are always the last line.
 read -r wall user sys rss_kib < <(tail -n 1 "$tmp/time")
+# m starts at 0, so a sample below the baseline (memory freed since the start)
+# reads as 0, never negative.
 read -r mem_peak load_peak < <(awk -v b="$base" '{ if ($1-b > m) m = $1-b; if ($2 > l) l = $2 } END { printf "%d %.1f\n", m, l }' "$tmp/samples")
 ncpu="$(nproc)"
 cpu="$(awk -v u="$user" -v s="$sys" 'BEGIN{printf "%.0f", u+s}')"
