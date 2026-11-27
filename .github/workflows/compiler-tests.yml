@@ -158,3 +158,162 @@ jobs:
             echo "::error::compiler E2E FAILED (output suppressed by policy; reproduce locally)"
           fi
           exit $rc
+
+  # ===========================================================================
+  # compiler-ops-tests — plaintext_add, simple_ops (incl. the rotation matrix)
+  # and matrix_ops, each server replaying its trace through the compiler
+  # (--target=FUNC_SIM), as the job above does for mult. A case passes only if
+  # nbcc_fhetch_replay left its output. scripts/ci/compiler_ops.sh drives the
+  # examples and prints one PASS/FAIL line per case; the same no-compiler-output
+  # policy applies (see the header of this file).
+  #
+  # It sits in this file, beside the mult smoke test, because the gcp-ephemeral
+  # runner group admits only this workflow path; each job gets its own VM. It
+  # keeps measuring what each phase costs the VM (scripts/ci/measure.sh, summary
+  # table on the run page) to size a runner.
+  # ===========================================================================
+  compiler-ops-tests:
+    name: Compiler ops tests (self-hosted, GCP)
+    runs-on: [self-hosted, gcp-ephemeral, "run-${{ github.run_id }}"]
+    # Measured 2026-11-27 (8 CPUs / 32 GB, two runs): ~7 min, of which the build
+    # is ~5.5 and the suites under 1.5. The rest of the budget is the .sdk-pin
+    # step, which may wait up to 30 min for a branch SDK to reach the mirror.
+    timeout-minutes: 45
+    env:
+      SDK: /mnt/niobium-sdk/sdk   # mounted RO at boot by runner-startup.sh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          submodules: recursive
+
+      - name: Pin branch SDK (lockstep changes only — .sdk-pin)
+        # No-op without a .sdk-pin file at the consumer repo's root (path via
+        # SDK_PIN_FILE when the workflow nests that checkout). With one, the named
+        # sdk-branch-* release's tarball is fetched from the GCS mirror,
+        # checksum-verified against its .sha256 sidecar, and BIND-MOUNTED over
+        # the nightly SDK, so every later step -- including anything that
+        # hardcodes the mount path -- sees the pin. A GITHUB_ENV write would
+        # not do that: this job defines SDK as job-level env, which GITHUB_ENV
+        # does not reliably override. The pin proves itself by mount identity
+        # (the SDK path now IS the extracted tree) plus the SDK contract file;
+        # the bundle's own VERSION is logged, not asserted -- the compiler
+        # writes the version string there, not the tag. Hard-fails on main so
+        # a pin cannot be merged.
+        run: |
+          set -e
+          # SDK_PIN_FILE: where THIS workflow checked the consumer repo out. Default is
+          # the workspace root; a workflow that nests the repo (fbs-consumer-check puts
+          # niobium-client at fbs/submission/niobium-client) sets it in job env.
+          PIN="${SDK_PIN_FILE:-.sdk-pin}"
+          [ -f "$PIN" ] || { echo "no $PIN — nightly SDK"; exit 0; }
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            echo "::error::.sdk-pin must not exist on main — remove it in the merge"; exit 1
+          fi
+          TAG="$(tr -d ' \r\n' < "$PIN")"
+          case "$TAG" in sdk-branch-*) ;; *) echo "::error::.sdk-pin must name an sdk-branch-* tag"; exit 1;; esac
+          DEST="$RUNNER_TEMP/branch-sdk"; mkdir -p "$DEST"
+          SRC="gs://github-runner-499901-sdk-branches/$TAG"
+          # The compiler build takes 15-25 min on the happy path (up to 3 h if
+          # it queues behind a running nightly) and its tarball lands in the
+          # bucket as it finishes; a PR opened right after the dispatch waits
+          # here instead of failing and asking for a rerun.
+          for i in $(seq 1 60); do
+            gcloud storage ls "$SRC/*.tar.*" >/dev/null 2>&1 && break
+            [ "$i" -eq 1 ] && echo "$TAG not in the mirror yet -- waiting up to 30 min for the compiler build"
+            sleep 30
+          done
+          gcloud storage cp "$SRC/*.tar.*" "$DEST/" --quiet \
+            || { echo "::error::$TAG still not in the mirror after 30 min -- check the release-binary-sdk run on the compiler branch, and that the tag is exactly right"; exit 1; }
+          # Two objects arrive: the tarball and its .sha256 sidecar. Name the
+          # tarball explicitly (a bare *.tar.* glob would hand tar the sidecar
+          # as a member to extract) and verify against the sidecar while it is here.
+          TARBALL="$(find "$DEST" -maxdepth 1 -name '*.tar.*' ! -name '*.sha256' | head -1)"
+          [ -n "$TARBALL" ] || { echo "::error::no tarball in $DEST"; exit 1; }
+          ( cd "$DEST" && sha256sum -c ./*.sha256 ) || { echo "::error::checksum mismatch for $TAG"; exit 1; }
+          tar -xf "$TARBALL" -C "$DEST"
+          SDKDIR="$(dirname "$(find "$DEST" -maxdepth 2 -name bin -type d | head -1)")"
+          [ -x "$SDKDIR/bin/nbcc_fhetch_replay" ] \
+            || { echo "::error::$TAG has no bin/nbcc_fhetch_replay -- not an SDK bundle this job can use"; exit 1; }
+          sudo mount --bind "$SDKDIR" "$SDK"
+          [ "$(stat -c %d:%i "$SDK")" = "$(stat -c %d:%i "$SDKDIR")" ] \
+            || { echo "::error::pin did not take: $SDK is not $SDKDIR after the bind mount"; exit 1; }
+          # Bundle-to-tag binding, warning-level: the producers enforce it, but a
+          # bundle whose VERSION does not even mention the tag's sha7 is worth a
+          # word in the log. The selftest fixture carries the real sha7, so it does
+          # not warn; only a bundle mirrored under an unrelated tag would.
+          BUNDLE_VERSION="$(cat "$SDK/VERSION" 2>/dev/null || echo n/a)"
+          grep -q "${TAG##*-}" <<< "$BUNDLE_VERSION" \
+            || echo "::warning::bundle VERSION '$BUNDLE_VERSION' does not mention the tag's sha7 (${TAG##*-})"
+          echo "pinned branch SDK: $TAG over $SDK (bundle VERSION: $BUNDLE_VERSION)"
+      - name: Verify SDK is mounted (no version printed)
+        run: |
+          test -x "$SDK/bin/nbcc_fhetch_replay" || { echo "::error::SDK not mounted"; exit 1; }
+
+      - name: Install build tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build time
+
+      - name: VM inventory (resource sizing)
+        run: |
+          cpus=$(nproc)
+          mem=$(awk '/^MemTotal:/{printf "%d", $2/1024}' /proc/meminfo)
+          echo "VM: ${cpus} CPUs, ${mem} MiB RAM"
+          df -h "$GITHUB_WORKSPACE" "$RUNNER_TEMP" /tmp
+          {
+            echo "### compiler-ops-tests: resources"
+            echo ""
+            echo "VM: ${cpus} CPUs, ${mem} MiB RAM. mem peak is system-wide used memory above the phase's start;"
+            echo "rss max is the single largest process (one compiler under make -j, not the sum)."
+            echo ""
+            echo "| phase | wall s | cpu s | cpu util | rss max MiB | mem peak MiB | load peak | status |"
+            echo "|---|---|---|---|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build client + fhetch (release, measured)
+        id: build
+        # Public C++/OpenFHE output — OK to show; useful for diagnosing build breaks.
+        run: scripts/ci/measure.sh build -- make release
+
+      - name: Map the SDK into the layout the Makefile expects
+        id: sdk
+        run: |
+          # test-mult-target-release and test-mult-transport-release look for
+          # $NIOBIUM_COMPILER_ROOT/build/nbcc_fhetch_replay[_server].
+          # The SDK ships bin/ + lib/. Bridge with a shim of symlinks so the
+          # replay binary's $ORIGIN rpath and the Makefile's LD_LIBRARY_PATH
+          # ($ROOT/build) both resolve correctly through the symlinks.
+          SHIM="$RUNNER_TEMP/nbcc-root"
+          mkdir -p "$SHIM/build"
+          ln -sf "$SDK"/bin/* "$SHIM/build/"
+          ln -sf "$SDK"/lib/* "$SHIM/build/"
+          test -x "$SHIM/build/nbcc_fhetch_replay" || { echo "::error::SDK missing nbcc_fhetch_replay"; exit 1; }
+          echo "NIOBIUM_COMPILER_ROOT=$SHIM" >> "$GITHUB_ENV"
+          echo "NIOBIUM_SPEC_DIR=$SDK/share/niobium/devices" >> "$GITHUB_ENV"
+          echo "$SHIM/build" >> "$GITHUB_PATH"
+
+      # One step per suite, so the check shows which one failed. Each still
+      # runs when another failed, but not without a build and an SDK.
+      - name: plaintext_add via compiler (PASS/FAIL only)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.sdk.outcome == 'success' }}
+        run: scripts/ci/measure.sh plaintext_add -- scripts/ci/compiler_ops.sh plaintext_add
+
+      - name: simple_ops via compiler (PASS/FAIL only)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.sdk.outcome == 'success' }}
+        run: scripts/ci/measure.sh simple_ops -- scripts/ci/compiler_ops.sh simple_ops
+
+      - name: simple_ops rotation matrix via compiler (PASS/FAIL only)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.sdk.outcome == 'success' }}
+        run: scripts/ci/measure.sh simple_ops_rotation -- scripts/ci/compiler_ops.sh simple_ops_rotation
+
+      - name: matrix_ops via compiler (PASS/FAIL only)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.sdk.outcome == 'success' }}
+        run: scripts/ci/measure.sh matrix_ops -- scripts/ci/compiler_ops.sh matrix_ops
+
+      - name: Disk usage (resource sizing)
+        if: ${{ !cancelled() }}
+        run: |
+          du -sh build vendor/lib 2>/dev/null || true
+          df -h "$GITHUB_WORKSPACE"
